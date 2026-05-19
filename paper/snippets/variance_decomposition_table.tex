@@ -1,0 +1,25 @@
+% Variance decomposition of g_rr CV across sampling restrictions.
+% Numbers from runs/20260519T085446Z_variance_decomposition/results.csv
+% Each cell: std/mean of 200 matched-N resamples of g_rr at the indicated N.
+
+\begin{table}[t]
+\centering
+\caption{Coefficient of variation of $\bar{g}_{rr}$ across $200$ matched-$N$ resamples, under four sampling restrictions. Pooled draws use the full eval corpus; within-ticker draws pick a single ticker uniformly at random per resample and draw both halves from it; within-regime draws restrict both halves to the indicated regime, split at the S\&P~500 peak on $2020$-$02$-$19$. The CV is bounded below by what each restricted sub-population contributes; values within a few hundredths of each other across columns indicate that cross-ticker and cross-regime heterogeneity are not the dominant variance source above ordinary sampling noise.}
+\label{tab:variance-decomposition}
+\begin{tabular}{lcccc}
+\toprule
+                                      &        &               & \multicolumn{2}{c}{Within-regime} \\
+\cmidrule(lr){4-5}
+Bucket                                & Pooled & Within-ticker & Pre-crash & Crash \\
+\midrule
+B1 \enspace tail-W$_{1}$              & 0.6495 & 0.6440        & 0.6162    & 0.6196 \\
+B4 \enspace scale-weighted kurtosis   & 0.7621 & 0.6107        & 0.7530    & 0.6604 \\
+B5 \enspace CFVC Frobenius            & 0.5847 & 0.6563        & 0.5822    & 0.6834 \\
+B6 \enspace conditional GPD tail      & 0.4395 & 0.4571        & 0.4336    & 0.6013 \\
+\bottomrule
+\end{tabular}
+
+\medskip
+\footnotesize
+Pooled draws use $N{=}200$ paths per half. Within-ticker draws use $N{=}10$ from a ticker chosen uniformly from those with at least $20$ windows ($37$ of $60$ tickers eligible). Within-regime draws use $N{=}50$ from a regime; the pre-crash pool holds $1040$ windows and the crash pool $147$.
+\end{table}

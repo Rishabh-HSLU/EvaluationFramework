@@ -1,0 +1,24 @@
+# Python / packaging
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+
+# Editor / OS
+.idea/
+.DS_Store
+
+# Local experiment artifacts — regenerate via scripts/
+ablation_output/
+runs/
+
+# LaTeX build artifacts
+paper/**/*.aux
+paper/**/*.log
+paper/**/*.out
+paper/**/*.toc
+paper/**/*.synctex.gz
+paper/**/*.fls
+paper/**/*.fdb_latexmk

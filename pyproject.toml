@@ -1,0 +1,22 @@
+[project]
+name = "evaluationframework"
+version = "0.1.0"
+description = "Six-bucket fidelity benchmark for synthetic financial return generators"
+requires-python = ">=3.12"
+dependencies = [
+    "matplotlib>=3.10.9",
+    "numpy>=2.4.5",
+    "pandas>=3.0.3",
+    "scipy>=1.17.1",
+    "torch>=2.12.0",
+]
+
+[project.optional-dependencies]
+dev = ["ipykernel>=7.2.0", "pytest>=8.0"]
+
+[project.scripts]
+bench = "bench:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
