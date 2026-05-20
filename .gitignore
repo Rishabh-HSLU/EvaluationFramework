@@ -10,9 +10,12 @@ build/
 .idea/
 .DS_Store
 
-# Local experiment artifacts — regenerate via scripts/
+# Local experiment artifacts — not part of the public framework
 ablation_output/
 runs/
+paper/
+scripts/
+tests/
 
 # LaTeX build artifacts
 paper/**/*.aux

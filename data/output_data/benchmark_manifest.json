@@ -1,0 +1,8 @@
+{
+  "window_len": 2520,
+  "benchmark_n_paths": 200,
+  "benchmark_seed": 42,
+  "reference_mean": -0.006203838829282082,
+  "reference_std": 1.6736369436592686,
+  "units": "deseasonalized_log_returns"
+}
