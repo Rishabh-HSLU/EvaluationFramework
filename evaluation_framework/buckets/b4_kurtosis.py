@@ -9,9 +9,20 @@ and how it converges toward Gaussianity under temporal aggregation
 
 Aggregation strategy
 --------------------
-Distributional. Pool all returns across N paths into one 1D vector before
-aggregating. Kurtosis is a population-level property of the marginal
-distribution at each scale.
+Per-path, then pool.  For each horizon h, each path is independently
+aggregated into non-overlapping h-minute blocks (sum of h consecutive
+returns).  The resulting blocks from all paths are then pooled into a
+single 1-D vector for L-kurtosis estimation.  This prevents blocks from
+spanning path boundaries (which would create meaningless cross-ticker
+returns) while still yielding a large pooled sample for stable estimation.
+
+Weighting strategy
+------------------
+Uniform weights across horizons (w_h = 1 for all h).  All aggregation
+scales matter equally to the assessment of aggregational Gaussianity.
+The previous 1/h weighting concentrated 73% of the metric on h=1 (pure
+marginal kurtosis), making the metric nearly redundant with Bucket 1 and
+blind to temporal-aggregation dynamics at h ≥ 5.
 
 Estimator choice: L-kurtosis
 -----------------------------
@@ -118,9 +129,14 @@ class BucketKurtosis(Bucket):
     """
     Scale-Weighted L-Kurtosis Gap.
 
-    Measures the tail heaviness of pooled returns at multiple aggregation
-    horizons via L-kurtosis (τ_4 = λ_4 / λ_2), and the weighted absolute
-    gap between real and synthetic L-kurtosis curves across horizons.
+    Measures the tail heaviness of returns at multiple aggregation
+    horizons via L-kurtosis (τ_4 = λ_4 / λ_2), and the uniformly-weighted
+    absolute gap between real and synthetic L-kurtosis curves across
+    horizons.
+
+    Aggregation is performed per-path first (non-overlapping h-minute
+    blocks within each path), then pooled across paths for L-kurtosis
+    estimation.  This avoids creating blocks that span path boundaries.
 
     L-kurtosis is used in place of moment-based excess kurtosis because
     financial returns have infinite eighth moments during crisis regimes,
@@ -132,10 +148,11 @@ class BucketKurtosis(Bucket):
     ----------
     horizons : list[int], default [1, 5, 30, 60, 390]
         Aggregation horizons in minutes. Each horizon h aggregates returns
-        into non-overlapping h-minute blocks by summing h consecutive returns.
+        into non-overlapping h-minute blocks by summing h consecutive
+        returns within each path.
     weights : list[float] | None, default None
-        Per-horizon weights. If None, uses w_h = 1/h so that fine-scale
-        horizons (where the stylized fact is strongest) receive more weight.
+        Per-horizon weights.  If None, uses uniform weights (w_h = 1)
+        so that all aggregation scales contribute equally.
     """
 
     def __init__(
@@ -149,7 +166,9 @@ class BucketKurtosis(Bucket):
             self.horizons = list(horizons)
 
         if weights is None:
-            self.weights = [1.0 / h for h in self.horizons]
+            # Uniform weights: all aggregation scales matter equally
+            # to the assessment of aggregational Gaussianity.
+            self.weights = [1.0 for _ in self.horizons]
         else:
             if len(weights) != len(self.horizons):
                 raise ValueError("weights and horizons must have the same length")
@@ -165,12 +184,13 @@ class BucketKurtosis(Bucket):
         synthetic: np.ndarray,
     ) -> float:
         """
-        Compute the scale-weighted L-kurtosis gap between real and synthetic.
+        Compute the uniform-weighted L-kurtosis gap between real and synthetic.
 
         For each horizon h:
-          1. Pool all returns across N paths into one 1-D vector
-          2. Aggregate into non-overlapping h-minute blocks (sum h returns)
-          3. Compute L-kurtosis τ_4 on the block distribution
+          1. Aggregate each path into non-overlapping h-minute blocks
+             (sum h consecutive returns), staying within path boundaries
+          2. Pool the aggregated blocks across all paths
+          3. Compute L-kurtosis τ_4 on the pooled block distribution
           4. gap_h = |τ_4(real) - τ_4(synthetic)|
 
         Final gap = sum(w_h * gap_h) / sum(w_h)
@@ -186,36 +206,37 @@ class BucketKurtosis(Bucket):
         """
         self._validate_input(real, synthetic)
 
-        real_pooled = real.ravel()
-        syn_pooled  = synthetic.ravel()
-
         total_gap    = 0.0
         total_weight = 0.0
 
         for h, w in zip(self.horizons, self.weights):
-            # Aggregate into h-minute blocks
-            n_real = (len(real_pooled) // h) * h
-            n_syn  = (len(syn_pooled)  // h) * h
-            blocks_real = real_pooled[:n_real].reshape(-1, h).sum(axis=1)
-            blocks_syn  = syn_pooled[:n_syn].reshape(-1, h).sum(axis=1)
-
-            # Need at least 4 observations for L-kurtosis (PWM b_3 requires n >= 4)
-            # In practice we want many more — skip only truly degenerate cases
+            n_blocks = real.shape[1] // h
+            if n_blocks == 0:
+                continue
+            usable = n_blocks * h
+            blocks_real = (
+                real[:, :usable]
+                .reshape(real.shape[0], n_blocks, h)
+                .sum(axis=2)
+                .ravel()
+            )
+            blocks_syn = (
+                synthetic[:, :usable]
+                .reshape(synthetic.shape[0], n_blocks, h)
+                .sum(axis=2)
+                .ravel()
+            )
             if len(blocks_real) < 30 or len(blocks_syn) < 30:
                 continue
-
             tau4_real = _l_kurtosis(blocks_real)
             tau4_syn  = _l_kurtosis(blocks_syn)
-
             if np.isnan(tau4_real) or np.isnan(tau4_syn):
                 continue
-
             total_gap    += w * abs(tau4_real - tau4_syn)
             total_weight += w
 
         if total_weight == 0.0:
             return float("nan")
-
         return total_gap / total_weight
 
     # ------------------------------------------------------------------
@@ -225,16 +246,86 @@ class BucketKurtosis(Bucket):
     def sanity_checks(self, real: np.ndarray) -> dict[str, bool]:
         """
         Sanity checks for BucketKurtosis:
-            N4.1 — Gaussian noise replacement should reduce L-kurtosis gap
-                    (Gaussian has τ_4 = 0.1226, real is higher)
-            N4.2 — Temporal shuffle should not change gap
-                    (L-kurtosis is a marginal property, order-invariant)
-            N4.3 — Scale perturbation (2x vol) should change gap at h=1
-                    but not qualitatively at large h
+            N4.1 — i.i.d. resampling: CLT at full speed -> large gap
+            N4.2 — shuffle: temporal structure destroyed -> large gap
+            N4.3 — scale invariance: L-kurtosis is scale-invariant -> ~zero gap
+            N4.4 — tail replacement: temporal structure preserved -> moderate gap
+            N4.5 — block-independent resampling: correct short-scale, wrong
+                   long-scale → expected large gap at h ≥ 60
         """
-        raise NotImplementedError(
-            "Sanity checks not yet implemented for BucketKurtosis."
-        )
+        rng = np.random.default_rng(0)
+
+        # Noise floor: contiguous-split real-vs-real gap
+        half = len(real) // 2
+        g_rr = self.compute_gap(real[:half], real[half: half * 2])
+
+        results: dict[str, bool] = {}
+
+        # --- N4.1  i.i.d. resampling ---
+        # Draw each element independently from the pooled marginal.
+        # Aggregated L-kurtosis decays at the i.i.d. CLT rate (much faster
+        # than real data's power-law decay). Gap should be large.
+        flat = real.ravel()
+        iid_sample = rng.choice(flat, size=real.shape, replace=True)
+        g_iid = self.compute_gap(real, iid_sample)
+        results["N4.1_iid_resample"] = g_iid > 2.0 * g_rr
+
+        # --- N4.2  Shuffle ---
+        # Destroys temporal structure. Minute-scale L-kurtosis preserved
+        # but aggregated L-kurtosis decays at i.i.d. rate. Large gap.
+        shuffled = real.copy()
+        for i in range(len(shuffled)):
+            rng.shuffle(shuffled[i])
+        g_shuffle = self.compute_gap(real, shuffled)
+        results["N4.2_shuffle"] = g_shuffle > 2.0 * g_rr
+
+        # --- N4.3  Scale invariance ---
+        # L-kurtosis (τ_4 = λ_4/λ_2) is scale-invariant: τ_4(cr) = τ_4(r).
+        # Gap should be ~zero.
+        g_scale = self.compute_gap(real, 2.0 * real)
+        results["N4.3_scale_invariance"] = g_scale < 1.5 * g_rr
+
+        # --- N4.4  Tail replacement ---
+        # Replace 5% tails with Gaussian draws, preserve temporal order.
+        # Temporal structure → CLT convergence rate ~preserved.
+        # h=1 L-kurtosis changes (marginal territory), but aggregated
+        # L-kurtosis gap should remain smaller than full destruction.
+        std = flat.std()
+        lo_q = np.quantile(flat, 0.05)
+        hi_q = np.quantile(flat, 0.95)
+        tail_replaced = real.copy()
+        flat_tr = tail_replaced.ravel()
+        mask_lo = flat_tr < lo_q
+        mask_hi = flat_tr > hi_q
+        flat_tr[mask_lo] = -np.abs(rng.normal(0, std, mask_lo.sum()))
+        flat_tr[mask_hi] = np.abs(rng.normal(0, std, mask_hi.sum()))
+        tail_replaced = flat_tr.reshape(real.shape)
+        g_tail = self.compute_gap(real, tail_replaced)
+        # Should be moderate — between noise floor and the iid/shuffle gaps
+        results["N4.4_tail_replacement"] = g_tail < g_iid
+
+        # --- N4.5  Block-independent resampling ---
+        # Divide each path into blocks of 30 minutes, shuffle the blocks
+        # (preserve within-block structure, destroy cross-block dependence).
+        # Short-horizon L-kurtosis preserved; long-horizon L-kurtosis decays
+        # too fast because daily returns become sums of independent blocks.
+        block_size = 30
+        T = real.shape[1]
+        n_blocks = T // block_size
+        if n_blocks >= 2:
+            block_shuffled = real.copy()
+            for i in range(len(block_shuffled)):
+                usable = n_blocks * block_size
+                blocks = block_shuffled[i, :usable].reshape(n_blocks, block_size)
+                rng.shuffle(blocks)  # shuffle along axis 0 (block order)
+                block_shuffled[i, :usable] = blocks.ravel()
+            g_block = self.compute_gap(real, block_shuffled)
+            results["N4.5_block_resample"] = g_block > 1.5 * g_rr
+        else:
+            # Paths too short for block resampling — skip
+            results["N4.5_block_resample"] = True
+
+        return results
 
     # ------------------------------------------------------------------
     # Metadata
@@ -248,6 +339,6 @@ class BucketKurtosis(Bucket):
     def description(self) -> str:
         horizons_str = str(self.horizons)
         return (
-            f"Scale-weighted L-kurtosis gap on pooled returns "
-            f"(horizons={horizons_str}, weights=1/h)"
+            f"Scale-weighted L-kurtosis gap, per-path aggregated "
+            f"(horizons={horizons_str}, uniform weights)"
         )

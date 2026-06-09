@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Six-bucket fidelity benchmark for synthetic financial return generators"
 requires-python = ">=3.12"
 dependencies = [
+    "cython>=3.2.5",
     "matplotlib>=3.10.9",
     "numpy>=2.4.5",
     "pandas>=3.0.3",
@@ -13,6 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["ipykernel>=7.2.0", "pytest>=8.0"]
+data = ["alpaca-py>=0.13"]
 
 [project.scripts]
 bench = "bench:main"

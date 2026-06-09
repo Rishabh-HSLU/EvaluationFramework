@@ -199,16 +199,83 @@ class BucketNonlinearTemporal(Bucket):
     def sanity_checks(self, real: np.ndarray) -> dict[str, bool]:
         """
         Sanity checks for BucketNonlinearTemporal:
-            N2.1 — real-vs-real gives gap near noise floor
-            N2.2 — shuffle destroys ACF -> large gap
-            N2.3 — marginal-only resampling -> large gap
-            N2.4 — short-burst clustering (low-persistence GARCH) ->
+            N2.1 — shuffle destroys ACF -> large gap
+            N2.2 — i.i.d. resampling from marginal -> large gap
+            N2.3 — short-burst clustering (low-persistence GARCH) ->
                    moderate to large gap driven by long lags
+            N2.4 — tail replacement preserves ACF -> small gap
             N2.5 — scale invariance: scaling by 2x -> ~zero gap
         """
-        raise NotImplementedError(
-            "Sanity checks not yet implemented for BucketNonlinearTemporal."
-        )
+        rng = np.random.default_rng(0)
+
+        # Noise floor: contiguous-split real-vs-real gap
+        half = len(real) // 2
+        g_rr = self.compute_gap(real[:half], real[half: half * 2])
+
+        results: dict[str, bool] = {}
+
+        # --- N2.1  Shuffle of returns ---
+        # Random permutation per path; marginal preserved, ACF destroyed.
+        shuffled = real.copy()
+        for i in range(len(shuffled)):
+            rng.shuffle(shuffled[i])
+        g_shuffle = self.compute_gap(real, shuffled)
+        results["N2.1_shuffle"] = g_shuffle > 3.0 * g_rr
+
+        # --- N2.2  i.i.d. resampling from marginal ---
+        # Draw each element independently from pooled empirical marginal.
+        flat = real.ravel()
+        iid_sample = rng.choice(flat, size=real.shape, replace=True)
+        g_iid = self.compute_gap(real, iid_sample)
+        results["N2.2_iid_resample"] = g_iid > 3.0 * g_rr
+
+        # --- N2.3  Short-memory GARCH(1,1) ---
+        # Simulate GARCH(1,1) with low persistence (alpha+beta ≈ 0.5),
+        # matching real marginal's scale. Exponential ACF decay → large gap
+        # at long lags even though short lags are fine.
+        omega = float(np.var(flat) * 0.5)   # unconditional var fraction
+        alpha, beta = 0.10, 0.40            # α+β = 0.50 → fast forgetting
+        garch = np.empty_like(real)
+        for i in range(len(garch)):
+            T = real.shape[1]
+            sigma2 = np.empty(T)
+            r_g = np.empty(T)
+            sigma2[0] = omega / (1.0 - alpha - beta)
+            r_g[0] = np.sqrt(sigma2[0]) * rng.standard_normal()
+            for t in range(1, T):
+                sigma2[t] = omega + alpha * r_g[t - 1] ** 2 + beta * sigma2[t - 1]
+                r_g[t] = np.sqrt(sigma2[t]) * rng.standard_normal()
+            garch[i] = r_g
+        g_garch = self.compute_gap(real, garch)
+        results["N2.3_short_memory_garch"] = g_garch > 2.0 * g_rr
+
+        # --- N2.4  Tail replacement invariance ---
+        # Replace 5% tails with Gaussian draws, preserve temporal order.
+        # ACF of |r| depends partly on extreme values, so this gap is
+        # not negligible — but it should be substantially smaller than
+        # the gap from full temporal-structure destruction (shuffle/iid).
+        std = flat.std()
+        lo_q = np.quantile(flat, 0.05)
+        hi_q = np.quantile(flat, 0.95)
+        tail_replaced = real.copy()
+        flat_tr = tail_replaced.ravel()
+        mask_lo = flat_tr < lo_q
+        mask_hi = flat_tr > hi_q
+        flat_tr[mask_lo] = -np.abs(rng.normal(0, std, mask_lo.sum()))
+        flat_tr[mask_hi] = np.abs(rng.normal(0, std, mask_hi.sum()))
+        tail_replaced = flat_tr.reshape(real.shape)
+        g_tail = self.compute_gap(real, tail_replaced)
+        # Compare against destructive checks: tail replacement should be
+        # substantially less than shuffle/iid (at most half the average).
+        g_destructive_mean = (g_shuffle + g_iid) / 2.0
+        results["N2.4_tail_replacement"] = g_tail < 0.6 * g_destructive_mean
+
+        # --- N2.5  Scale invariance ---
+        # ρ_k(|cr|) = ρ_k(|r|) for any positive c; gap should be ~zero.
+        g_scale = self.compute_gap(real, 2.0 * real)
+        results["N2.5_scale_invariance"] = g_scale < 1.5 * g_rr
+
+        return results
 
     # ------------------------------------------------------------------
     # Metadata

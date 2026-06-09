@@ -173,10 +173,78 @@ class BucketLeverageEffect(Bucket):
             N3.3 — Symmetric GARCH simulation -> large gap
             N3.4 — Shuffle invariance -> large gap
             N3.5 — Scale invariance -> ~zero gap
+
+        Note: leverage at 1-minute frequency is genuinely weak, so we use
+        a multi-split averaged baseline to stabilise the noise floor and
+        use moderate thresholds.
         """
-        raise NotImplementedError(
-            "Sanity checks not yet implemented for BucketLeverageEffect."
-        )
+        rng = np.random.default_rng(0)
+
+        # Multi-split averaged noise floor: 8 random splits to get a
+        # more stable g_rr (single-split g_rr for leverage is noisy
+        # because the signal is weak at 1-minute frequency).
+        n_splits = 8
+        g_rr_samples = []
+        indices = np.arange(len(real))
+        for _ in range(n_splits):
+            rng.shuffle(indices)
+            half = len(real) // 2
+            a_idx, b_idx = indices[:half], indices[half: half * 2]
+            g_rr_samples.append(self.compute_gap(real[a_idx], real[b_idx]))
+        g_rr = float(np.mean(g_rr_samples))
+
+        results: dict[str, bool] = {}
+
+        # --- N3.1  Time reversal ---
+        # Reverse time order per path; flips causal direction of
+        # leverage (drop → future vol becomes future vol → drop).
+        reversed_real = real[:, ::-1].copy()
+        g_rev = self.compute_gap(real, reversed_real)
+        results["N3.1_time_reversal"] = g_rev > 1.5 * g_rr
+
+        # --- N3.2  Sign symmetrization ---
+        # Randomly flip the sign of each r_t independently.
+        # Preserves |r| exactly (B2 invariant), destroys leverage → 0.
+        signs = rng.choice([-1.0, 1.0], size=real.shape)
+        symmetrized = real * signs
+        g_sym = self.compute_gap(real, symmetrized)
+        results["N3.2_sign_symmetrization"] = g_sym > 1.5 * g_rr
+
+        # --- N3.3  Symmetric GARCH simulation ---
+        # GARCH(1,1) with symmetric innovations: conditional variance
+        # depends on r², not r, so L(k)=0 at every lag.
+        flat = real.ravel()
+        omega = float(np.var(flat) * (1.0 - 0.95))
+        alpha, beta = 0.05, 0.90
+        garch = np.empty_like(real)
+        for i in range(len(garch)):
+            T = real.shape[1]
+            sigma2 = np.empty(T)
+            r_g = np.empty(T)
+            sigma2[0] = omega / (1.0 - alpha - beta)
+            r_g[0] = np.sqrt(sigma2[0]) * rng.standard_normal()
+            for t in range(1, T):
+                sigma2[t] = omega + alpha * r_g[t - 1] ** 2 + beta * sigma2[t - 1]
+                r_g[t] = np.sqrt(sigma2[t]) * rng.standard_normal()
+            garch[i] = r_g
+        g_garch = self.compute_gap(real, garch)
+        results["N3.3_symmetric_garch"] = g_garch > 1.5 * g_rr
+
+        # --- N3.4  Shuffle ---
+        # Random permutation per path destroys all cross-lag
+        # relationships, including leverage.
+        shuffled = real.copy()
+        for i in range(len(shuffled)):
+            rng.shuffle(shuffled[i])
+        g_shuffle = self.compute_gap(real, shuffled)
+        results["N3.4_shuffle"] = g_shuffle > 1.5 * g_rr
+
+        # --- N3.5  Scale invariance ---
+        # Corr(c·r_t, c·|r_{t+k}|) = Corr(r_t, |r_{t+k}|); gap ~ 0.
+        g_scale = self.compute_gap(real, 2.0 * real)
+        results["N3.5_scale_invariance"] = g_scale < 1.5 * g_rr
+
+        return results
 
     # ------------------------------------------------------------------
     # Metadata
