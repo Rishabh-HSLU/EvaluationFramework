@@ -51,9 +51,9 @@ class BucketCFVC(Bucket):
         c_syn = self._compute_mean_corr(synthetic)
 
         if c_real is None or c_syn is None:
-            return float('nan')
+            return float("nan")
 
-        return float(np.linalg.norm(c_real - c_syn, ord='fro'))
+        return float(np.linalg.norm(c_real - c_syn, ord="fro"))
 
     def _compute_mean_corr(self, corpus: np.ndarray) -> np.ndarray | None:
         T = corpus.shape[1]
@@ -63,10 +63,10 @@ class BucketCFVC(Bucket):
         if T_valid <= 0:
             return None
 
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # corpus: (N_paths, T)
         r = torch.tensor(corpus, dtype=torch.float32, device=device)
-        r_sq = r ** 2
+        r_sq = r**2
 
         sigmas = []
         for w in self.scales:
@@ -87,7 +87,7 @@ class BucketCFVC(Bucket):
         # Centered: (N, S, T_valid)
         centered = sigma_stack - mean
         # Variance: (N, S, 1)
-        var = (centered ** 2).sum(dim=2, keepdim=True)
+        var = (centered**2).sum(dim=2, keepdim=True)
 
         # Valid paths have non-zero variance across all scales
         valid_paths = (var.squeeze(2) > 1e-8).all(dim=1)
@@ -119,7 +119,7 @@ class BucketCFVC(Bucket):
 
         # Noise floor: contiguous-split real-vs-real gap
         half = len(real) // 2
-        g_rr = self.compute_gap(real[:half], real[half: half * 2])
+        g_rr = self.compute_gap(real[:half], real[half : half * 2])
 
         results: dict[str, bool] = {}
 
@@ -140,7 +140,7 @@ class BucketCFVC(Bucket):
         # approximately 0.5 when synthetic = real (by construction of
         # the contiguous split). Check that the noise floor is non-trivial
         # (g_rr > 0) and that a reasonable synthetic gap yields s5 in range.
-        g_sr = self.compute_gap(real[:half], real[half: half * 2])
+        g_sr = self.compute_gap(real[:half], real[half : half * 2])
         if g_rr + g_sr > 0:
             s5 = g_rr / (g_rr + g_sr)
             results["S5.2_baseline_calibration"] = 0.2 < s5 < 0.8

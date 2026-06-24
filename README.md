@@ -25,6 +25,24 @@ The repo ships with the built eval corpus (`data/output_data/`) and three exampl
 
 ---
 
+## Development setup
+
+This project uses `uv` for dependency management and `ruff` for formatting, linting, and import sorting.
+
+```bash
+uv sync --dev
+uv run pre-commit install
+uv run pre-commit run --all-files
+```
+
+After installation, the pre-commit hooks run automatically before each commit. To run the same checks manually:
+
+```bash
+uv run ruff check --fix .
+uv run ruff format .
+uv run pytest
+```
+
 ## Results
 
 Benchmark run on the canonical corpus: 60 eval tickers, NASDAQ 1-minute bars, Sep 2019 – Mar 2020 (1,187 windows of 2,520 returns each). N = 200 paths, 200 resamples, paired-bootstrap CIs (B = 2,000).
@@ -92,8 +110,8 @@ EvaluationFramework/
 ```
 
 ---
-TODO: Yet to add the pipeline of all the synthetic generators results feeding into the 
-data pipeline. 
+TODO: Yet to add the pipeline of all the synthetic generators results feeding into the
+data pipeline.
 ## Adding your own generator
 
 Drop a `(N, 2520)` or `(N, 2520, 1)` float array into `data/output_data/<name>_synthetic.npy`. Pass it through `save_benchmark_corpus` first to subsample to N=200 and align volatility to the real corpus:

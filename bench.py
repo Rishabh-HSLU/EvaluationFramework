@@ -88,30 +88,35 @@ def run_benchmark() -> dict[str, dict[str, tuple[float, float, float]]]:
 
     # Per-cell SeedSequence — same scheme as scripts/run_paired_vs_unpaired.py
     # so the published paired-bootstrap CIs are reproducible at the cell level.
-    seq        = np.random.SeedSequence(SEED)
+    seq = np.random.SeedSequence(SEED)
     cell_seeds = seq.spawn(len(buckets) * len(gens))
-    cell_iter  = iter(cell_seeds)
+    cell_iter = iter(cell_seeds)
 
     table: dict[str, dict[str, tuple[float, float, float]]] = {}
     for bkey, (bdesc, gap_fn) in buckets.items():
         print(f"\n=== {bkey}: {bdesc} ===")
         table[bkey] = {}
         for gname, syn in gens.items():
-            ss   = next(cell_iter)
+            ss = next(cell_iter)
             seed = int(ss.generate_state(1, dtype=np.uint32)[0])
-            t0   = time.time()
+            t0 = time.time()
             g_rr, g_sr = rr_sr_gaps_paired(
-                gap_fn, real, syn,
-                n_per_half=N, n_resamples=N_RESAMPLES,
+                gap_fn,
+                real,
+                syn,
+                n_per_half=N,
+                n_resamples=N_RESAMPLES,
                 rng=np.random.default_rng(seed),
                 sampler=sampler,
             )
             sim, lo, hi = similarity_with_ci_paired(
-                g_rr, g_sr, N_BOOTSTRAP,
+                g_rr,
+                g_sr,
+                N_BOOTSTRAP,
                 np.random.default_rng(seed + 2),
             )
             elapsed = time.time() - t0
-            cv_rr   = g_rr.std() / g_rr.mean() if g_rr.mean() else float("nan")
+            cv_rr = g_rr.std() / g_rr.mean() if g_rr.mean() else float("nan")
             print(
                 f"  [{gname:<6}] g_rr_mean={g_rr.mean():.6f} CV={cv_rr:.3f}  "
                 f"g_sr_mean={g_sr.mean():.6f}  "
@@ -125,8 +130,9 @@ def run_benchmark() -> dict[str, dict[str, tuple[float, float, float]]]:
 
 def main() -> None:
     table = run_benchmark()
-    names = sorted({g for d in table.values() for g in d.keys()},
-                   key=["AIL", "GARCH", "SFAGan", "SBBTS"].index)
+    names = sorted(
+        {g for d in table.values() for g in d}, key=["AIL", "GARCH", "SFAGan", "SBBTS"].index
+    )
     _print_table(table, names)
 
 
@@ -136,8 +142,7 @@ def _print_table(
 ) -> None:
     w = 78
     print("\n\n" + "=" * w)
-    print(f"BENCHMARK — N={N}, resamples={N_RESAMPLES}, "
-          f"paired-bootstrap CIs (B={N_BOOTSTRAP})")
+    print(f"BENCHMARK — N={N}, resamples={N_RESAMPLES}, paired-bootstrap CIs (B={N_BOOTSTRAP})")
     print("=" * w)
     header = f"{'Bucket':<8} | " + " | ".join(f"{g:<22}" for g in names)
     print(header)
@@ -162,7 +167,9 @@ def _print_table(
 
     ranked = sorted(
         names,
-        key=lambda g: float(np.mean([table[b][g][0] for b in ["B1", "B2", "B3", "B4", "B5", "B6"]])),
+        key=lambda g: float(
+            np.mean([table[b][g][0] for b in ["B1", "B2", "B3", "B4", "B5", "B6"]])
+        ),
         reverse=True,
     )
     print("\nRank (arithmetic composite, higher = better):")

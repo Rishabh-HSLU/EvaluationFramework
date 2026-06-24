@@ -59,16 +59,14 @@ class BucketMarginal(Bucket):
 
     def __init__(
         self,
-        tail_q:          float = 0.05,
-        n_quantile_grid: int   = 1000,
+        tail_q: float = 0.05,
+        n_quantile_grid: int = 1000,
     ) -> None:
         if not (0.0 < tail_q < 0.5):
             raise ValueError(f"tail_q must be in (0, 0.5), got {tail_q}")
         if n_quantile_grid < 100:
-            raise ValueError(
-                f"n_quantile_grid must be at least 100, got {n_quantile_grid}"
-            )
-        self.tail_q          = tail_q
+            raise ValueError(f"n_quantile_grid must be at least 100, got {n_quantile_grid}")
+        self.tail_q = tail_q
         self.n_quantile_grid = n_quantile_grid
 
     # ------------------------------------------------------------------
@@ -77,22 +75,22 @@ class BucketMarginal(Bucket):
 
     def compute_gap(
         self,
-        real:      np.ndarray,
+        real: np.ndarray,
         synthetic: np.ndarray,
     ) -> float:
         self._validate_input(real, synthetic)
 
         # Pool: flatten both corpora into 1-D vectors
         real_pooled = real.ravel()
-        syn_pooled  = synthetic.ravel()
+        syn_pooled = synthetic.ravel()
 
         # Common quantile grid u in [1/(n+1), n/(n+1)] avoiding 0 and 1
         n = self.n_quantile_grid
-        u = (np.arange(1, n + 1) - 0.5) / n        # midpoint rule
+        u = (np.arange(1, n + 1) - 0.5) / n  # midpoint rule
 
         # Empirical quantile functions
         q_real = np.quantile(real_pooled, u)
-        q_syn  = np.quantile(syn_pooled,  u)
+        q_syn = np.quantile(syn_pooled, u)
 
         # Pointwise absolute difference
         diff = np.abs(q_real - q_syn)
@@ -122,7 +120,7 @@ class BucketMarginal(Bucket):
 
         # Noise floor: contiguous-split real-vs-real gap
         half = len(real) // 2
-        g_rr = self.compute_gap(real[:half], real[half: half * 2])
+        g_rr = self.compute_gap(real[:half], real[half : half * 2])
 
         results: dict[str, bool] = {}
 

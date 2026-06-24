@@ -10,8 +10,6 @@ Step 10    : per-ticker z-score on training tickers only
 See README.md for full spec and output files.
 """
 
-
-
 from __future__ import annotations
 
 import json
@@ -42,7 +40,7 @@ def clean_ticker(csv_path: Path) -> pd.DataFrame | None:
     try:
         df = pd.read_csv(csv_path)
     except OSError as e:
-        warnings.warn(f"Could not read {csv_path.name}: {e}")
+        warnings.warn(f"Could not read {csv_path.name}: {e}", stacklevel=2)
         return None
 
     if "timestamp" not in df.columns:
@@ -54,8 +52,7 @@ def clean_ticker(csv_path: Path) -> pd.DataFrame | None:
     df["date_ny"] = df["ts_ny"].dt.date
 
     regular = df[
-        (df["minute_of_day_ny"] >= SESSION_START_MIN)
-        & (df["minute_of_day_ny"] <= SESSION_END_MIN)
+        (df["minute_of_day_ny"] >= SESSION_START_MIN) & (df["minute_of_day_ny"] <= SESSION_END_MIN)
     ].copy()
     if regular.empty:
         return None
@@ -70,9 +67,7 @@ def clean_ticker(csv_path: Path) -> pd.DataFrame | None:
     if len(regular_clean) < 2:
         return None
 
-    regular_clean["log_return"] = np.log(
-        regular_clean["close"] / regular_clean["close"].shift(1)
-    )
+    regular_clean["log_return"] = np.log(regular_clean["close"] / regular_clean["close"].shift(1))
     regular_clean = regular_clean.dropna(subset=["log_return"])
     return regular_clean[["date_ny", "minute_of_day_ny", "log_return"]]
 
@@ -101,23 +96,15 @@ def liquidity_stats_table(cleaned: dict[str, pd.DataFrame]) -> pd.DataFrame:
     """Step 7 liquidity classes from already-cleaned tickers."""
     df = pd.DataFrame([liquidity_row(t, d) for t, d in sorted(cleaned.items())])
     df["liquidity_class"] = "excluded"
-    df.loc[df["median_bars_per_day"] >= TRAIN_BAR_THRESHOLD, "liquidity_class"] = (
-        "train_only"
-    )
-    df.loc[df["median_bars_per_day"] >= EVAL_BAR_THRESHOLD, "liquidity_class"] = (
-        "eval_eligible"
-    )
+    df.loc[df["median_bars_per_day"] >= TRAIN_BAR_THRESHOLD, "liquidity_class"] = "train_only"
+    df.loc[df["median_bars_per_day"] >= EVAL_BAR_THRESHOLD, "liquidity_class"] = "eval_eligible"
     return df
 
 
 def make_ticker_split(stats_df: pd.DataFrame) -> dict[str, list[str]]:
     rng = np.random.default_rng(RANDOM_SEED)
-    eval_eligible = stats_df.loc[
-        stats_df["liquidity_class"] == "eval_eligible", "ticker"
-    ].tolist()
-    train_only = stats_df.loc[
-        stats_df["liquidity_class"] == "train_only", "ticker"
-    ].tolist()
+    eval_eligible = stats_df.loc[stats_df["liquidity_class"] == "eval_eligible", "ticker"].tolist()
+    train_only = stats_df.loc[stats_df["liquidity_class"] == "train_only", "ticker"].tolist()
 
     arr = np.array(sorted(eval_eligible))
     rng.shuffle(arr)
@@ -244,9 +231,7 @@ def build_dataset(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    csv_files = sorted(
-        f for f in data_dir.glob("*.csv") if f.name != "download_log.csv"
-    )
+    csv_files = sorted(f for f in data_dir.glob("*.csv") if f.name != "download_log.csv")
     print(f"Found {len(csv_files)} CSV files in {data_dir}")
 
     print("Cleaning tickers (Steps 1-6, single pass)...")

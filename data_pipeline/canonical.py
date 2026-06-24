@@ -118,14 +118,9 @@ def prepare_benchmark_corpus(
     n_paths = reference.n_paths if n_paths is None else n_paths
     seed = reference.seed if seed is None else seed
     arr = subsample_paths(windows, n_paths, seed)
-    if align_volatility:
-        arr = align_to_reference(arr, reference)
-    else:
-        arr = arr - arr.mean()
+    arr = align_to_reference(arr, reference) if align_volatility else arr - arr.mean()
     if arr.shape[1] != reference.window_len:
-        raise ValueError(
-            f"window_len {arr.shape[1]} != reference {reference.window_len}"
-        )
+        raise ValueError(f"window_len {arr.shape[1]} != reference {reference.window_len}")
     if not np.isfinite(arr).all():
         raise ValueError("non-finite values in corpus")
     return arr
@@ -141,9 +136,7 @@ def save_benchmark_corpus(
     """Write (N, T, 1) float32 for EvaluationFramework."""
     output_dir = Path(output_dir)
     reference = load_reference(output_dir)
-    arr = prepare_benchmark_corpus(
-        windows, reference, align_volatility=align_volatility
-    )
+    arr = prepare_benchmark_corpus(windows, reference, align_volatility=align_volatility)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     np.save(path, arr[:, :, np.newaxis].astype(np.float32))

@@ -56,10 +56,10 @@ import numpy as np
 
 from ..bucket import Bucket
 
-
 # ---------------------------------------------------------------------------
 # L-kurtosis estimator
 # ---------------------------------------------------------------------------
+
 
 def _l_kurtosis(x: np.ndarray) -> float:
     """
@@ -92,7 +92,7 @@ def _l_kurtosis(x: np.ndarray) -> float:
         return float("nan")
 
     x_sorted = np.sort(x)
-    j = np.arange(1, n + 1, dtype=float)   # 1-indexed order statistic positions
+    j = np.arange(1, n + 1, dtype=float)  # 1-indexed order statistic positions
 
     # Unbiased PWM estimators b_0, b_1, b_2, b_3
     # b_r = (1/n) * sum_j [C(j-1, r) / C(n-1, r)] * x_(j)
@@ -101,13 +101,13 @@ def _l_kurtosis(x: np.ndarray) -> float:
     def pwm(r: int) -> float:
         # C(j-1, r) / C(n-1, r) for j = r+1 ... n
         # = product_{k=0}^{r-1} (j-1-k) / (n-1-k)
-        idx   = j[r:]           # j values from r+1 to n (0-indexed slice from r)
+        idx = j[r:]  # j values from r+1 to n (0-indexed slice from r)
         coeff = np.ones(n - r)
         for k in range(r):
             coeff *= (idx - 1 - k) / (n - 1 - k)
         return float(coeff @ x_sorted[r:]) / n
 
-    b0 = pwm(0)   # = mean(x)
+    b0 = pwm(0)  # = mean(x)
     b1 = pwm(1)
     b2 = pwm(2)
     b3 = pwm(3)
@@ -124,6 +124,7 @@ def _l_kurtosis(x: np.ndarray) -> float:
 # ---------------------------------------------------------------------------
 # Bucket class
 # ---------------------------------------------------------------------------
+
 
 class BucketKurtosis(Bucket):
     """
@@ -158,7 +159,7 @@ class BucketKurtosis(Bucket):
     def __init__(
         self,
         horizons: list[int] | None = None,
-        weights:  list[float] | None = None,
+        weights: list[float] | None = None,
     ) -> None:
         if horizons is None:
             self.horizons = [1, 5, 30, 60, 390]
@@ -180,7 +181,7 @@ class BucketKurtosis(Bucket):
 
     def compute_gap(
         self,
-        real:      np.ndarray,
+        real: np.ndarray,
         synthetic: np.ndarray,
     ) -> float:
         """
@@ -206,33 +207,25 @@ class BucketKurtosis(Bucket):
         """
         self._validate_input(real, synthetic)
 
-        total_gap    = 0.0
+        total_gap = 0.0
         total_weight = 0.0
 
-        for h, w in zip(self.horizons, self.weights):
+        for h, w in zip(self.horizons, self.weights, strict=True):
             n_blocks = real.shape[1] // h
             if n_blocks == 0:
                 continue
             usable = n_blocks * h
-            blocks_real = (
-                real[:, :usable]
-                .reshape(real.shape[0], n_blocks, h)
-                .sum(axis=2)
-                .ravel()
-            )
+            blocks_real = real[:, :usable].reshape(real.shape[0], n_blocks, h).sum(axis=2).ravel()
             blocks_syn = (
-                synthetic[:, :usable]
-                .reshape(synthetic.shape[0], n_blocks, h)
-                .sum(axis=2)
-                .ravel()
+                synthetic[:, :usable].reshape(synthetic.shape[0], n_blocks, h).sum(axis=2).ravel()
             )
             if len(blocks_real) < 30 or len(blocks_syn) < 30:
                 continue
             tau4_real = _l_kurtosis(blocks_real)
-            tau4_syn  = _l_kurtosis(blocks_syn)
+            tau4_syn = _l_kurtosis(blocks_syn)
             if np.isnan(tau4_real) or np.isnan(tau4_syn):
                 continue
-            total_gap    += w * abs(tau4_real - tau4_syn)
+            total_gap += w * abs(tau4_real - tau4_syn)
             total_weight += w
 
         if total_weight == 0.0:
@@ -257,7 +250,7 @@ class BucketKurtosis(Bucket):
 
         # Noise floor: contiguous-split real-vs-real gap
         half = len(real) // 2
-        g_rr = self.compute_gap(real[:half], real[half: half * 2])
+        g_rr = self.compute_gap(real[:half], real[half : half * 2])
 
         results: dict[str, bool] = {}
 

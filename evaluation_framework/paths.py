@@ -42,10 +42,10 @@ def generator_paths() -> dict[str, Path]:
     """Synthetic generator outputs alongside the real eval corpus."""
     out = output_dir()
     return {
-        "AIL":    out / "ail_synthetic.npy",
-        "GARCH":  out / "garch_synthetic.npy",
+        "AIL": out / "ail_synthetic.npy",
+        "GARCH": out / "garch_synthetic.npy",
         "SFAGan": out / "sfagan_synthetic.npy",
-        "SBBTS":  out / "sbbts_synthetic.npy",
+        "SBBTS": out / "sbbts_synthetic.npy",
     }
 
 

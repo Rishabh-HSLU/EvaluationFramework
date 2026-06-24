@@ -22,15 +22,15 @@ from .data_prep import (
     make_windows,
 )
 
-DEFAULT_RAW_DIR    = Path("data/raw")
+DEFAULT_RAW_DIR = Path("data/raw")
 DEFAULT_OUTPUT_DIR = Path("data/output_data")
-WINDOW_LEN         = 2520
+WINDOW_LEN = 2520
 
 
 def regenerate(raw_dir: Path, output_dir: Path, window_len: int = WINDOW_LEN) -> None:
-    split             = json.loads((output_dir / "ticker_split.json").read_text())
-    eval_tickers_set  = split["eval"]
-    fff               = np.load(output_dir / "fff_pattern.npy")
+    split = json.loads((output_dir / "ticker_split.json").read_text())
+    eval_tickers_set = split["eval"]
+    fff = np.load(output_dir / "fff_pattern.npy")
     eval_arr_existing = np.load(output_dir / "eval_deseasonalized.npy")
 
     print(f"ticker_split eval count : {len(eval_tickers_set)}")
@@ -51,8 +51,10 @@ def regenerate(raw_dir: Path, output_dir: Path, window_len: int = WINDOW_LEN) ->
     print(f"cleaned eval tickers    : {len(eval_dfs)}")
 
     eval_arr, eval_tickers, eval_regimes = make_windows(
-        eval_dfs, col="return_deseas",
-        window_len=window_len, regime_labels=True,
+        eval_dfs,
+        col="return_deseas",
+        window_len=window_len,
+        regime_labels=True,
     )
 
     assert eval_arr.shape == eval_arr_existing.shape, (
@@ -69,9 +71,9 @@ def regenerate(raw_dir: Path, output_dir: Path, window_len: int = WINDOW_LEN) ->
     np.save(output_dir / "eval_ticker_labels.npy", eval_tickers)
     np.save(output_dir / "eval_regime_labels.npy", eval_regimes)
 
-    n_total   = eval_arr.shape[0]
-    n0        = int((eval_regimes == 0).sum())
-    n1        = int((eval_regimes == 1).sum())
+    n_total = eval_arr.shape[0]
+    n0 = int((eval_regimes == 0).sum())
+    n1 = int((eval_regimes == 1).sum())
     n_tickers = len(np.unique(eval_tickers))
     print()
     print(f"eval windows total : {n_total}")
@@ -82,11 +84,19 @@ def regenerate(raw_dir: Path, output_dir: Path, window_len: int = WINDOW_LEN) ->
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Regenerate eval label companion arrays.")
-    p.add_argument("--raw-dir",    type=Path, default=DEFAULT_RAW_DIR,
-                   help="Directory of per-ticker raw CSVs (default: data/raw)")
-    p.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR,
-                   help="Directory containing eval_deseasonalized.npy + ticker_split.json + fff_pattern.npy")
-    p.add_argument("--window-len", type=int,  default=WINDOW_LEN)
+    p.add_argument(
+        "--raw-dir",
+        type=Path,
+        default=DEFAULT_RAW_DIR,
+        help="Directory of per-ticker raw CSVs (default: data/raw)",
+    )
+    p.add_argument(
+        "--output-dir",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR,
+        help="Directory containing eval_deseasonalized.npy + ticker_split.json + fff_pattern.npy",
+    )
+    p.add_argument("--window-len", type=int, default=WINDOW_LEN)
     args = p.parse_args()
     regenerate(args.raw_dir, args.output_dir, args.window_len)
 

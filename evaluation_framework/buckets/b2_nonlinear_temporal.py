@@ -73,9 +73,7 @@ class BucketNonlinearTemporal(Bucket):
         if k_min < 1:
             raise ValueError(f"k_min must be >= 1, got {k_min}")
         if k_max <= k_min:
-            raise ValueError(
-                f"k_max must be > k_min, got k_min={k_min}, k_max={k_max}"
-            )
+            raise ValueError(f"k_max must be > k_min, got k_min={k_min}, k_max={k_max}")
         self.k_min = k_min
         self.k_max = k_max
 
@@ -106,7 +104,7 @@ class BucketNonlinearTemporal(Bucket):
             # Path too short to estimate any lag in the window
             return np.full(k_max - k_min + 1, np.nan)
 
-        mu  = abs_r.mean()
+        mu = abs_r.mean()
         std = abs_r.std()
 
         if std < 1e-10:
@@ -121,18 +119,15 @@ class BucketNonlinearTemporal(Bucket):
             if k > k_max_actual:
                 acf[i] = np.nan
             else:
-                acf[i] = (
-                    np.dot(centered[: n - k], centered[k:])
-                    / (n * std ** 2)
-                )
+                acf[i] = np.dot(centered[: n - k], centered[k:]) / (n * std**2)
 
         return acf
 
     @staticmethod
     def _mean_acf(
         corpus: np.ndarray,
-        k_min:  int,
-        k_max:  int,
+        k_min: int,
+        k_max: int,
     ) -> np.ndarray:
         """
         Compute the ACF averaged across all paths in a corpus.
@@ -147,11 +142,10 @@ class BucketNonlinearTemporal(Bucket):
         -------
         mean_acf : shape (k_max - k_min + 1,), NaN-aware mean
         """
-        acfs = np.stack([
-            BucketNonlinearTemporal._acf_path(corpus[i], k_min, k_max)
-            for i in range(len(corpus))
-        ])                                      # (N_paths, n_lags)
-        return np.nanmean(acfs, axis=0)         # (n_lags,)
+        acfs = np.stack(
+            [BucketNonlinearTemporal._acf_path(corpus[i], k_min, k_max) for i in range(len(corpus))]
+        )  # (N_paths, n_lags)
+        return np.nanmean(acfs, axis=0)  # (n_lags,)
 
     # ------------------------------------------------------------------
     # Core metric
@@ -159,7 +153,7 @@ class BucketNonlinearTemporal(Bucket):
 
     def compute_gap(
         self,
-        real:      np.ndarray,
+        real: np.ndarray,
         synthetic: np.ndarray,
     ) -> float:
         self._validate_input(real, synthetic)
@@ -177,17 +171,15 @@ class BucketNonlinearTemporal(Bucket):
             )
 
         # Average ACF across paths for each corpus
-        acf_real = self._mean_acf(real,      self.k_min, k_max_eff)
-        acf_syn  = self._mean_acf(synthetic, self.k_min, k_max_eff)
+        acf_real = self._mean_acf(real, self.k_min, k_max_eff)
+        acf_syn = self._mean_acf(synthetic, self.k_min, k_max_eff)
 
         # Mean absolute difference across valid lags
         diff = np.abs(acf_real - acf_syn)
         valid = ~np.isnan(diff)
 
         if not valid.any():
-            raise ValueError(
-                "All ACF estimates are NaN — paths may be too short."
-            )
+            raise ValueError("All ACF estimates are NaN — paths may be too short.")
 
         gap = float(diff[valid].mean())
         return gap
@@ -210,7 +202,7 @@ class BucketNonlinearTemporal(Bucket):
 
         # Noise floor: contiguous-split real-vs-real gap
         half = len(real) // 2
-        g_rr = self.compute_gap(real[:half], real[half: half * 2])
+        g_rr = self.compute_gap(real[:half], real[half : half * 2])
 
         results: dict[str, bool] = {}
 
@@ -233,8 +225,8 @@ class BucketNonlinearTemporal(Bucket):
         # Simulate GARCH(1,1) with low persistence (alpha+beta ≈ 0.5),
         # matching real marginal's scale. Exponential ACF decay → large gap
         # at long lags even though short lags are fine.
-        omega = float(np.var(flat) * 0.5)   # unconditional var fraction
-        alpha, beta = 0.10, 0.40            # α+β = 0.50 → fast forgetting
+        omega = float(np.var(flat) * 0.5)  # unconditional var fraction
+        alpha, beta = 0.10, 0.40  # α+β = 0.50 → fast forgetting
         garch = np.empty_like(real)
         for i in range(len(garch)):
             T = real.shape[1]

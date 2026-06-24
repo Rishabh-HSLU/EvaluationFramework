@@ -50,9 +50,7 @@ class BucketLeverageEffect(Bucket):
         if k_min < 1:
             raise ValueError(f"k_min must be >= 1, got {k_min}")
         if k_max <= k_min:
-            raise ValueError(
-                f"k_max must be > k_min, got k_min={k_min}, k_max={k_max}"
-            )
+            raise ValueError(f"k_max must be > k_min, got k_min={k_min}, k_max={k_max}")
         self.k_min = k_min
         self.k_max = k_max
 
@@ -83,17 +81,17 @@ class BucketLeverageEffect(Bucket):
         if k_min > k_max_actual:
             return np.full(k_max - k_min + 1, np.nan)
 
-        mu_r  = r.mean()
+        mu_r = r.mean()
         std_r = r.std()
-        
-        mu_abs  = abs_r.mean()
+
+        mu_abs = abs_r.mean()
         std_abs = abs_r.std()
 
         if std_r < 1e-10 or std_abs < 1e-10:
             # Constant path — correlation undefined
             return np.zeros(k_max - k_min + 1)
 
-        centered_r   = r - mu_r
+        centered_r = r - mu_r
         centered_abs = abs_r - mu_abs
         n = len(path)
 
@@ -103,27 +101,26 @@ class BucketLeverageEffect(Bucket):
                 leverage[i] = np.nan
             else:
                 # Standard biased cross-correlation estimator uses n in denominator
-                leverage[i] = (
-                    np.dot(centered_r[: n - k], centered_abs[k:])
-                    / (n * std_r * std_abs)
-                )
+                leverage[i] = np.dot(centered_r[: n - k], centered_abs[k:]) / (n * std_r * std_abs)
 
         return leverage
 
     @staticmethod
     def _mean_leverage(
         corpus: np.ndarray,
-        k_min:  int,
-        k_max:  int,
+        k_min: int,
+        k_max: int,
     ) -> np.ndarray:
         """
         Compute the leverage curve averaged across all paths in a corpus.
         """
-        curves = np.stack([
-            BucketLeverageEffect._leverage_path(corpus[i], k_min, k_max)
-            for i in range(len(corpus))
-        ])                                         # (N_paths, n_lags)
-        return np.nanmean(curves, axis=0)          # (n_lags,)
+        curves = np.stack(
+            [
+                BucketLeverageEffect._leverage_path(corpus[i], k_min, k_max)
+                for i in range(len(corpus))
+            ]
+        )  # (N_paths, n_lags)
+        return np.nanmean(curves, axis=0)  # (n_lags,)
 
     # ------------------------------------------------------------------
     # Core metric
@@ -131,7 +128,7 @@ class BucketLeverageEffect(Bucket):
 
     def compute_gap(
         self,
-        real:      np.ndarray,
+        real: np.ndarray,
         synthetic: np.ndarray,
     ) -> float:
         self._validate_input(real, synthetic)
@@ -146,17 +143,15 @@ class BucketLeverageEffect(Bucket):
             )
 
         # Average leverage curves across paths
-        lev_real = self._mean_leverage(real,      self.k_min, k_max_eff)
-        lev_syn  = self._mean_leverage(synthetic, self.k_min, k_max_eff)
+        lev_real = self._mean_leverage(real, self.k_min, k_max_eff)
+        lev_syn = self._mean_leverage(synthetic, self.k_min, k_max_eff)
 
         # Mean absolute difference across valid lags
         diff = np.abs(lev_real - lev_syn)
         valid = ~np.isnan(diff)
 
         if not valid.any():
-            raise ValueError(
-                "All leverage estimates are NaN — paths may be too short."
-            )
+            raise ValueError("All leverage estimates are NaN — paths may be too short.")
 
         gap = float(diff[valid].mean())
         return gap
@@ -189,7 +184,7 @@ class BucketLeverageEffect(Bucket):
         for _ in range(n_splits):
             rng.shuffle(indices)
             half = len(real) // 2
-            a_idx, b_idx = indices[:half], indices[half: half * 2]
+            a_idx, b_idx = indices[:half], indices[half : half * 2]
             g_rr_samples.append(self.compute_gap(real[a_idx], real[b_idx]))
         g_rr = float(np.mean(g_rr_samples))
 

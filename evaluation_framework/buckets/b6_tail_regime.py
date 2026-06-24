@@ -55,7 +55,7 @@ class BucketTailRegime(Bucket):
         _, real_vols = self._get_returns_and_vols(real_corpus)
         if len(real_vols) == 0:
             raise ValueError("Real corpus too small to compute volatility regimes.")
-        
+
         self.fixed_thresholds = [
             float(np.percentile(real_vols, 100 * i / self.n_regimes))
             for i in range(1, self.n_regimes)
@@ -75,19 +75,19 @@ class BucketTailRegime(Bucket):
             thresholds = self.fixed_thresholds
         else:
             if len(real_vols) == 0:
-                return float('nan')
+                return float("nan")
             thresholds = [
                 float(np.percentile(real_vols, 100 * i / self.n_regimes))
                 for i in range(1, self.n_regimes)
             ]
 
         bounds = [-np.inf] + thresholds + [np.inf]
-        
+
         gap_sum = 0.0
         valid_regimes = 0
 
         for i in range(self.n_regimes):
-            low, high = bounds[i], bounds[i+1]
+            low, high = bounds[i], bounds[i + 1]
 
             mask_real = (real_vols >= low) & (real_vols < high)
             mask_syn = (syn_vols >= low) & (syn_vols < high)
@@ -103,13 +103,13 @@ class BucketTailRegime(Bucket):
                 valid_regimes += 1
 
         if valid_regimes == 0:
-            return float('nan')
+            return float("nan")
 
         return gap_sum / valid_regimes
 
     def _get_returns_and_vols(self, corpus: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         N_paths, T = corpus.shape
-        if T <= self.vol_lookback:
+        if self.vol_lookback >= T:
             return np.array([]), np.array([])
 
         # Use pandas for fast rolling std calculation across columns (paths)
@@ -120,22 +120,22 @@ class BucketTailRegime(Bucket):
         # local_vol(t) is std(r[t-lookback:t]).
         # df.rolling(window=lookback).std() at index `t-1` gives std(r[t-lookback:t]).
         # Thus, we align return at `t` (corpus[:, t]) with vol ending at `t-1` (vols[t-1, :]).
-        
-        valid_returns = corpus[:, self.vol_lookback:]            # shape (N, T - lookback)
-        valid_vols = vols[self.vol_lookback - 1 : T - 1, :].T    # shape (N, T - lookback)
+
+        valid_returns = corpus[:, self.vol_lookback :]  # shape (N, T - lookback)
+        valid_vols = vols[self.vol_lookback - 1 : T - 1, :].T  # shape (N, T - lookback)
 
         return valid_returns.ravel(), valid_vols.ravel()
 
     def _fit_gpd_xi(self, returns: np.ndarray) -> float:
         abs_r = np.abs(returns)
         if len(abs_r) == 0:
-            return float('nan')
+            return float("nan")
 
         u = np.percentile(abs_r, 100 * (1 - self.tail_q))
         exceedances = abs_r[abs_r > u] - u
 
         if len(exceedances) < 50:
-            return float('nan')
+            return float("nan")
 
         params = genpareto.fit(exceedances, floc=0)
         return float(params[0])
@@ -159,7 +159,7 @@ class BucketTailRegime(Bucket):
         # However, compute_gap needs (N_paths, window_len) arrays,
         # so we use a contiguous split as a pragmatic approximation.
         half = len(real) // 2
-        g_rr = self.compute_gap(real[:half], real[half: half * 2])
+        g_rr = self.compute_gap(real[:half], real[half : half * 2])
 
         results: dict[str, bool] = {}
 
@@ -187,7 +187,7 @@ class BucketTailRegime(Bucket):
 
         # --- S6.2  Real-real baseline calibration ---
         # s6 = g_rr / (g_rr + g_sr) should be ~ 0.5.
-        g_sr = self.compute_gap(real[:half], real[half: half * 2])
+        g_sr = self.compute_gap(real[:half], real[half : half * 2])
         if g_rr + g_sr > 0:
             s6 = g_rr / (g_rr + g_sr)
             results["S6.2_baseline_calibration"] = 0.2 < s6 < 0.8
@@ -207,9 +207,7 @@ class BucketTailRegime(Bucket):
             # Compute rolling vol to sort by
             lookback = self.vol_lookback
             if len(path) > lookback:
-                vols = pd.Series(path).rolling(
-                    window=lookback, min_periods=lookback
-                ).std().values
+                vols = pd.Series(path).rolling(window=lookback, min_periods=lookback).std().values
                 # Only sort the valid portion (after lookback)
                 valid_start = lookback
                 valid_path = path[valid_start:].copy()

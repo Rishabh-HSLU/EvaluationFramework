@@ -9,7 +9,9 @@ exactly one bucket from the six-bucket framework.
 """
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
+
 import numpy as np
 
 
@@ -34,7 +36,7 @@ class Bucket(ABC):
     @abstractmethod
     def compute_gap(
         self,
-        real:      np.ndarray,
+        real: np.ndarray,
         synthetic: np.ndarray,
     ) -> float:
         """
@@ -82,7 +84,7 @@ class Bucket(ABC):
 
     def _validate_input(
         self,
-        real:      np.ndarray,
+        real: np.ndarray,
         synthetic: np.ndarray,
     ) -> None:
         """Shared input validation — called by subclasses at top of compute_gap."""
@@ -93,8 +95,7 @@ class Bucket(ABC):
             )
         if real.shape[1] != synthetic.shape[1]:
             raise ValueError(
-                f"window_len mismatch: real={real.shape[1]}, "
-                f"synthetic={synthetic.shape[1]}"
+                f"window_len mismatch: real={real.shape[1]}, synthetic={synthetic.shape[1]}"
             )
         if np.isnan(real).any() or np.isnan(synthetic).any():
             raise ValueError("Input contains NaNs")

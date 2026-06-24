@@ -38,12 +38,11 @@ def load_eval_corpus(
         ticker_labels : (N,)  str   — ticker for each window
         regime_labels : (N,)  int8  — 0 = pre-crash, 1 = crash
     """
-    real    = load_corpus(real_corpus(), reference, "real")
+    real = load_corpus(real_corpus(), reference, "real")
     tickers = np.load(real_ticker_labels())
     regimes = np.load(real_regime_labels())
     if not (len(real) == len(tickers) == len(regimes)):
         raise ValueError(
-            f"Length mismatch: real={len(real)}, tickers={len(tickers)}, "
-            f"regimes={len(regimes)}"
+            f"Length mismatch: real={len(real)}, tickers={len(tickers)}, regimes={len(regimes)}"
         )
     return real, tickers, regimes

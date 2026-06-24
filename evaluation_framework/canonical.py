@@ -9,13 +9,13 @@ from the data-prep package's internals.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 
 from data_pipeline.canonical import (
     MANIFEST_NAME,
     BenchmarkReference,
+)
+from data_pipeline.canonical import (
     load_reference as load_manifest,
 )
 
@@ -32,16 +32,14 @@ __all__ = [
 
 
 def validate_corpus(
-    arr:       np.ndarray,
+    arr: np.ndarray,
     reference: BenchmarkReference,
-    name:      str,
+    name: str,
 ) -> dict[str, float]:
     if arr.ndim != 2:
         raise ValueError(f"{name}: expected (N, T), got {arr.shape}")
     if arr.shape[1] != reference.window_len:
-        raise ValueError(
-            f"{name}: T={arr.shape[1]} != {reference.window_len}"
-        )
+        raise ValueError(f"{name}: T={arr.shape[1]} != {reference.window_len}")
     if not np.isfinite(arr).all():
         raise ValueError(f"{name}: non-finite values")
     stats = {"mean": float(arr.mean()), "std": float(arr.std()), "n": float(len(arr))}
@@ -55,7 +53,4 @@ def validate_corpus(
 
 
 def format_corpus_line(name: str, stats: dict[str, float]) -> str:
-    return (
-        f"  {name:<8} n={int(stats['n']):>4}  "
-        f"mean={stats['mean']:+.5f}  std={stats['std']:.4f}"
-    )
+    return f"  {name:<8} n={int(stats['n']):>4}  mean={stats['mean']:+.5f}  std={stats['std']:.4f}"

@@ -37,7 +37,7 @@ class Sampler(ABC):
     def draw_pair(
         self,
         n_per_half: int,
-        rng:        np.random.Generator,
+        rng: np.random.Generator,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Return two DISJOINT integer index arrays into the real corpus,
@@ -51,7 +51,7 @@ class Sampler(ABC):
     @abstractmethod
     def draw_single(
         self,
-        n:   int,
+        n: int,
         rng: np.random.Generator,
     ) -> np.ndarray:
         """
@@ -64,6 +64,7 @@ class Sampler(ABC):
 # ---------------------------------------------------------------------------
 # PooledSampler
 # ---------------------------------------------------------------------------
+
 
 class PooledSampler(Sampler):
     """
@@ -82,7 +83,7 @@ class PooledSampler(Sampler):
     def draw_pair(
         self,
         n_per_half: int,
-        rng:        np.random.Generator,
+        rng: np.random.Generator,
     ) -> tuple[np.ndarray, np.ndarray]:
         if 2 * n_per_half > self._n_real:
             raise ValueError(
@@ -94,7 +95,7 @@ class PooledSampler(Sampler):
 
     def draw_single(
         self,
-        n:   int,
+        n: int,
         rng: np.random.Generator,
     ) -> np.ndarray:
         if n > self._n_real:
@@ -105,6 +106,7 @@ class PooledSampler(Sampler):
 # ---------------------------------------------------------------------------
 # WithinTickerSampler
 # ---------------------------------------------------------------------------
+
 
 class WithinTickerSampler(Sampler):
     """
@@ -118,29 +120,25 @@ class WithinTickerSampler(Sampler):
 
     def __init__(
         self,
-        ticker_labels:  np.ndarray,
+        ticker_labels: np.ndarray,
         max_n_per_half: int,
     ) -> None:
         if max_n_per_half < 1:
             raise ValueError(f"max_n_per_half must be ≥ 1, got {max_n_per_half}")
 
         counts = Counter(ticker_labels.tolist())
-        eligible = sorted(t for t, c in counts.items()
-                          if c >= 2 * max_n_per_half)
+        eligible = sorted(t for t, c in counts.items() if c >= 2 * max_n_per_half)
 
         if not eligible:
             top = counts.most_common(3)
             raise ValueError(
-                f"No tickers have ≥ {2 * max_n_per_half} windows. "
-                f"Largest tickers: {top}"
+                f"No tickers have ≥ {2 * max_n_per_half} windows. Largest tickers: {top}"
             )
 
         # Pre-compute per-ticker index arrays for O(1) lookup at draw time.
-        self._eligible_tickers   = np.array(eligible)
-        self._ticker_to_indices  = {
-            t: np.where(ticker_labels == t)[0] for t in eligible
-        }
-        self._max_n_per_half     = int(max_n_per_half)
+        self._eligible_tickers = np.array(eligible)
+        self._ticker_to_indices = {t: np.where(ticker_labels == t)[0] for t in eligible}
+        self._max_n_per_half = int(max_n_per_half)
 
     @property
     def eligible_tickers(self) -> np.ndarray:
@@ -152,7 +150,7 @@ class WithinTickerSampler(Sampler):
     def draw_pair(
         self,
         n_per_half: int,
-        rng:        np.random.Generator,
+        rng: np.random.Generator,
     ) -> tuple[np.ndarray, np.ndarray]:
         if n_per_half > self._max_n_per_half:
             raise ValueError(
@@ -160,27 +158,25 @@ class WithinTickerSampler(Sampler):
                 f"{self._max_n_per_half} fixed at construction."
             )
         ticker = self._pick_ticker(rng)
-        pool   = self._ticker_to_indices[ticker]
-        idx    = rng.choice(pool, size=2 * n_per_half, replace=False)
+        pool = self._ticker_to_indices[ticker]
+        idx = rng.choice(pool, size=2 * n_per_half, replace=False)
         return idx[:n_per_half], idx[n_per_half:]
 
     def draw_single(
         self,
-        n:   int,
+        n: int,
         rng: np.random.Generator,
     ) -> np.ndarray:
         if n > self._max_n_per_half:
-            raise ValueError(
-                f"n={n} exceeds max_n_per_half={self._max_n_per_half}."
-            )
+            raise ValueError(f"n={n} exceeds max_n_per_half={self._max_n_per_half}.")
         ticker = self._pick_ticker(rng)
-        return rng.choice(self._ticker_to_indices[ticker],
-                          size=n, replace=False)
+        return rng.choice(self._ticker_to_indices[ticker], size=n, replace=False)
 
 
 # ---------------------------------------------------------------------------
 # WithinRegimeSampler
 # ---------------------------------------------------------------------------
+
 
 class WithinRegimeSampler(Sampler):
     """
@@ -190,8 +186,8 @@ class WithinRegimeSampler(Sampler):
 
     def __init__(
         self,
-        regime_labels:  np.ndarray,
-        target_regime:  int,
+        regime_labels: np.ndarray,
+        target_regime: int,
         max_n_per_half: int,
     ) -> None:
         if max_n_per_half < 1:
@@ -200,12 +196,11 @@ class WithinRegimeSampler(Sampler):
         pool = np.where(regime_labels == target_regime)[0]
         if len(pool) < 2 * max_n_per_half:
             raise ValueError(
-                f"Regime {target_regime} has {len(pool)} windows, "
-                f"need ≥ {2 * max_n_per_half}."
+                f"Regime {target_regime} has {len(pool)} windows, need ≥ {2 * max_n_per_half}."
             )
-        self._pool            = pool
-        self._target_regime   = int(target_regime)
-        self._max_n_per_half  = int(max_n_per_half)
+        self._pool = pool
+        self._target_regime = int(target_regime)
+        self._max_n_per_half = int(max_n_per_half)
 
     @property
     def pool_size(self) -> int:
@@ -218,7 +213,7 @@ class WithinRegimeSampler(Sampler):
     def draw_pair(
         self,
         n_per_half: int,
-        rng:        np.random.Generator,
+        rng: np.random.Generator,
     ) -> tuple[np.ndarray, np.ndarray]:
         if n_per_half > self._max_n_per_half:
             raise ValueError(
@@ -230,11 +225,9 @@ class WithinRegimeSampler(Sampler):
 
     def draw_single(
         self,
-        n:   int,
+        n: int,
         rng: np.random.Generator,
     ) -> np.ndarray:
         if n > self._max_n_per_half:
-            raise ValueError(
-                f"n={n} exceeds max_n_per_half={self._max_n_per_half}."
-            )
+            raise ValueError(f"n={n} exceeds max_n_per_half={self._max_n_per_half}.")
         return rng.choice(self._pool, size=n, replace=False)
