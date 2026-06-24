@@ -1,6 +1,6 @@
 # EvaluationFramework
 
-A six-bucket fidelity benchmark for synthetic 1-minute financial return generators. Each bucket measures one orthogonal stylized fact; scores are normalized against a real-vs-real baseline so results are interpretable without any reference model.
+A six-facets (termed facets in the paper, TODO harmonize) fidelity benchmark for synthetic 1-minute financial return generators. Each bucket measures one orthogonal stylized fact; scores are normalized against a real-vs-real baseline so results are interpretable without any reference model.
 
 ```
 real eval corpus  ──┐
@@ -8,7 +8,15 @@ real eval corpus  ──┐
 synthetic corpus  ──┘                                                      (1 = indistinguishable)
 ```
 
-`s_b = mean(g_rr) / (mean(g_rr) + mean(g_sr))` — 1 means the synthetic is indistinguishable from real under that metric, 0.5 is the real-vs-real noise floor.
+`s_b = mean(g_rr) / (mean(g_rr) + mean(g_sr))`
+
+Interpretation:
+
+- `s_b = 1.0` means zero measured discrepancy between synthetic and real data under bucket `b`.
+- `s_b = 0.5` means the synthetic data are at real-sample parity: the synthetic-vs-real gap equals the natural real-vs-real baseline variability.
+- `s_b > 0.5` means the synthetic-vs-real gap is smaller than the real-vs-real baseline gap. In other words, the synthetic data are closer to the reference real sample than an independent real sample would be under that bucket.
+- `s_b < 0.5` means the synthetic data deviate more from real data than two independent real samples deviate from each other.
+- `s_b → 0` indicates increasing structural divergence from the real data along that bucket.
 
 ---
 
