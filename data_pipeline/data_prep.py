@@ -202,6 +202,7 @@ def make_windows(
     col: str,
     window_len: int = 2520,
     regime_labels: bool = False,
+    drop_mixed_regime_windows: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """
     Non-overlapping windows in sorted ticker order.
@@ -214,15 +215,28 @@ def make_windows(
     regimes: list[int] = []
 
     for ticker in sorted(ticker_dfs):
-        df = ticker_dfs[ticker]
-        vals = df[col].values
-        dates = df["date_ny"].values if regime_labels else None
+        df = ticker_dfs[ticker].sort_values(["date_ny", "minute_of_day_ny"]).reset_index(drop=True)
+        vals = df[col].to_numpy(dtype=np.float32)
+        if regime_labels:
+            dates = pd.to_datetime(df["date_ny"]).to_numpy()
+            cutoff = np.datetime64(pd.to_datetime(CRASH_CUTOFF).date())
+        else:
+            dates = None
         for i in range(len(vals) // window_len):
             start, end = i * window_len, (i + 1) * window_len
+            if regime_labels:
+                window_dates = dates[start:end]
+                is_crash = window_dates >= cutoff
+                is_mixed = is_crash.any() and (~is_crash).any()
+                if is_mixed:
+                    if drop_mixed_regime_windows:
+                        continue
+                    regime = int(is_crash.mean() >= 0.5)  # majority rule
+                else:
+                    regime = int(is_crash.all())
+                regimes.append(regime)
             windows.append(vals[start:end])
             tickers.append(ticker)
-            if regime_labels:
-                regimes.append(0 if dates[start] < CRASH_CUTOFF else 1)
 
     if not windows:
         empty_w = np.empty((0, window_len, 1))
