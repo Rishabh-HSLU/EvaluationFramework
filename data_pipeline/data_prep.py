@@ -23,7 +23,7 @@ from scipy.optimize import curve_fit
 from .canonical import BenchmarkReference
 
 SESSION_START_MIN = 570
-SESSION_END_MIN = 959
+SESSION_END_MIN = 960
 MINUTES_PER_DAY = SESSION_END_MIN - SESSION_START_MIN + 1
 
 TRAIN_BAR_THRESHOLD = 280
