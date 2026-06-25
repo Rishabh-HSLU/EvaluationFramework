@@ -125,28 +125,54 @@ def _fff_func(tau: np.ndarray, *params) -> np.ndarray:
 
 
 def fit_fff(train_returns: list[pd.DataFrame]) -> np.ndarray:
-    pooled = pd.concat(train_returns, ignore_index=True)
-    pooled["tau"] = pooled["minute_of_day_ny"] - SESSION_START_MIN
-    mean_abs = (
-        pooled.groupby("tau")["log_return"]
-        .apply(lambda x: x.abs().mean())
-        .reset_index(name="mean_abs_return")
-        .sort_values("tau")
-    )
-    tau_vals = mean_abs["tau"].values.astype(float)
-    y_vals = mean_abs["mean_abs_return"].values
+    pooled = pd.concat(train_returns, ignore_index=True).copy()
+
+    pooled["tau"] = (pooled["minute_of_day_ny"] - SESSION_START_MIN).astype(int)
+
+    if pooled["tau"].min() < 0 or pooled["tau"].max() >= MINUTES_PER_DAY:
+        raise ValueError("Found minute_of_day_ny outside the expected regular-session range.")
+
+    # Empirical intraday variance profile.
+    var_profile = pooled.groupby("tau")["log_return"].var(ddof=1).reindex(range(MINUTES_PER_DAY))
+
+    if var_profile.isna().any():
+        missing = var_profile[var_profile.isna()].index.tolist()
+        raise ValueError(f"Missing variance estimates for tau values: {missing}")
+
+    eps = 1e-8
+    tau_vals = np.arange(MINUTES_PER_DAY, dtype=float)
+    y_vals = np.log(var_profile.values + eps)
+
     n_params = 1 + 2 * FFF_HARMONICS
     p0 = np.zeros(n_params)
     p0[0] = y_vals.mean()
-    popt, _ = curve_fit(_fff_func, tau_vals, y_vals, p0=p0, maxfev=10_000)
-    s = _fff_func(np.arange(MINUTES_PER_DAY, dtype=float), *popt)
-    return np.clip(s, a_min=1e-8, a_max=None)
+
+    popt, _ = curve_fit(
+        _fff_func,
+        tau_vals,
+        y_vals,
+        p0=p0,
+        maxfev=10_000,
+    )
+
+    # Fitted log variance -> fitted volatility scale.
+    log_var_hat = _fff_func(tau_vals, *popt)
+    s = np.exp(0.5 * log_var_hat)
+
+    return np.clip(s, a_min=eps, a_max=None)
 
 
 def deseasonalize(df: pd.DataFrame, s: np.ndarray) -> pd.DataFrame:
-    tau = (df["minute_of_day_ny"] - SESSION_START_MIN).values.astype(int)
+    if len(s) != MINUTES_PER_DAY:
+        raise ValueError(f"Expected seasonal curve of length {MINUTES_PER_DAY}, got {len(s)}.")
+
+    tau = (df["minute_of_day_ny"] - SESSION_START_MIN).astype(int).to_numpy()
+
+    if tau.min() < 0 or tau.max() >= MINUTES_PER_DAY:
+        raise ValueError("Found minute_of_day_ny outside the expected regular-session range.")
+
     out = df.copy()
-    out["return_deseas"] = out["log_return"] / s[tau]
+    out["return_deseas"] = out["log_return"].to_numpy() / s[tau]
     return out
 
 
