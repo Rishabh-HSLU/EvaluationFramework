@@ -124,17 +124,22 @@ def _fff_func(tau: np.ndarray, *params) -> np.ndarray:
     return result
 
 
-def fit_fff(train_returns: list[pd.DataFrame]) -> np.ndarray:
-    pooled = pd.concat(train_returns, ignore_index=True).copy()
-
+def fit_fff(train_returns: dict[str, pd.DataFrame]) -> np.ndarray:
+    pooled = pd.concat(
+        (df.assign(ticker=ticker) for ticker, df in train_returns.items()), ignore_index=True
+    ).copy()
     pooled["tau"] = (pooled["minute_of_day_ny"] - SESSION_START_MIN).astype(int)
-
     if pooled["tau"].min() < 0 or pooled["tau"].max() >= MINUTES_PER_DAY:
         raise ValueError("Found minute_of_day_ny outside the expected regular-session range.")
 
+    # One statistic per ticker-day-minute.
+    cell = pooled.groupby(["ticker", "date_ny", "tau"], as_index=False)["log_return"].mean()
+    cell["sq_return"] = cell["log_return"] ** 2
+    ticker_tau_profile = cell.groupby(["ticker", "tau"])["sq_return"].mean().reset_index()
     # Empirical intraday variance profile.
-    var_profile = pooled.groupby("tau")["log_return"].var(ddof=1).reindex(range(MINUTES_PER_DAY))
-
+    var_profile = (
+        ticker_tau_profile.groupby("tau")["sq_return"].mean().reindex(range(MINUTES_PER_DAY))
+    )
     if var_profile.isna().any():
         missing = var_profile[var_profile.isna()].index.tolist()
         raise ValueError(f"Missing variance estimates for tau values: {missing}")
@@ -277,7 +282,7 @@ def build_dataset(
     del cleaned
 
     print("FFF fit and deseasonalization (Step 9)...")
-    s = fit_fff(list(train_dfs.values()))
+    s = fit_fff(train_dfs)
     np.save(output_dir / "fff_pattern.npy", s)
     train_dfs = {t: deseasonalize(df, s) for t, df in train_dfs.items()}
     eval_dfs = {t: deseasonalize(df, s) for t, df in eval_dfs.items()}
