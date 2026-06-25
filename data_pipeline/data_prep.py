@@ -119,9 +119,8 @@ def _fff_func(tau: np.ndarray, *params) -> np.ndarray:
     result = np.full_like(tau, c0, dtype=float)
     for j in range(1, FFF_HARMONICS + 1):
         a_j, b_j = params[2 * j - 1], params[2 * j]
-        result += a_j * np.cos(2 * np.pi * j * tau / MINUTES_PER_DAY) + b_j * np.sin(
-            2 * np.pi * j * tau / MINUTES_PER_DAY
-        )
+        angle = 2 * np.pi * j * tau / MINUTES_PER_DAY
+        result += a_j * np.cos(angle) + b_j * np.sin(angle)
     return result
 
 
