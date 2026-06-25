@@ -63,12 +63,13 @@ def clean_ticker(csv_path: Path) -> pd.DataFrame | None:
 
     is_session_start = ~regular["same_day"]
     is_post_gap = regular["same_day"] & (regular["diff_min"] > 1)
-    regular_clean = regular[~(is_session_start | is_post_gap)].copy()
-    if len(regular_clean) < 2:
-        return None
 
-    regular_clean["log_return"] = np.log(regular_clean["close"]).diff()
-    regular_clean = regular_clean.dropna(subset=["log_return"])
+    regular["log_return"] = np.log(regular["close"]).diff()
+    regular.loc[is_session_start | is_post_gap, "log_return"] = np.nan
+
+    regular_clean = regular.dropna(subset=["log_return"]).copy()
+    if len(regular) < 2:
+        return None
     return regular_clean[["date_ny", "minute_of_day_ny", "log_return"]]
 
 
