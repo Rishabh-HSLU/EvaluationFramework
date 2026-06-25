@@ -1,3 +1,5 @@
+data/raw_intraday
+
 # Python / packaging
 __pycache__/
 *.py[cod]
