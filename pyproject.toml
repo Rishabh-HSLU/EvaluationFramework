@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ipykernel>=7.2.0", "pytest>=8.0"]
+dev = ["ipykernel>=7.2.0", "pytest>=8.0", "pandas-stubs~=3.0.3", "scipy-stubs~=1.17.1"]
 data = ["alpaca-py>=0.13"]
 
 [project.scripts]
