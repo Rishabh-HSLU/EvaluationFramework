@@ -67,7 +67,7 @@ def clean_ticker(csv_path: Path) -> pd.DataFrame | None:
     if len(regular_clean) < 2:
         return None
 
-    regular_clean["log_return"] = np.log(regular_clean["close"] / regular_clean["close"].shift(1))
+    regular_clean["log_return"] = np.log(regular_clean["close"]).diff()
     regular_clean = regular_clean.dropna(subset=["log_return"])
     return regular_clean[["date_ny", "minute_of_day_ny", "log_return"]]
 
