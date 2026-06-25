@@ -124,7 +124,7 @@ def _fff_func(tau: np.ndarray, *params) -> np.ndarray:
     return result
 
 
-def fit_fff(train_returns: dict[str, pd.DataFrame]) -> np.ndarray:
+def fit_fff(train_returns: dict[str, pd.DataFrame]) -> pd.Series[float]:
     pooled = pd.concat(
         (df.assign(ticker=ticker) for ticker, df in train_returns.items()), ignore_index=True
     ).copy()
@@ -136,17 +136,15 @@ def fit_fff(train_returns: dict[str, pd.DataFrame]) -> np.ndarray:
     cell = pooled.groupby(["ticker", "date_ny", "tau"], as_index=False)["log_return"].mean()
     cell["sq_return"] = cell["log_return"] ** 2
     ticker_tau_profile = cell.groupby(["ticker", "tau"])["sq_return"].mean().reset_index()
+    expected_taus = np.arange(pooled["tau"].min(), pooled["tau"].max() + 1)
     # Empirical intraday variance profile.
-    var_profile = (
-        ticker_tau_profile.groupby("tau")["sq_return"].mean().reindex(range(MINUTES_PER_DAY))
-    )
+    var_profile = ticker_tau_profile.groupby("tau")["sq_return"].mean().reindex(expected_taus)
     if var_profile.isna().any():
         missing = var_profile[var_profile.isna()].index.tolist()
         raise ValueError(f"Missing variance estimates for tau values: {missing}")
 
-    eps = 1e-8
-    tau_vals = np.arange(MINUTES_PER_DAY, dtype=float)
-    y_vals = np.log(var_profile.values + eps)
+    tau_vals = expected_taus.astype(float)
+    y_vals = np.log(var_profile.values + 1e-12)
 
     n_params = 1 + 2 * FFF_HARMONICS
     p0 = np.zeros(n_params)
@@ -163,21 +161,25 @@ def fit_fff(train_returns: dict[str, pd.DataFrame]) -> np.ndarray:
     # Fitted log variance -> fitted volatility scale.
     log_var_hat = _fff_func(tau_vals, *popt)
     s = np.exp(0.5 * log_var_hat)
+    return pd.Series(
+        np.clip(s, a_min=1e-8, a_max=None),
+        index=expected_taus,
+        name="fff_scale",
+    )
 
-    return np.clip(s, a_min=eps, a_max=None)
 
-
-def deseasonalize(df: pd.DataFrame, s: np.ndarray) -> pd.DataFrame:
-    if len(s) != MINUTES_PER_DAY:
-        raise ValueError(f"Expected seasonal curve of length {MINUTES_PER_DAY}, got {len(s)}.")
-
-    tau = (df["minute_of_day_ny"] - SESSION_START_MIN).astype(int).to_numpy()
-
+def deseasonalize(df: pd.DataFrame, s: pd.Series[float]) -> pd.DataFrame:
+    tau = (df["minute_of_day_ny"] - SESSION_START_MIN).astype(int)
     if tau.min() < 0 or tau.max() >= MINUTES_PER_DAY:
         raise ValueError("Found minute_of_day_ny outside the expected regular-session range.")
 
+    scale = tau.map(s)
+    if scale.isna().any():
+        missing = sorted(tau[scale.isna()].unique())
+        raise ValueError(f"Missing FFF scale for tau values: {missing}")
+
     out = df.copy()
-    out["return_deseas"] = out["log_return"].to_numpy() / s[tau]
+    out["return_deseas"] = out["log_return"].to_numpy() / scale.to_numpy()
     return out
 
 
@@ -283,7 +285,11 @@ def build_dataset(
 
     print("FFF fit and deseasonalization (Step 9)...")
     s = fit_fff(train_dfs)
-    np.save(output_dir / "fff_pattern.npy", s)
+    np.savez(
+        output_dir / "fff_pattern.npz",
+        tau=s.index.to_numpy(dtype=np.int16),
+        scale=s.to_numpy(dtype=np.float64),
+    )
     train_dfs = {t: deseasonalize(df, s) for t, df in train_dfs.items()}
     eval_dfs = {t: deseasonalize(df, s) for t, df in eval_dfs.items()}
 
