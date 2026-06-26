@@ -23,7 +23,7 @@ from scipy.optimize import curve_fit
 from .canonical import BenchmarkReference
 
 SESSION_START_MIN = 570
-SESSION_END_MIN = 959
+SESSION_END_MIN = 960
 MINUTES_PER_DAY = SESSION_END_MIN - SESSION_START_MIN + 1
 
 TRAIN_BAR_THRESHOLD = 280
@@ -63,12 +63,13 @@ def clean_ticker(csv_path: Path) -> pd.DataFrame | None:
 
     is_session_start = ~regular["same_day"]
     is_post_gap = regular["same_day"] & (regular["diff_min"] > 1)
-    regular_clean = regular[~(is_session_start | is_post_gap)].copy()
-    if len(regular_clean) < 2:
-        return None
 
-    regular_clean["log_return"] = np.log(regular_clean["close"] / regular_clean["close"].shift(1))
-    regular_clean = regular_clean.dropna(subset=["log_return"])
+    regular["log_return"] = np.log(regular["close"]).diff()
+    regular.loc[is_session_start | is_post_gap, "log_return"] = np.nan
+
+    regular_clean = regular.dropna(subset=["log_return"]).copy()
+    if len(regular) < 2:
+        return None
     return regular_clean[["date_ny", "minute_of_day_ny", "log_return"]]
 
 
@@ -119,35 +120,67 @@ def _fff_func(tau: np.ndarray, *params) -> np.ndarray:
     result = np.full_like(tau, c0, dtype=float)
     for j in range(1, FFF_HARMONICS + 1):
         a_j, b_j = params[2 * j - 1], params[2 * j]
-        result += a_j * np.cos(2 * np.pi * j * tau / MINUTES_PER_DAY) + b_j * np.sin(
-            2 * np.pi * j * tau / MINUTES_PER_DAY
-        )
+        angle = 2 * np.pi * j * tau / MINUTES_PER_DAY
+        result += a_j * np.cos(angle) + b_j * np.sin(angle)
     return result
 
 
-def fit_fff(train_returns: list[pd.DataFrame]) -> np.ndarray:
-    pooled = pd.concat(train_returns, ignore_index=True)
-    pooled["tau"] = pooled["minute_of_day_ny"] - SESSION_START_MIN
-    mean_abs = (
-        pooled.groupby("tau")["log_return"]
-        .apply(lambda x: x.abs().mean())
-        .reset_index(name="mean_abs_return")
-        .sort_values("tau")
-    )
-    tau_vals = mean_abs["tau"].values.astype(float)
-    y_vals = mean_abs["mean_abs_return"].values
+def fit_fff(train_returns: dict[str, pd.DataFrame]) -> pd.Series[float]:
+    pooled = pd.concat(
+        (df.assign(ticker=ticker) for ticker, df in train_returns.items()), ignore_index=True
+    ).copy()
+    pooled["tau"] = (pooled["minute_of_day_ny"] - SESSION_START_MIN).astype(int)
+    if pooled["tau"].min() < 0 or pooled["tau"].max() >= MINUTES_PER_DAY:
+        raise ValueError("Found minute_of_day_ny outside the expected regular-session range.")
+
+    # One statistic per ticker-day-minute.
+    cell = pooled.groupby(["ticker", "date_ny", "tau"], as_index=False)["log_return"].mean()
+    cell["sq_return"] = cell["log_return"] ** 2
+    ticker_tau_profile = cell.groupby(["ticker", "tau"])["sq_return"].mean().reset_index()
+    expected_taus = np.arange(pooled["tau"].min(), pooled["tau"].max() + 1)
+    # Empirical intraday variance profile.
+    var_profile = ticker_tau_profile.groupby("tau")["sq_return"].mean().reindex(expected_taus)
+    if var_profile.isna().any():
+        missing = var_profile[var_profile.isna()].index.tolist()
+        raise ValueError(f"Missing variance estimates for tau values: {missing}")
+
+    tau_vals = expected_taus.astype(float)
+    y_vals = np.log(var_profile.values + 1e-12)
+
     n_params = 1 + 2 * FFF_HARMONICS
     p0 = np.zeros(n_params)
     p0[0] = y_vals.mean()
-    popt, _ = curve_fit(_fff_func, tau_vals, y_vals, p0=p0, maxfev=10_000)
-    s = _fff_func(np.arange(MINUTES_PER_DAY, dtype=float), *popt)
-    return np.clip(s, a_min=1e-8, a_max=None)
+
+    popt, _ = curve_fit(
+        _fff_func,
+        tau_vals,
+        y_vals,
+        p0=p0,
+        maxfev=10_000,
+    )
+
+    # Fitted log variance -> fitted volatility scale.
+    log_var_hat = _fff_func(tau_vals, *popt)
+    s = np.exp(0.5 * log_var_hat)
+    return pd.Series(
+        np.clip(s, a_min=1e-8, a_max=None),
+        index=expected_taus,
+        name="fff_scale",
+    )
 
 
-def deseasonalize(df: pd.DataFrame, s: np.ndarray) -> pd.DataFrame:
-    tau = (df["minute_of_day_ny"] - SESSION_START_MIN).values.astype(int)
+def deseasonalize(df: pd.DataFrame, s: pd.Series[float]) -> pd.DataFrame:
+    tau = (df["minute_of_day_ny"] - SESSION_START_MIN).astype(int)
+    if tau.min() < 0 or tau.max() >= MINUTES_PER_DAY:
+        raise ValueError("Found minute_of_day_ny outside the expected regular-session range.")
+
+    scale = tau.map(s)
+    if scale.isna().any():
+        missing = sorted(tau[scale.isna()].unique())
+        raise ValueError(f"Missing FFF scale for tau values: {missing}")
+
     out = df.copy()
-    out["return_deseas"] = out["log_return"] / s[tau]
+    out["return_deseas"] = out["log_return"].to_numpy() / scale.to_numpy()
     return out
 
 
@@ -170,6 +203,7 @@ def make_windows(
     col: str,
     window_len: int = 2520,
     regime_labels: bool = False,
+    drop_mixed_regime_windows: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """
     Non-overlapping windows in sorted ticker order.
@@ -182,15 +216,28 @@ def make_windows(
     regimes: list[int] = []
 
     for ticker in sorted(ticker_dfs):
-        df = ticker_dfs[ticker]
-        vals = df[col].values
-        dates = df["date_ny"].values if regime_labels else None
+        df = ticker_dfs[ticker].sort_values(["date_ny", "minute_of_day_ny"]).reset_index(drop=True)
+        vals = df[col].to_numpy(dtype=np.float32)
+        if regime_labels:
+            dates = pd.to_datetime(df["date_ny"]).to_numpy()
+            cutoff = np.datetime64(pd.to_datetime(CRASH_CUTOFF).date())
+        else:
+            dates = None
         for i in range(len(vals) // window_len):
             start, end = i * window_len, (i + 1) * window_len
+            if regime_labels:
+                window_dates = dates[start:end]
+                is_crash = window_dates >= cutoff
+                is_mixed = is_crash.any() and (~is_crash).any()
+                if is_mixed:
+                    if drop_mixed_regime_windows:
+                        continue
+                    regime = int(is_crash.mean() >= 0.5)  # majority rule
+                else:
+                    regime = int(is_crash.all())
+                regimes.append(regime)
             windows.append(vals[start:end])
             tickers.append(ticker)
-            if regime_labels:
-                regimes.append(0 if dates[start] < CRASH_CUTOFF else 1)
 
     if not windows:
         empty_w = np.empty((0, window_len, 1))
@@ -252,8 +299,12 @@ def build_dataset(
     del cleaned
 
     print("FFF fit and deseasonalization (Step 9)...")
-    s = fit_fff(list(train_dfs.values()))
-    np.save(output_dir / "fff_pattern.npy", s)
+    s = fit_fff(train_dfs)
+    np.savez(
+        output_dir / "fff_pattern.npz",
+        tau=s.index.to_numpy(dtype=np.int16),
+        scale=s.to_numpy(dtype=np.float64),
+    )
     train_dfs = {t: deseasonalize(df, s) for t, df in train_dfs.items()}
     eval_dfs = {t: deseasonalize(df, s) for t, df in eval_dfs.items()}
 
