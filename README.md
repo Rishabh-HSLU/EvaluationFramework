@@ -119,35 +119,19 @@ Then pass it to `CurationPipeline` alongside the real dataset. The pipeline hand
 
 ## The six buckets
 
-| ID | Stylized fact | Statistic | Aggregation |
-|----|--------------|-----------|-------------|
-| B1 | Marginal distribution, 5% tails | Tail-weighted Wasserstein-1 | Pooled |
-| B2 | Volatility clustering | Mean ACF gap on \|r\|, lags 60–390 | Per-path, FFT |
-| B3 | Leverage effect | Cross-correlation gap Corr(r_t, \|r_{t+k}\|), lags 1–390 | Per-path, FFT |
-| B4 | Aggregational kurtosis | Uniform-weighted L-kurtosis gap across horizons {1, 5, 30, 60, 390} min | Per-path then pooled |
+| ID | Stylized fact             | Statistic | Aggregation |
+|----|---------------------------|-----------|-------------|
+| B1 | Unconditional Heavy Tails | Tail-weighted Wasserstein-1 | Pooled |
+| B2 | Volatility clustering     | Mean ACF gap on \|r\|, lags 60–390 | Per-path, FFT |
+| B3 | Leverage effect           | Cross-correlation gap Corr(r_t, \|r_{t+k}\|), lags 1–390 | Per-path, FFT |
+| B4 | Aggregational kurtosis    | Uniform-weighted L-kurtosis gap across horizons {1, 5, 30, 60, 390} min | Per-path then pooled |
 | B5 | Multi-scale vol structure | Frobenius gap on cross-scale vol correlation matrix | Per-path |
-| B6 | Tail index by vol regime | GPD shape parameter ξ gap across low/high vol regimes | Regime-stratified |
-
-B4 uses **L-kurtosis** (τ₄ = λ₄/λ₂) rather than moment-based excess kurtosis. Financial returns during crisis regimes have tail indices ξ ≈ 0.3–0.5, meaning the eighth moment does not exist. L-kurtosis requires only E[|X|] < ∞ and is stable for all financial return distributions.
+| B6 | Conditional Heavy Tails   | GPD shape parameter ξ gap across low/high vol regimes | Regime-stratified |
 
 ---
 
 ## Results
 
-Benchmark on the canonical corpus: 60 eval tickers, NASDAQ 1-minute bars, Sep 2019 – Mar 2020 (1,187 windows of 2,520 returns). N = 200 paths, 200 resamples, paired-bootstrap CIs (B = 2,000).
-
-| Bucket | AIL | GARCH | SFAGan |
-|--------|-----|-------|--------|
-| B1 — Marginal tails | 0.315 [0.291, 0.340] | 0.424 [0.403, 0.445] | 0.296 [0.275, 0.317] |
-| B2 — Volatility clustering | 0.260 [0.252, 0.268] | 0.136 [0.131, 0.141] | 0.053 [0.051, 0.055] |
-| B3 — Leverage effect | 0.422 [0.419, 0.424] | 0.378 [0.374, 0.381] | 0.401 [0.398, 0.403] |
-| B4 — Aggregational kurtosis | 0.543 [0.518, 0.568] | 0.374 [0.347, 0.402] | 0.143 [0.133, 0.155] |
-| B5 — Cross-scale vol structure | 0.132 [0.123, 0.143] | 0.044 [0.040, 0.047] | 0.038 [0.035, 0.041] |
-| B6 — Tail index by vol regime | 0.130 [0.124, 0.137] | 0.259 [0.247, 0.271] | 0.101 [0.095, 0.107] |
-| **Composite (arithmetic)** | **0.300** | **0.269** | **0.172** |
-| **Composite (geometric)** | **0.262** | **0.212** | **0.123** |
-
-**Rank: AIL > GARCH > SFAGan**
 
 ---
 
