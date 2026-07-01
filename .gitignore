@@ -16,7 +16,6 @@ build/
 ablation_output/
 runs/
 paper/
-scripts/
 tests/
 
 # LaTeX build artifacts
@@ -27,3 +26,4 @@ paper/**/*.toc
 paper/**/*.synctex.gz
 paper/**/*.fls
 paper/**/*.fdb_latexmk
+*.parquet

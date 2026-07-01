@@ -1,0 +1,51 @@
+{
+  "build_timestamp_utc": "2026-06-30T20:54:47.330908+00:00",
+  "parameters": {
+    "calendar": "XNYS",
+    "frequency": "1min",
+    "coverage_floor": 0.7,
+    "start_date": "2019-09-03",
+    "end_date": "2020-03-20"
+  },
+  "clock": {
+    "length": 53850,
+    "first": "2019-09-03 13:31:00+00:00",
+    "last": "2020-03-20 20:00:00+00:00",
+    "tz": "UTC"
+  },
+  "ticker_counts": {
+    "real_raw": 948,
+    "synthetic_raw": {
+      "AIL": 952
+    },
+    "intersection": 948,
+    "final_universe": 600
+  },
+  "coverage_stats": {
+    "real": {
+      "mean": 0.8236273403617644,
+      "median": 0.8596657381615599,
+      "min": 0.09600742804085423,
+      "max": 0.9989600742804086,
+      "std": 0.1514711365733689
+    },
+    "AIL": {
+      "mean": 0.7480385035788583,
+      "median": 0.757205199628598,
+      "min": 0.16787372330547817,
+      "max": 0.9260538532961932,
+      "std": 0.11886752271055835
+    },
+    "joint_min": {
+      "mean": 0.737387746866785,
+      "median": 0.7500185701021356,
+      "min": 0.09600742804085423,
+      "max": 0.9260538532961932,
+      "std": 0.12944007145073563
+    }
+  },
+  "source_file_sha256": {
+    "Real": "191fd0b8add7497be76cc1e8152da0b51e46e0f68c2c47bb7fa81c039c165af7",
+    "AIL": "2b9428226ac96ba4fe834554f5faf74f36e61f17824de8d7de05ee6360c5c7fc"
+  }
+}

@@ -8,8 +8,11 @@ dependencies = [
     "matplotlib>=3.10.9",
     "numpy>=2.4.5",
     "pandas>=3.0.3",
+    "pandas-market-calendars>=5.4.0",
+    "pyarrow>=24.0.0",
     "scipy>=1.17.1",
     "torch>=2.12.0",
+    "tqdm>=4.68.3",
 ]
 
 [project.optional-dependencies]

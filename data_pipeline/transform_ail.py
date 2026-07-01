@@ -28,7 +28,7 @@ from .canonical import save_benchmark_corpus
 
 WINDOW_LEN = 2520
 SESSION_START_MIN = 570
-SESSION_END_MIN = 959
+SESSION_END_MIN = 960
 
 
 def load_fff(path: Path) -> np.ndarray:
