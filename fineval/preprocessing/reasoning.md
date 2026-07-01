@@ -1,3 +1,4 @@
+# Data Loading
 ## Ticker Universe Curation
 
 **Summary.** We started this project with 948 real-data tickers and an
@@ -190,6 +191,8 @@ preprocessing layer.
 
 ### 6. Caveat
 
+
+
 The curation introduces a mild survivorship/liquidity bias: the
 evaluated universe tilts toward more continuously-traded names. This
 is a deliberate trade-off. The alternative would either require
@@ -199,3 +202,178 @@ gap-randomness has not been verified at the level we've verified the
 current universe. The bias is in the same direction as standard
 universe-construction conventions in the cited literature and should
 be stated explicitly in the paper's data section.
+
+------------------------
+# Preprocessing
+
+## Conditional Intraday Deseasonalization (FFF)
+
+**Summary.** The Flexible Fourier Form (FFF) procedure removes the deterministic U-shaped intraday volatility smile from returns. While real equities and advanced synthetic generators (like AIL) exhibit this genuine smile, standard baselines (like GBM or standard GARCH) are structurally flat. Blindly applying a deseasonalization profile to a flat series injects an artificial inverted smile. Therefore, the pipeline must conditionally detect if a genuine smile exists per series, and only fit/apply FFF if it does.
+
+---
+
+### 1. The Danger of Blind Deseasonalization
+
+Real equity returns show a strong diurnal pattern: high variance at the open (09:31 ET), dropping to a trough at midday, and rising again into the close. The FFF procedure (Andersen & Bollerslev, 1997) fits a Fourier series to this log-variance profile and divides out the deterministic seasonality, leaving approximately unit-variance returns.
+
+Our empirical checks confirmed that AIL successfully learns this intraday behavior, presenting a variance profile nearly identical to real equities (open/mid variance ratio of 5.91 for AIL vs. 5.98 for real). For both real data and AIL, FFF is statistically justified and necessary to expose the true return signal.
+
+However, baseline generators like Geometric Brownian Motion (GBM) or GARCH(1,1) are typically simulated without intraday time-of-day effects—their expected variance profile across the session is flat. If we were to blindly divide a flat GBM series by a U-shaped volatility profile, we would synthetically suppress its open/close returns and inflate its midday returns. We would be actively injecting an artificial, inverted smile into the baseline, corrupting its intraday structure before the evaluation metrics even see it.
+
+### 2. The Solution: Conditional FFF Application
+
+To prevent this extrinsic contamination, the preprocessing pipeline applies FFF conditionally per-series. For each dataset (real and synthetic), the pipeline must evaluate whether a genuine smile exists before acting.
+
+1. **Variance Profile Extraction:** We compute the pooled per-minute variance profile across the trading session (i.e., average squared return for minute $\tau$).
+2. **Dispersion Measurement:** We use the coefficient of variation (CV = standard deviation / mean) of this minute-by-minute profile as our test statistic.
+3. **Thresholding:** A flat series like GBM will have a variance profile dominated by noise, yielding a near-zero CV (empirically ~0.05). A seasonal series with a massive open spike will have a highly dispersed profile, yielding a large CV (empirically ~0.6+). A threshold of 0.3 robustly separates the two regimes.
+
+If the CV > 0.3, the pipeline fits an FFF model native to that specific dataset and deseasonalizes it. If false, the pipeline recognizes the series as flat and passes the returns through unchanged.
+
+### 3. Implications for the Benchmark
+
+This conditional logic ensures the evaluation remains intellectually honest across the entire spectrum of generator complexity. A sophisticated model that correctly replicates the smile is judged on its underlying signal (after its own smile is removed), while a naive baseline is evaluated fairly on its raw output without having a spurious penalty injected by the preprocessing layer. This guarantees that the evaluation framework measures the generators' intrinsic properties rather than preprocessing artifacts.
+
+---------------------------
+
+## Log Returns with Overnight Masking
+
+Log-differencing prices is lossless for the information every metric
+needs. However, `diff()` propagates NaN forward: if P_t is missing,
+both returns at t and t+1 become NaN. A decomposition analysis
+confirmed this is not new information loss — the "extra" NaN at each
+gap boundary reflects the honest fact that a 1-minute return requires
+both P_t and P_{t-1} to exist. Real NaN fraction rises from 9.5%
+(prices) to 16.5% (returns); AIL from 18% to 30%. The valid returns
+that survive are genuinely adjacent 1-minute price pairs with
+untouched temporal ordering and distributional shape.
+
+Overnight returns (09:31 ET, the first bar of each session) are
+masked because they span a 17.5-hour gap. Leaving them in would
+distort every downstream metric: GARCH treats them as 1-minute
+shocks, ACF sees false persistence, and the marginal distribution
+absorbs a structurally different return.
+
+
+## FFF Deseasonalisation — Conditional Per Series
+
+The original design assumed FFF should be fit on real data only and
+applied identically to both real and synthetic series. Empirical
+investigation revealed this is wrong for two reasons:
+
+1. **Applying real's smile to a flat generator injects an inverted
+   smile.** GBM and GARCH baselines have no intraday seasonality by
+   construction. Dividing their returns by real's U-shaped profile
+   would create artificial variance at midday and suppress variance
+   at the open/close — actively distorting the data rather than
+   cleaning it.
+
+2. **AIL learned real's smile almost exactly.** Intraday variance
+   profile comparison showed open/mid ratios of 5.98 (real) vs 5.91
+   (AIL), close/mid of 1.52 vs 1.32. The profiles track slot-by-slot.
+   Fitting AIL's own FFF versus applying real's would produce nearly
+   identical deseasonalised series.
+
+**Resolution:** FFF is now conditional per series. The pipeline
+computes the coefficient of variation (CV) of the per-minute variance
+profile: flat series (CV ≈ 0) skip FFF entirely; seasonal series
+(CV > 0.3) get their own FFF fitted and applied. Empirically
+validated: real CV = 0.944, AIL CV = 0.974 (both applied), GBM
+CV ≈ 0 (correctly skipped).
+
+This means each series' own seasonality is removed cleanly, and
+the metrics see only the non-seasonal structure. If seasonal fidelity
+matters, it belongs as a separate diagnostic axis — not smuggled
+into the six metrics through a mismatched deseasonalisation.
+
+
+## Regime-Conditional Tail Design
+
+### What it measures
+
+After stripping predictable patterns (seasonality via FFF), do
+return tails get heavier in turbulent market regimes? This is a
+conditional property that the unconditional tail metric cannot
+capture: a generator could produce the right average tail by being
+too thin during crises and too heavy during calm periods, and the
+marginal metric would never notice.
+
+### Original design: McNeil-Frey AR-GARCH → GPD (abandoned)
+
+The initial plan followed McNeil & Frey (2000): fit AR-GARCH(1,1)
+per ticker to extract standardised residuals, partition time into
+volatility regimes, fit GPD on tail exceedances per regime, extract
+shape parameter ξ.
+
+This failed empirically on our data. Contiguous-segment analysis
+showed median non-NaN run length of 4 bars (real) and 3 bars (AIL).
+AR-GARCH needs ≈250+ contiguous observations for stable parameter
+estimates. Requiring 250-bar segments discards 79% of real data and
+95% of AIL data — and the discarded data is biased toward volatile
+periods (where gaps cluster), which is exactly what a regime-
+conditional metric should be most sensitive to.
+
+### Standardisation suppresses the signal
+
+A direct comparison tested two approaches:
+- **Option A:** standardise returns by a volatility proxy (r_t / σ_t),
+  then fit GPD on standardised residuals per regime.
+- **Option B:** fit GPD on raw deseasonalised returns per regime,
+  using the volatility proxy only for regime labelling.
+
+Option A produced a flat ξ curve across regimes (EWMA: −0.169 to
+−0.162), because dividing by the same quantity used for regime
+partitioning removes the very signal being measured. Option B showed
+a strong regime effect (EWMA: −0.134 to +0.188), with tails clearly
+heavier in the turbulent quintile.
+
+**Decision:** no standardisation. The volatility proxy is used only
+to assign regime labels, not to transform the returns.
+
+### Volatility proxy: rolling 60-minute std
+
+Two candidates tested — EWMA (λ = 0.94) and rolling 60-minute
+causal standard deviation:
+
+- Rolling60 produced better discrimination against a bad generator
+  (real-GBM |Δξ| = 0.153 vs EWMA's 0.065).
+- Rolling60 produced tighter tracking of a good generator
+  (real-AIL |Δξ| = 0.0048 vs EWMA's 0.0080).
+
+Rolling60 wins on both axes. It is also simpler, has no
+hyperparameter beyond the window length, and is fully gap-tolerant
+(restarts cleanly after NaN runs).
+
+### GPD estimation method
+
+Monte Carlo validation of the WNLS estimator (Park & Kim 2016)
+showed reliable ξ recovery (rel_bias < 1%, rmse < 0.08) at n ≥ 500
+exceedances. However, regime-cell analysis found ~259,000
+exceedances per quintile after pooling across 600 tickers. At this
+sample size, MLE and WNLS are both essentially exact. MLE is
+retained for simplicity (scipy-native, no custom optimisation).
+
+### GBM baseline discrimination (validated)
+
+GBM prices were generated on the same clock with real's NaN mask
+imposed, processed through PreprocessingPipeline (FFF correctly
+skipped due to flat CV), and evaluated with Option B / Rolling60:
+
+- Real turbulent-regime ξ: +0.181
+- AIL turbulent-regime ξ:  +0.184
+- GBM turbulent-regime ξ:  −0.010
+
+Real-GBM gap (0.153) is 32× larger than real-AIL gap (0.0048).
+The metric cleanly separates a generator that captures regime-
+conditional tail structure from one that does not.
+
+### Final specification
+
+1. Compute rolling 60-min causal std on deseasonalised returns.
+2. Pool (volatility, return) pairs across all tickers, drop NaN.
+3. Split into quintiles on volatility (boundaries from real data).
+4. Within each quintile, fit GPD (MLE, floc=0) on the 5% upper-tail
+   exceedances of |return|.
+5. Extract ξ per quintile → 5-element feature curve.
+6. Gap: weighted MAE between real and synthetic ξ curves, with
+   weight on the top two quintiles (stress-testing focus).
