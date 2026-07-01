@@ -1,10 +1,9 @@
 [project]
-name = "evaluationframework"
-version = "0.1.0"
+name = "fineval"
+version = "0.2.0"
 description = "Six-bucket fidelity benchmark for synthetic financial return generators"
 requires-python = ">=3.12"
 dependencies = [
-    "cython>=3.2.5",
     "matplotlib>=3.10.9",
     "numpy>=2.4.5",
     "pandas>=3.0.3",
@@ -19,15 +18,12 @@ dependencies = [
 dev = ["ipykernel>=7.2.0", "pytest>=8.0", "pandas-stubs~=3.0.3", "scipy-stubs~=1.17.1"]
 data = ["alpaca-py>=0.13"]
 
-[project.scripts]
-bench = "bench:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["evaluation_framework", "data_pipeline"]
+packages = ["fineval"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
