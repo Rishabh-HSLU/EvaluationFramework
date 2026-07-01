@@ -17,6 +17,7 @@ ablation_output/
 runs/
 paper/
 tests/
+fineval/scripts/notebooks/conditional_heavy_tails.ipynb
 
 # LaTeX build artifacts
 paper/**/*.aux

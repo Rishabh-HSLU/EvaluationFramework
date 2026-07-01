@@ -157,7 +157,29 @@ guesses. The work was done once, at the door.
 
 ## 3. Preprocessing
 
-*To be written as we build the return computation and deseasonalization modules.*
+The preprocessing pipeline acts as the bridge between curated raw prices and the stationary, approximately unit-variance returns expected by the downstream evaluation metrics. It has two main responsibilities: computing clean log returns and conditionally handling intraday seasonality.
+
+### Computing Log Returns and Masking Overnight Gaps
+
+The pipeline first converts the `(T, N)` price matrix into log returns using standard differencing (`np.log(prices).diff()`).
+
+Crucially, it must handle the overnight gap. The regular stock market session closes at 16:00 ET and reopens the next day at 09:30 ET. The return observed at 09:31 ET incorporates 17.5 hours of accumulated overnight news, making its variance fundamentally different from a standard 1-minute intraday return. If left in the dataset, these massive overnight jumps will distort any metric measuring tail behavior or volatility clustering.
+
+The pipeline applies an **overnight mask**, explicitly setting the 09:31 ET return (the first minute of the session) to `NaN`. This ensures that all returns passed to the metrics are strictly 1-minute intraday returns, preserving the statistical homogeneity of the sample.
+
+### Conditional Intraday Deseasonalization (FFF)
+
+Real equity returns are not stationary across the trading day. They exhibit a U-shaped variance profile (the "volatility smile"): high variance at the open, dropping at midday, and rising into the close. If left untreated, this deterministic pattern inflates autocorrelations and dominates the marginal distribution. The standard solution is the Flexible Fourier Form (FFF) deseasonalization, which fits a Fourier curve to the log-variance profile and divides it out.
+
+However, applying FFF blindly is dangerous when evaluating synthetic generators. Standard baseline generators like Geometric Brownian Motion (GBM) or standard GARCH are structurally flat—they have no intraday smile. If the pipeline divides a flat GBM series by a U-shaped variance profile, it artificially suppresses the open/close and inflates the midday, actively injecting an inverted smile and corrupting the baseline.
+
+To ensure fairness across all generator types, the pipeline uses **conditional deseasonalization**:
+
+1. **Detect the smile:** For each dataset, the pipeline calculates the pooled variance for each minute of the day and computes the Coefficient of Variation (CV) of this profile.
+2. **Branching logic:** A flat series (like GBM) will have a CV near zero (~0.05). A seasonal series (like real data or advanced models like AIL) will have a high CV (~0.6+). We use a robust threshold of `0.3` to separate the regimes.
+3. **Application:** If the CV > 0.3, the pipeline fits an FFF model native to that dataset and deseasonalizes the returns. If the CV < 0.3, it recognizes the series as flat and passes it through unchanged.
+
+This guarantees that sophisticated generators are evaluated on their underlying signal (after removing their properly learned smile), while basic baselines are evaluated on their raw output without being penalized by preprocessing artifacts.
 
 ---
 

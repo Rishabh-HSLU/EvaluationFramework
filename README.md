@@ -1,6 +1,8 @@
 # fineval
 
-A six-bucket fidelity benchmark for synthetic 1-minute financial return generators, built as an installable Python package. Each bucket measures one orthogonal stylized fact; scores are normalized against a real-vs-real baseline so results are interpretable without a reference model.
+A multi-metric fidelity benchmark for synthetic 1-minute financial return generators.
+Each metric measures empirical stylized fact; scores are normalized against a
+real-vs-real baseline so results are interpretable without a reference model.
 
 ```
 real market data  ──► loader ──► curate ──► preprocess ──► metrics ──► s_b ∈ [0, 1]
@@ -117,16 +119,16 @@ Then pass it to `CurationPipeline` alongside the real dataset. The pipeline hand
 
 ---
 
-## The six buckets
+## The Metrics
 
 | ID | Stylized fact             | Statistic | Aggregation |
 |----|---------------------------|-----------|-------------|
-| B1 | Unconditional Heavy Tails | Tail-weighted Wasserstein-1 | Pooled |
-| B2 | Volatility clustering     | Mean ACF gap on \|r\|, lags 60–390 | Per-path, FFT |
-| B3 | Leverage effect           | Cross-correlation gap Corr(r_t, \|r_{t+k}\|), lags 1–390 | Per-path, FFT |
-| B4 | Aggregational kurtosis    | Uniform-weighted L-kurtosis gap across horizons {1, 5, 30, 60, 390} min | Per-path then pooled |
-| B5 | Multi-scale vol structure | Frobenius gap on cross-scale vol correlation matrix | Per-path |
-| B6 | Conditional Heavy Tails   | GPD shape parameter ξ gap across low/high vol regimes | Regime-stratified |
+| M1 | Unconditional Heavy Tails | Tail-weighted Wasserstein-1 | Pooled |
+| M2 | Volatility clustering     | Mean ACF gap on \|r\|, lags 60–390 | Per-path, FFT |
+| M3 | Leverage effect           | Cross-correlation gap Corr(r_t, \|r_{t+k}\|), lags 1–390 | Per-path, FFT |
+| M4 | Aggregational kurtosis    | Uniform-weighted L-kurtosis gap across horizons {1, 5, 30, 60, 390} min | Per-path then pooled |
+| M5 | Multi-scale vol structure | Frobenius gap on cross-scale vol correlation matrix | Per-path |
+| M6 | Conditional Heavy Tails   | GPD shape parameter ξ gap across low/high vol regimes | Regime-stratified |
 
 ---
 
