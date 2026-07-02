@@ -14,7 +14,7 @@ from fineval.metrics.base import BaseMetric
 
 
 class UnconditionalHeavyTails(BaseMetric):
-    """
+    r"""
     Evaluates the marginal tail distribution fidelity of synthetic financial returns.
 
     The metric implements a tail-weighted Wasserstein-1 (W1) distance using the

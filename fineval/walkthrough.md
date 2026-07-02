@@ -104,12 +104,22 @@ If validation fails — wrong index type, missing timezone, non-string
 columns — you get a clear error message telling you exactly what's
 wrong.
 
-The framework ships with two concrete loaders as reference
-implementations: `RealDataLoader` (a directory of per-ticker CSVs) and
-`AILSyntheticLoader` (a long-format parquet from the AIL generator).
-Both live in `data/curate.py` alongside the curation pipeline that
-consumes them. To benchmark a new generator with its own raw format,
-write a new subclass following the pattern above.
+The framework ships with four concrete loaders as reference
+implementations, all in `data/curate.py` alongside the curation
+pipeline that consumes them:
+
+- `RealDataLoader` — a directory of per-ticker CSVs (raw real data).
+- `AILSyntheticLoader` — a long-format parquet from the AIL generator.
+- `CuratedParquetLoader` — a wide-format parquet that is already on
+  the curated market clock; used to reload the curation output
+  without re-running the raw loaders.
+- `GBMBaselineLoader` — the GBM baseline parquet produced by
+  `scripts/baseline_generation.py`. GBM is generated directly on the
+  curated clock with real's NaN mask imposed, so it is curated by
+  construction and skips the `CurationPipeline` entirely.
+
+To benchmark a new generator with its own raw format, write a new
+subclass following the pattern above.
 
 ### Curation: from raw loaded data to evaluation-ready files
 
@@ -185,16 +195,177 @@ This guarantees that sophisticated generators are evaluated on their underlying 
 
 ## 4. Stylized Facts and Metrics
 
-*To be written as we build the metric classes.*
+### The idea
+
+Real financial returns have well-documented statistical signatures —
+*stylized facts* (Cont, 2001). A good synthetic generator should
+reproduce them; a naive one won't. Each metric isolates one stylized
+fact and turns "how well does the generator reproduce it?" into a
+number.
+
+### The contract: `BaseMetric`
+
+Every metric subclasses `BaseMetric` (`metrics/base.py`) and
+implements three methods:
+
+1. `extract_features(sample)` — takes one panel of deseasonalized
+   returns (timestamps × tickers) and returns a fixed-length feature
+   vector. Stateless: no fit step, no reference distribution. Regime
+   boundaries, quantile cuts, etc. are computed from the sample
+   itself.
+2. `compute_distance(fa, fb)` — a non-negative scalar distance between
+   two feature vectors. Must tolerate NaN by masking: only dimensions
+   where both vectors are finite are compared.
+3. `normalize(g_rr, g_sr)` — turns raw distance arrays into a [0, 1]
+   similarity score (see Section 5 for where those arrays come from).
+
+The NaN policy mirrors the framework-wide no-imputation principle:
+where the data is too thin for a stable estimate, the feature is NaN —
+absence is preserved, never fabricated over.
+
+### The four implemented metrics
+
+**M1 — Unconditional heavy tails** (`unconditional_heavy_tails.py`).
+The marginal distribution of returns. Features: the empirical quantile
+function on a 5001-point grid, pooled across all tickers. Distance: a
+tail-weighted Wasserstein-1 — the mean absolute quantile gap under a
+smooth weight `w(u) = 1 + λ[u^-α + (1-u)^-α]` that keeps the whole
+distribution at baseline weight 1 while progressively up-weighting the
+extremes (α = 0.3, λ = 1.0, both validated by hyperparameter sweeps —
+see `scripts/reasoning.md`).
+
+**M2 — Volatility clustering** (`volatility_clustering.py`).
+Long-memory temporal dependence. Features: the autocorrelation
+function of |returns| per ticker, averaged cross-sectionally, with the
+lag-k numerator confined within session boundaries so no pair ever
+spans an overnight gap. Distance: summed absolute ACF gap over lags
+60–390 — the long-lag regime that short-memory generators cannot fake.
+
+**M4 — Aggregational Gaussianity** (`aggregational_gaussianity.py`).
+Real returns are heavy-tailed at 1-minute resolution but converge
+toward Gaussian as returns are aggregated to coarser scales. Features:
+the normalized excess-kurtosis ratio κ(k)/κ(1) at scales {1, 5, 15,
+30} minutes, with aggregation confined within sessions and NaN
+propagating honestly through incomplete blocks. Distance: masked mean
+absolute difference between decay curves. GBM is flat at 1.0
+everywhere (Gaussian at every scale); real decays; a good generator
+matches the decay *rate*.
+
+**M6 — Regime-conditional tails** (`regime_tails.py`). Do tails get
+heavier when the market is turbulent? Features: a causal rolling
+60-minute volatility proxy (session-aware, restarted at every open)
+assigns each observation to one of five self-labeled volatility
+quintiles; within each quintile a Generalized Pareto Distribution is
+fitted to the top 5% of |returns|, and the shape parameter ξ is the
+feature. Distance: weighted mean absolute ξ gap, with extra weight on
+the turbulent quintiles (stress-testing emphasis).
+
+M3 (leverage effect) and M5 (multi-scale volatility structure) are
+planned but not yet implemented.
+
+Every hyperparameter lives in `config.py`, and every non-obvious
+design decision — including two session-boundary bugs found and fixed
+along the way — is documented with its empirical evidence in
+`scripts/reasoning.md`.
 
 ---
 
 ## 5. The Bootstrap Engine
 
-*To be written as we build the bootstrap module.*
+### Why a bootstrap at all
+
+Suppose M2's distance between real and synthetic is 2.79. Is that
+good? Bad? Raw distances have no scale of their own. The trick: ask
+how far two *independent samples of real data* are from each other
+under the same metric. That real-vs-real distance is the noise floor —
+the discrepancy you'd measure even for a perfect generator, purely
+from sampling variability.
+
+### Matched-N ticker resampling
+
+The engine (`bootstrap/engine.py`, `MatchedTickerBootstrap`) makes
+this operational. For each of B resamples (default 100):
+
+1. Draw two ticker subsamples A and B (200 tickers, with replacement)
+   from the real panel.
+2. `g_rr[b] = distance(features(A), features(B))` — the noise floor.
+3. For each generator, draw a subsample S from its panel and compute
+   `g_sr[b] = distance(features(A), features(S))` — the generator gap.
+
+The same real draw A is shared between `g_rr` and every generator's
+`g_sr` (that's the "matched" part), so per-draw sampling noise
+partially cancels out of the final score.
+
+### The score
+
+Each metric's `normalize` maps the two arrays into a similarity score:
+
+```
+s = mean(g_rr) / (mean(g_rr) + mean(g_sr))
+```
+
+- `s = 1.0` — zero measured discrepancy.
+- `s = 0.5` — real-sample parity: the generator is as far from real
+  as real is from itself. You cannot ask for more.
+- `s < 0.5` — the generator deviates more than sampling noise alone
+  explains; the smaller, the worse.
+
+### Confidence intervals
+
+The 95% CI comes from a paired bootstrap over the resample index: the
+same index array is drawn into both `g_rr` and `g_sr` per iteration,
+preserving the per-draw correlation created by sharing A. This yields
+narrower, honest CIs versus resampling the two arrays independently.
 
 ---
 
 ## 6. Putting It All Together
 
-*To be written after all modules are complete.*
+### The one-command benchmark
+
+`scripts/run_benchmark.py` wires every layer into a single run:
+
+```
+prices (curated parquet)
+   │  loaders: CuratedParquetLoader (Real, AIL), GBMBaselineLoader
+   ▼
+PreprocessingPipeline          log returns → overnight mask → conditional FFF
+   │  per (real, synthetic) pair
+   ▼
+MatchedTickerBootstrap         B resamples × {M1, M2, M4, M6} × {AIL, GBM}
+   │
+   ▼
+benchmark table                score [95% CI] per (metric, generator)
+```
+
+Run it from the repository root:
+
+```bash
+uv run python -m fineval.scripts.run_benchmark
+# or, for a quick pass:
+uv run python -m fineval.scripts.run_benchmark --n-resamples 20
+```
+
+It prints the markdown benchmark table and writes the tidy results to
+`scripts/results/benchmark_results.csv`.
+
+### The GBM baseline
+
+`scripts/baseline_generation.py` produces the anchor at the low end of
+the score range. It calibrates per-ticker drift and volatility from
+the curated real data's overnight-masked 1-minute log returns,
+simulates one i.i.d.-Gaussian GBM path per ticker on the same market
+clock, and imposes real's exact NaN mask — so both sides carry
+identical missingness and no metric can score coverage instead of
+dynamics. Regenerate it (deterministic, seed 42) with:
+
+```bash
+uv run python -m fineval.scripts.baseline_generation
+```
+
+The two anchors make every score interpretable: the real-vs-real
+baseline defines what "indistinguishable" looks like (0.5), and GBM
+defines what "structurally wrong" looks like. Any generator worth
+evaluating should land between them, and *where* it lands — per
+metric — tells you which stylized facts it captures and which it
+misses.

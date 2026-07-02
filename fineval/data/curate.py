@@ -357,6 +357,65 @@ class RealDataLoader(BaseLoader):
         return prices
 
 
+class CuratedParquetLoader(BaseLoader):
+    """
+    Loads an evaluation-ready wide-format parquet file.
+
+    For datasets that are already on the curated market clock — either
+    the output of CurationPipeline (real_prices.parquet,
+    ail_prices.parquet) or a baseline generated directly on that clock
+    (gbm_prices.parquet). No reshaping is needed; the file is read,
+    contract-validated by BaseLoader, and wrapped in a MarketDataset.
+
+    Attributes:
+
+        parquet_path : str
+            Path to the wide-format parquet file.
+
+    Example::
+
+        loader  = CuratedParquetLoader(
+            parquet_path="data/curated/real_prices.parquet",
+            name="Real",
+            is_synthetic=False,
+        )
+        dataset = loader.load()
+    """
+
+    def __init__(self, parquet_path: str, name: str, is_synthetic: bool):
+        super().__init__(name=name, is_synthetic=is_synthetic)
+        self.parquet_path = parquet_path
+
+    def _load_raw(self) -> pd.DataFrame:
+        prices = pd.read_parquet(self.parquet_path)
+        prices.index = pd.to_datetime(prices.index, utc=True)
+        return prices.sort_index()
+
+
+class GBMBaselineLoader(CuratedParquetLoader):
+    """
+    Loads the GBM baseline dataset produced by
+    fineval/scripts/baseline_generation.py.
+
+    The GBM baseline is generated directly on the curated market clock
+    with real's NaN mask imposed, so it is curated by construction and
+    never passes through CurationPipeline.
+
+    Attributes:
+
+        parquet_path : str
+            Path to the GBM baseline parquet file.
+
+    Example::
+
+        loader  = GBMBaselineLoader(parquet_path="data/curated/gbm_prices.parquet")
+        dataset = loader.load()
+    """
+
+    def __init__(self, parquet_path: str):
+        super().__init__(parquet_path=parquet_path, name="GBM", is_synthetic=True)
+
+
 class AILSyntheticLoader(BaseLoader):
     """
     Loads AIL synthetic data from a long-format parquet file.

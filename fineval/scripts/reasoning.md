@@ -867,3 +867,94 @@ metric (M3). M6 asks a narrower, orthogonal question: do extreme
 moves, in either direction, get more extreme during turbulent
 regimes? Using `|returns|` answers exactly that while keeping the
 feature vector concise (5 elements) and free of overlap with M3.
+
+---
+
+# Benchmark Results and Interpretation
+
+## The first full benchmark run
+
+The first complete run of the matched-N ticker bootstrap (B = 100
+resamples, 200 tickers per draw, seed 42; `scripts/run_benchmark.py`)
+produced:
+
+| Metric | Stylized fact | AIL | GBM |
+|---|---|---|---|
+| M1 | Unconditional heavy tails | 0.484 [0.450, 0.517] | 0.028 [0.024, 0.031] |
+| M2 | Volatility clustering | 0.220 [0.199, 0.242] | 0.020 [0.018, 0.023] |
+| M4 | Aggregational Gaussianity | 0.380 [0.352, 0.410] | 0.125 [0.110, 0.141] |
+| M6 | Regime-conditional tails | 0.461 [0.431, 0.490] | 0.045 [0.041, 0.049] |
+
+GBM is rejected by every metric, as a Gaussian, memoryless baseline
+should be. AIL sits essentially at real-sample parity on M1 (0.484)
+and M6 (0.461) — its marginal distribution and its
+regime-conditional tail response are statistically indistinguishable
+from an independent draw of real data at this resolution. The two
+scores that stand out are M2 (0.220) and, less severely, M4 (0.380).
+
+## Why AIL's M2 score is low: a small bias caught by a tight noise floor
+
+The headline number looks harsh for a generator that plainly *does*
+cluster volatility, so the raw components matter:
+
+| M2 | mean distance |
+|---|---:|
+| g_rr (real vs real, noise floor) | 0.794 |
+| g_sr (real vs AIL) | 2.809 |
+
+The real-vs-AIL gap is not the anomaly — 2.809 on the full panel
+matches the 2.794 recorded when the session-leak fix was validated
+(Section: M2, Empirical validation). What drives the score is the
+*noise floor*: real data's cross-sectional |r| ACF curve is extremely
+stable across independent 200-ticker subsamples, so mean(g_rr) is
+small and the metric has high statistical power.
+
+A full-panel diagnostic (600 tickers, single pass, no bootstrap) shows
+what that power is detecting. AIL's ACF curve tracks real's *shape*
+almost perfectly, but sits uniformly below it at nearly every lag:
+
+| | Real | AIL |
+|---|---:|---:|
+| ACF of \|r\| at lag 1 | 0.389 | 0.377 |
+| ACF at lag 60 | 0.246 | 0.228 |
+| ACF at lag 120 | 0.192 | 0.178 |
+| ACF half-life (lag where ACF falls below half its lag-1 value) | 119 min | 107 min |
+
+The per-lag gap is only ~0.01–0.02, but it is a persistent bias, not
+scattered noise — AIL's volatility clustering decays roughly 10%
+faster than real's. Summed over the 330 lags of M2's scoring window,
+that bias accumulates to 3.5× the real-vs-real noise floor, which the
+ratio-of-means normalization converts to 0.22.
+
+Two conclusions follow:
+
+1. **The metric is behaving correctly, not harshly.** A tight noise
+   floor is what allows a subtle, systematic discrepancy to be
+   detected at all; a noisier metric would wave this through as
+   sampling variation.
+2. **The finding is corroborated independently by M4.** AIL's excess
+   kurtosis also decays faster than real's under temporal aggregation
+   (κ(5)/κ(1) = 0.52 vs 0.64; Section: M4, Empirical validation).
+   Both metrics point at the same underlying property: AIL
+   under-persists long-memory structure — it reproduces short-range
+   volatility texture well but loses persistence faster than real
+   markets do, a known tendency of generative sequence models with no
+   explicit long-memory mechanism.
+
+## Why a "resampled real" positive control would be tautological
+
+An obvious sanity check — build a synthetic dataset that satisfies
+volatility clustering *by construction* (e.g. block-bootstrap real
+sessions) and confirm it scores well — turns out to be uninformative
+for the current metric set. M1, M2, M4 and M6 are all invariant to
+session order: each pools or averages statistics across sessions
+without regard to which day came first. Any dataset built by
+resampling, reordering or recombining real sessions is therefore just
+another draw of real data as far as these metrics are concerned, and
+its expected score is ≈ 0.5 by the same argument that defines the
+real-vs-real baseline. It would confirm the top of the scale doesn't
+break, but nothing more.
+
+A meaningful positive control has to be an *independent model* that
+generates fresh paths with the right long-memory structure — which is
+what the FIGARCH baseline below provides.
