@@ -8,14 +8,18 @@ The two baselines anchor opposite ends of the score range:
   regime-conditional tail structure. Every metric should separate it
   cleanly from real data — it anchors the low end the same way the
   real-vs-real baseline anchors the high end.
-- **FIGARCH** (Fractionally Integrated GARCH; Baillie, Bollerslev &
-  Mikkelsen, 1996) is the positive control for M2. Its ARCH weights
-  decay hyperbolically (~k^-(1+d)) rather than exponentially, giving
-  genuine long-memory volatility clustering — the one stylized fact a
-  short-memory GARCH cannot fake. A model *designed* to satisfy the
-  fact M2 measures should score well on M2, validating the metric's
-  top end with an independent generator (a resampled-real control
-  would be tautological; see scripts/reasoning.md).
+- **MSV** (multi-scale stochastic volatility, in the two-timescale
+  spirit of Fouque, Papanicolaou & Sircar) is the positive control
+  for M2. Log-volatility is the sum of a *slow* factor — long-memory
+  fractional Gaussian noise across sessions, constant within each
+  session, reproducing the day-level volatility persistence that
+  dominates real's within-session |r| ACF — and a *fast* intraday
+  OU/AR(1) factor reproducing the short-lag decay. A model *designed*
+  to satisfy the fact M2 measures should score well on M2, validating
+  the metric's top end with an independent generator (a
+  resampled-real control would be tautological; single-factor
+  FIGARCH and LMSV attempts decayed far too steeply — all documented
+  in scripts/reasoning.md).
 
 Both baselines are deliberately matched to the curated real dataset on
 everything *except* the return-generating process:
@@ -29,7 +33,7 @@ everything *except* the return-generating process:
 
 Output is one wide-format parquet per baseline, identical in shape to
 the curated real file, loadable through ``GBMBaselineLoader`` /
-``FIGARCHBaselineLoader`` (fineval/data/curate.py). No CurationPipeline
+``MSVBaselineLoader`` (fineval/data/curate.py). No CurationPipeline
 pass is needed: the data is curated by construction.
 
 Run from the repository root:
@@ -41,22 +45,22 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from scipy.signal import lfilter
 
 from fineval.config import SEED
 
 CURATED_DIR = Path(__file__).resolve().parent / "data" / "curated"
 REAL_PATH = CURATED_DIR / "real_prices.parquet"
 GBM_OUTPUT_PATH = CURATED_DIR / "gbm_prices.parquet"
-FIGARCH_OUTPUT_PATH = CURATED_DIR / "figarch_prices.parquet"
+MSV_OUTPUT_PATH = CURATED_DIR / "msv_prices.parquet"
 
-# FIGARCH(0, d, 0) parameters. d controls the hyperbolic decay rate of
-# the ARCH(inf) weights; the truncation length bounds how far back the
-# conditional variance looks (2 full sessions of memory at 1min bars).
-FIGARCH_D = 0.45
-FIGARCH_TRUNCATION = 780
-FIGARCH_BURN_IN = 2000
-FIGARCH_SEED = SEED + 1  # decoupled from GBM's stream so the two
+# MSV parameters, selected by sweeping the simulated |r| ACF curve
+# against real's (see scripts/reasoning.md, MSV baseline section).
+MSV_NU_SLOW = 0.9  # amplitude of the slow (per-session) log-vol factor
+MSV_NU_FAST = 0.3  # amplitude of the fast intraday log-vol factor
+MSV_TAU_FAST = 20.0  # fast-factor autocorrelation time in minutes
+MSV_H_SLOW = 0.90  # Hurst exponent of the across-session fGn factor
+MSV_SEED = SEED + 1  # decoupled from GBM's stream so the two
 # baselines don't share innovation draws
 
 
@@ -110,89 +114,117 @@ def generate_gbm_prices(real_prices: pd.DataFrame, seed: int = SEED) -> pd.DataF
     return pd.DataFrame(paths, index=real_prices.index, columns=real_prices.columns)
 
 
-def _figarch_weights(d: float, truncation: int) -> np.ndarray:
-    """ARCH(inf) weights of FIGARCH(0, d, 0), truncated.
+def _fgn_eigenvalues(h: float, n_steps: int) -> np.ndarray:
+    """Circulant-embedding eigenvalues for exact fGn sampling.
 
-    lambda(L) = 1 - (1-L)^d, so lambda_k = -delta_k where delta_k are
-    the binomial expansion coefficients of (1-L)^d:
+    Builds the autocovariance of fractional Gaussian noise,
 
-        delta_0 = 1,  delta_k = delta_{k-1} * (k - 1 - d) / k
+        rho(k) = 0.5 * (|k+1|^{2H} - 2|k|^{2H} + |k-1|^{2H}),
 
-    All lambda_k are positive for d in (0, 1) and decay hyperbolically
-    as k^-(1+d) — the long-memory signature. The untruncated weights
-    sum to exactly 1 (IGARCH-like unit persistence); truncation leaves
-    the sum slightly below 1, which is what makes the simulated
-    variance finite and lets omega set its level.
+    embeds it in a circulant of size 2*n_steps, and returns the FFT
+    eigenvalues (Davies & Harte, 1987). Tiny negative eigenvalues from
+    floating-point round-off are clipped to zero.
     """
-    delta = np.empty(truncation + 1)
-    delta[0] = 1.0
-    for k in range(1, truncation + 1):
-        delta[k] = delta[k - 1] * (k - 1 - d) / k
-    return -delta[1:]
+    k = np.arange(n_steps + 1, dtype=float)
+    rho = 0.5 * ((k + 1) ** (2 * h) - 2 * k ** (2 * h) + np.abs(k - 1) ** (2 * h))
+    row = np.concatenate([rho, rho[-2:0:-1]])  # length 2 * n_steps
+    return np.clip(np.fft.fft(row).real, 0.0, None)
 
 
-def generate_figarch_prices(
+def _sample_fgn(rng: np.random.Generator, eigenvalues: np.ndarray, n_paths: int) -> np.ndarray:
+    """Draw exact fGn paths via circulant embedding, two per FFT.
+
+    With w_k = sqrt(lambda_k / m) * (A_k + i B_k) for i.i.d. standard
+    normal A, B and X = fft(w), the real and imaginary parts of the
+    first n entries of X are two independent fGn samples with the
+    embedded autocovariance (Dieker, 2004).
+
+    Returns:
+        (n_steps, n_paths) array of standard-normal-marginal fGn.
+    """
+    m = len(eigenvalues)
+    n_steps = m // 2
+    scale = np.sqrt(eigenvalues / m)
+    paths = np.empty((n_steps, n_paths))
+    for j in range(0, n_paths, 2):
+        w = scale * (rng.standard_normal(m) + 1j * rng.standard_normal(m))
+        x = np.fft.fft(w)
+        paths[:, j] = x.real[:n_steps]
+        if j + 1 < n_paths:
+            paths[:, j + 1] = x.imag[:n_steps]
+    return paths
+
+
+def generate_msv_prices(
     real_prices: pd.DataFrame,
-    d: float = FIGARCH_D,
-    truncation: int = FIGARCH_TRUNCATION,
-    burn_in: int = FIGARCH_BURN_IN,
-    seed: int = FIGARCH_SEED,
+    nu_slow: float = MSV_NU_SLOW,
+    nu_fast: float = MSV_NU_FAST,
+    tau_fast: float = MSV_TAU_FAST,
+    h_slow: float = MSV_H_SLOW,
+    seed: int = MSV_SEED,
 ) -> pd.DataFrame:
-    """Simulate one FIGARCH(0, d, 0) price path per ticker on the real market clock.
+    """Simulate one multi-scale SV price path per ticker on the real market clock.
 
-    Conditional variance follows the truncated ARCH(inf) form
+    Two-factor log-volatility in the two-timescale spirit of Fouque,
+    Papanicolaou & Sircar:
 
-        sigma^2_t = omega_i + sum_{k=1}^{K} lambda_k * r^2_{t-k}
+        r_t = c_i * exp(nu_slow * s_{d(t)} + nu_fast * f_t) * z_t
 
-    with per-ticker omega_i = var_i * (1 - sum(lambda)) so each
-    ticker's unconditional return variance matches its real
-    counterpart (var_i from overnight-masked real log returns).
-    Innovations are standard Gaussian; a burn-in period lets the
-    variance process forget its flat initial state before the
-    market-clock sample begins. Prices are anchored at each ticker's
-    first observed real price and real's NaN mask is copied onto the
-    output, exactly as for GBM.
+    - s_d is the *slow* factor: exact fractional Gaussian noise with
+      Hurst exponent ``h_slow`` across the sample's sessions, held
+      constant within each session. It reproduces the day-level
+      volatility persistence that dominates real's within-session |r|
+      ACF (a volatile day stays volatile all session).
+    - f_t is the *fast* factor: a stationary AR(1)/OU process in
+      minutes with autocorrelation time ``tau_fast``, reproducing the
+      short-lag ACF decay.
+    - z_t is i.i.d. standard Gaussian, and c_i rescales each ticker so
+      its simulated return standard deviation exactly matches its real
+      counterpart (from overnight-masked real log returns).
+
+    Both factors are stationary and sampled exactly, so no burn-in is
+    needed. Prices are anchored at each ticker's first observed real
+    price and real's NaN mask is copied onto the output, exactly as
+    for GBM.
 
     Args:
         real_prices: Curated wide-format real prices (T, N).
-        d: Fractional integration order in (0, 1); higher d means
-            more persistent volatility clustering.
-        truncation: ARCH(inf) truncation length K in bars.
-        burn_in: Pre-sample steps discarded before the clock starts.
+        nu_slow: Amplitude of the per-session log-vol factor.
+        nu_fast: Amplitude of the intraday log-vol factor.
+        tau_fast: Fast-factor autocorrelation time in minutes.
+        h_slow: Hurst exponent of the across-session fGn factor.
         seed: RNG seed; the output is fully reproducible.
 
     Returns:
-        pd.DataFrame of FIGARCH prices with the same index, columns
-        and NaN structure as ``real_prices``.
+        pd.DataFrame of MSV prices with the same index, columns and
+        NaN structure as ``real_prices``.
     """
     rng = np.random.default_rng(seed)
 
     log_returns = _masked_log_returns(real_prices)
-    var = log_returns.var().to_numpy()
-
-    lam = _figarch_weights(d, truncation)
-    lam_rev = lam[::-1].copy()  # lam_rev @ window == sum_k lambda_k * r2_{t-k}
-    omega = var * (1.0 - lam.sum())
+    target_std = log_returns.std().to_numpy()
 
     t_len, n_tickers = real_prices.shape
-    total = burn_in + t_len
-    z = rng.standard_normal((total, n_tickers))
+    day_index = pd.factorize(real_prices.index.normalize())[0]
+    n_days = int(day_index[-1]) + 1
 
-    r2 = np.empty((total + truncation, n_tickers))
-    r2[:truncation] = var  # pre-history at the unconditional variance
-    returns = np.empty((total, n_tickers))
+    # Slow factor: long-memory fGn across sessions, constant within each
+    slow = _sample_fgn(rng, _fgn_eigenvalues(h_slow, n_days), n_tickers)[day_index]
 
-    for t in tqdm(range(total), desc="FIGARCH simulation"):
-        sigma2 = omega + lam_rev @ r2[t : t + truncation]
-        r_t = np.sqrt(sigma2) * z[t]
-        returns[t] = r_t
-        r2[truncation + t] = r_t**2
+    # Fast factor: stationary AR(1) with unit marginal variance
+    phi = np.exp(-1.0 / tau_fast)
+    shocks = rng.standard_normal((t_len, n_tickers)) * np.sqrt(1.0 - phi**2)
+    shocks[0] /= np.sqrt(1.0 - phi**2)  # draw x_0 from the stationary law
+    fast = lfilter([1.0], [1.0, -phi], shocks, axis=0)
 
-    increments = returns[burn_in:]
-    increments[0, :] = 0.0  # anchor: first bar is the starting price itself
+    log_vol = nu_slow * slow + nu_fast * fast
+    returns = np.exp(log_vol) * rng.standard_normal((t_len, n_tickers))
+    returns *= target_std / returns.std(axis=0)
+
+    returns[0, :] = 0.0  # anchor: first bar is the starting price itself
 
     p0 = real_prices.bfill().iloc[0].to_numpy()
-    paths = p0 * np.exp(np.cumsum(increments, axis=0))
+    paths = p0 * np.exp(np.cumsum(returns, axis=0))
     paths[real_prices.isna().to_numpy()] = np.nan
 
     return pd.DataFrame(paths, index=real_prices.index, columns=real_prices.columns)
@@ -209,13 +241,14 @@ def main() -> None:
     gbm_prices.to_parquet(GBM_OUTPUT_PATH)
     print(f"Saved: {GBM_OUTPUT_PATH} ({gbm_prices.shape}), seed={SEED}")
 
-    figarch_prices = generate_figarch_prices(real_prices)
-    assert figarch_prices.shape == real_prices.shape
-    assert figarch_prices.isna().to_numpy().sum() == real_prices.isna().to_numpy().sum()
-    figarch_prices.to_parquet(FIGARCH_OUTPUT_PATH)
+    msv_prices = generate_msv_prices(real_prices)
+    assert msv_prices.shape == real_prices.shape
+    assert msv_prices.isna().to_numpy().sum() == real_prices.isna().to_numpy().sum()
+    msv_prices.to_parquet(MSV_OUTPUT_PATH)
     print(
-        f"Saved: {FIGARCH_OUTPUT_PATH} ({figarch_prices.shape}), "
-        f"d={FIGARCH_D}, K={FIGARCH_TRUNCATION}, seed={FIGARCH_SEED}"
+        f"Saved: {MSV_OUTPUT_PATH} ({msv_prices.shape}), "
+        f"nu_slow={MSV_NU_SLOW}, nu_fast={MSV_NU_FAST}, "
+        f"tau={MSV_TAU_FAST}, H={MSV_H_SLOW}, seed={MSV_SEED}"
     )
 
 

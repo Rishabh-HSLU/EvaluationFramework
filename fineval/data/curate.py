@@ -416,6 +416,32 @@ class GBMBaselineLoader(CuratedParquetLoader):
         super().__init__(parquet_path=parquet_path, name="GBM", is_synthetic=True)
 
 
+class MSVBaselineLoader(CuratedParquetLoader):
+    """
+    Loads the multi-scale stochastic volatility (MSV) baseline dataset
+    produced by fineval/scripts/baseline_generation.py.
+
+    MSV is the positive-control baseline for volatility clustering
+    (M2): a slow long-memory per-session log-vol factor plus a fast
+    intraday factor. Like GBM, it is generated directly on the curated
+    market clock with real's NaN mask imposed, so it is curated by
+    construction and never passes through CurationPipeline.
+
+    Attributes:
+
+        parquet_path : str
+            Path to the MSV baseline parquet file.
+
+    Example::
+
+        loader  = MSVBaselineLoader(parquet_path="data/curated/msv_prices.parquet")
+        dataset = loader.load()
+    """
+
+    def __init__(self, parquet_path: str):
+        super().__init__(parquet_path=parquet_path, name="MSV", is_synthetic=True)
+
+
 class AILSyntheticLoader(BaseLoader):
     """
     Loads AIL synthetic data from a long-format parquet file.

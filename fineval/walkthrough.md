@@ -104,7 +104,7 @@ If validation fails — wrong index type, missing timezone, non-string
 columns — you get a clear error message telling you exactly what's
 wrong.
 
-The framework ships with four concrete loaders as reference
+The framework ships with five concrete loaders as reference
 implementations, all in `data/curate.py` alongside the curation
 pipeline that consumes them:
 
@@ -113,10 +113,11 @@ pipeline that consumes them:
 - `CuratedParquetLoader` — a wide-format parquet that is already on
   the curated market clock; used to reload the curation output
   without re-running the raw loaders.
-- `GBMBaselineLoader` — the GBM baseline parquet produced by
-  `scripts/baseline_generation.py`. GBM is generated directly on the
-  curated clock with real's NaN mask imposed, so it is curated by
-  construction and skips the `CurationPipeline` entirely.
+- `GBMBaselineLoader` / `MSVBaselineLoader` — the baseline parquets
+  produced by `scripts/baseline_generation.py`. Both baselines are
+  generated directly on the curated clock with real's NaN mask
+  imposed, so they are curated by construction and skip the
+  `CurationPipeline` entirely.
 
 To benchmark a new generator with its own raw format, write a new
 subclass following the pattern above.
@@ -327,12 +328,12 @@ narrower, honest CIs versus resampling the two arrays independently.
 
 ```
 prices (curated parquet)
-   │  loaders: CuratedParquetLoader (Real, AIL), GBMBaselineLoader
+   │  loaders: CuratedParquetLoader (Real, AIL), GBMBaselineLoader, MSVBaselineLoader
    ▼
 PreprocessingPipeline          log returns → overnight mask → conditional FFF
    │  per (real, synthetic) pair
    ▼
-MatchedTickerBootstrap         B resamples × {M1, M2, M4, M6} × {AIL, GBM}
+MatchedTickerBootstrap         B resamples × {M1, M2, M4, M6} × {AIL, GBM, MSV}
    │
    ▼
 benchmark table                score [95% CI] per (metric, generator)
@@ -347,25 +348,41 @@ uv run python -m fineval.scripts.run_benchmark --n-resamples 20
 ```
 
 It prints the markdown benchmark table and writes the tidy results to
-`scripts/results/benchmark_results.csv`.
+a per-run stamped CSV in `scripts/results/` (parameters + timestamp in
+the filename); only a default-parameter run also refreshes the
+canonical `scripts/results/benchmark_results.csv`.
 
-### The GBM baseline
+### The baselines: GBM and MSV
 
-`scripts/baseline_generation.py` produces the anchor at the low end of
-the score range. It calibrates per-ticker drift and volatility from
-the curated real data's overnight-masked 1-minute log returns,
-simulates one i.i.d.-Gaussian GBM path per ticker on the same market
-clock, and imposes real's exact NaN mask — so both sides carry
-identical missingness and no metric can score coverage instead of
-dynamics. Regenerate it (deterministic, seed 42) with:
+`scripts/baseline_generation.py` produces two control generators,
+both matched to the curated real data on everything except the
+return-generating process — same market clock, same tickers,
+per-ticker scale calibrated to real's overnight-masked 1-minute log
+returns, real's exact NaN mask imposed (so no metric can score
+coverage instead of dynamics):
+
+- **GBM** is the negative control: i.i.d.-Gaussian increments, so no
+  clustering, no heavy tails, no regime structure. Every metric
+  should reject it.
+- **MSV** (two-factor multi-scale stochastic volatility) is the
+  positive control for M2: a slow long-memory factor constant within
+  each session reproduces real's day-level volatility persistence,
+  and a fast intraday factor reproduces the short-lag ACF decay. It
+  is an M2 specialist by design — it should score well on M2 while
+  losing to a full generator elsewhere. The three failed designs that
+  preceded it (block-bootstrap, FIGARCH, single-factor LMSV) are
+  documented in `scripts/reasoning.md`.
+
+Regenerate both (deterministic, seeds from `config.py`) with:
 
 ```bash
 uv run python -m fineval.scripts.baseline_generation
 ```
 
-The two anchors make every score interpretable: the real-vs-real
-baseline defines what "indistinguishable" looks like (0.5), and GBM
-defines what "structurally wrong" looks like. Any generator worth
-evaluating should land between them, and *where* it lands — per
-metric — tells you which stylized facts it captures and which it
-misses.
+The anchors make every score interpretable: the real-vs-real baseline
+defines what "indistinguishable" looks like (0.5), GBM defines what
+"structurally wrong" looks like, and MSV demonstrates that a model
+which genuinely has a stylized fact scores well on that fact's
+metric. Any generator worth evaluating should land between the
+anchors, and *where* it lands — per metric — tells you which stylized
+facts it captures and which it misses.

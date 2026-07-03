@@ -11,6 +11,12 @@ independently for A, B and each synthetic S. The real draw A_b is
 shared between g_rr and every generator's g_sr (matched design), so
 per-draw sampling noise partially cancels out of the score.
 
+RNG streams are independent per role: the real draws come from one
+stream and each generator's draws from its own stream keyed by the
+generator's name. Adding or removing a generator therefore never
+changes the subsamples drawn for the others — every (metric,
+generator) cell is reproducible in isolation under a fixed seed.
+
 The similarity score is the metric's own normalize():
 
     s = mean(g_rr) / (mean(g_rr) + mean(g_sr))
@@ -21,6 +27,8 @@ iteration, preserving the per-b correlation created by sharing A_b.
 """
 
 from __future__ import annotations
+
+import zlib
 
 import numpy as np
 import pandas as pd
@@ -99,7 +107,17 @@ class MatchedTickerBootstrap:
             columns [metric, generator, score, ci_low, ci_high,
             g_rr_mean, g_sr_mean].
         """
-        rng = np.random.default_rng(self.seed)
+        # Independent streams: [seed, 0] for real draws, [seed, 1, crc32(name)]
+        # per generator (and per-cell CI streams in _summarize). Keying
+        # generators by a stable digest of their name (not position) keeps
+        # every cell's draws fixed under any addition, removal or
+        # reordering of generators.
+        rng_real = np.random.default_rng([self.seed, 0])
+        rng_synth = {
+            gen: np.random.default_rng([self.seed, 1, zlib.crc32(gen.encode())])
+            for gen in synthetics
+        }
+
         n_real = real.shape[1]
         m = min(self.tickers_per_draw, n_real)
         b_total = self.n_resamples
@@ -110,8 +128,8 @@ class MatchedTickerBootstrap:
         }
 
         for b in tqdm(range(b_total), desc="Bootstrap resamples"):
-            idx_a = rng.integers(0, n_real, m)
-            idx_b = rng.integers(0, n_real, m)
+            idx_a = rng_real.integers(0, n_real, m)
+            idx_b = rng_real.integers(0, n_real, m)
             panel_a = self._subsample(real, idx_a)
             panel_b = self._subsample(real, idx_b)
 
@@ -123,7 +141,7 @@ class MatchedTickerBootstrap:
                 )
 
             for gen, synth in synthetics.items():
-                idx_s = rng.integers(0, synth.shape[1], m)
+                idx_s = rng_synth[gen].integers(0, synth.shape[1], m)
                 panel_s = self._subsample(synth, idx_s)
                 for mt in self.metrics:
                     features_s = mt.extract_features(panel_s)
@@ -131,14 +149,17 @@ class MatchedTickerBootstrap:
                         features_a[mt.name], features_s
                     )
 
-        return self._summarize(synthetics.keys(), rng)
+        return self._summarize(synthetics.keys())
 
-    def _summarize(self, generators, rng: np.random.Generator) -> pd.DataFrame:
+    def _summarize(self, generators) -> pd.DataFrame:
         rows = []
         for mt in self.metrics:
             g_rr = self.g_rr[mt.name]
             for gen in generators:
                 g_sr = self.g_sr[mt.name][gen]
+                rng = np.random.default_rng(
+                    [self.seed, 2, zlib.crc32(mt.name.encode()), zlib.crc32(gen.encode())]
+                )
                 ci_low, ci_high = self._paired_ci(g_rr, g_sr, rng)
                 rows.append(
                     {

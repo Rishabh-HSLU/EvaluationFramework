@@ -12,7 +12,10 @@ End-to-end flow:
    subsamples for real-A, real-B and each generator, extract every
    metric's features, and accumulate g_rr / g_sr distance arrays.
 4. Normalize into [0, 1] similarity scores with 95% paired-bootstrap
-   CIs, print the benchmark table, and save the tidy results CSV.
+   CIs, print the benchmark table, and save the tidy results to a
+   per-run CSV stamped with (B, tickers/draw, seed, timestamp). Only
+   a run at the default parameters also refreshes the canonical
+   benchmark_results.csv, so quick passes can never clobber it.
 
 Run from the repository root (defaults take ~1 min per resample):
 
@@ -21,6 +24,7 @@ Run from the repository root (defaults take ~1 min per resample):
 """
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -41,7 +45,7 @@ from fineval.config import (
     SEED,
     TAIL_QUANTILE,
 )
-from fineval.data import CuratedParquetLoader, GBMBaselineLoader
+from fineval.data import CuratedParquetLoader, GBMBaselineLoader, MSVBaselineLoader
 from fineval.metrics import (
     AggregationalGaussianity,
     RegimeConditionalTails,
@@ -114,11 +118,12 @@ def main() -> None:
         parquet_path=str(CURATED_DIR / "ail_prices.parquet"), name="AIL", is_synthetic=True
     ).load()
     gbm = GBMBaselineLoader(parquet_path=str(CURATED_DIR / "gbm_prices.parquet")).load()
+    msv = MSVBaselineLoader(parquet_path=str(CURATED_DIR / "msv_prices.parquet")).load()
 
     print("Preprocessing (log returns, overnight mask, conditional FFF)...")
     deseas_real = None
     synthetics = {}
-    for dataset in (ail, gbm):
+    for dataset in (ail, gbm, msv):
         pipeline = PreprocessingPipeline().run(real.prices, dataset.prices)
         synthetics[dataset.name] = pipeline.deseas_synthetic
         if deseas_real is None:
@@ -133,8 +138,21 @@ def main() -> None:
     results = engine.run(deseas_real, synthetics)
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    csv_path = RESULTS_DIR / "benchmark_results.csv"
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    csv_path = (
+        RESULTS_DIR
+        / f"benchmark_B{args.n_resamples}_m{args.tickers_per_draw}_seed{args.seed}_{stamp}.csv"
+    )
     results.to_csv(csv_path, index=False)
+
+    defaults = parser.parse_args([])
+    is_default_run = (args.n_resamples, args.tickers_per_draw, args.seed) == (
+        defaults.n_resamples,
+        defaults.tickers_per_draw,
+        defaults.seed,
+    )
+    if is_default_run:
+        results.to_csv(RESULTS_DIR / "benchmark_results.csv", index=False)
 
     print(
         f"\nBenchmark (B={args.n_resamples}, {args.tickers_per_draw} tickers/draw, "
@@ -143,6 +161,8 @@ def main() -> None:
     )
     print(format_table(results))
     print(f"\nTidy results saved to: {csv_path}")
+    if is_default_run:
+        print(f"Canonical results updated: {RESULTS_DIR / 'benchmark_results.csv'}")
 
 
 if __name__ == "__main__":

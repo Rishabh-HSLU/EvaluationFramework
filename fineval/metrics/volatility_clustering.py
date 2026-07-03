@@ -75,11 +75,22 @@ class VolatilityClustering(BaseMetric):
         bounds = np.flatnonzero(session_ids[1:].values != session_ids[:-1].values) + 1
         blocks = np.split(centered, bounds, axis=0)
 
+        # Per-block lag-k cross-product sums via FFT autocorrelation.
+        # NaN -> 0 is exact here: the original nansum skipped any pair
+        # with a NaN member, and a zero factor contributes zero to the
+        # sum. Zero-padding to >= 2n makes the circular correlation
+        # linear, so s[k] = sum_t c[t] * c[t+k] within the block.
         num = np.zeros((self.lag_max, a.shape[1]))
         for blk in blocks:
             n = blk.shape[0]
-            for k in range(1, min(self.lag_max, n - 1) + 1):
-                num[k - 1] += np.nansum(blk[:-k] * blk[k:], axis=0)
+            if n < 2:
+                continue
+            c = np.nan_to_num(blk, nan=0.0)
+            pad = 1 << int(np.ceil(np.log2(2 * n)))
+            f = np.fft.rfft(c, n=pad, axis=0)
+            s = np.fft.irfft(f * np.conj(f), n=pad, axis=0)
+            kmax = min(self.lag_max, n - 1)
+            num[:kmax] += s[1 : kmax + 1]
 
         with np.errstate(invalid="ignore", divide="ignore"):
             ticker_acfs = num / denominator

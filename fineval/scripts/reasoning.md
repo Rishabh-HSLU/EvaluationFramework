@@ -958,3 +958,134 @@ break, but nothing more.
 A meaningful positive control has to be an *independent model* that
 generates fresh paths with the right long-memory structure — which is
 what the FIGARCH baseline below provides.
+
+---
+
+# The MSV Positive-Control Baseline
+
+## Why a positive control, and why it must be an independent model
+
+GBM anchors the bottom of the score range, but nothing anchored the
+top with an *independent generator* — the real-vs-real baseline is
+internal to the scoring rule itself. Since resampled-real controls
+are tautological for the current metric set (previous section), the
+positive control had to be a parametric model *designed* to satisfy
+one stylized fact — volatility clustering (M2) — and generated the
+same way as GBM: same market clock, same ticker universe, per-ticker
+scale calibrated to real, real's NaN mask imposed
+(`scripts/baseline_generation.py`).
+
+Getting a model to actually match real's measured ACF curve took
+three attempts, and the failures were more informative than the
+success.
+
+## Attempt 1: FIGARCH — hyperbolic decay is far too steep
+
+FIGARCH (Baillie, Bollerslev & Mikkelsen, 1996) is the canonical
+long-memory GARCH: ARCH(∞) weights decaying as k^-(1+d). A
+FIGARCH(0, d, 0) simulation (truncated ARCH(∞), per-ticker variance
+targeting, 100-ticker sweep panel) produced, against real's
+full-panel ACF curve (sum |Δρ| over lags 60–390; real–AIL = 2.79,
+real–GBM = 38.6 on the same scale):
+
+| d | ACF lag 1 | lag 60 | lag 120 | curve distance |
+|---:|---:|---:|---:|---:|
+| 0.30 | 0.319 | 0.052 | 0.031 | 32.9 |
+| 0.45 | 0.517 | 0.141 | 0.089 | 21.6 |
+| 0.60 | 0.605 | 0.132 | 0.074 | 24.8 |
+| 0.75 | 0.643 | 0.068 | 0.031 | 33.1 |
+
+Real's curve is 0.389 / 0.246 / 0.192 at those lags. Even the best d
+misses by 8× the AIL distance: FIGARCH's hyperbolic decay collapses
+by lag 60 no matter how d is tuned.
+
+The diagnostic that explains why: undoing the ACF estimator's
+within-session pair-count taper (at lag k a session contributes
+~(390−k) pairs but the denominator is fixed, so measured ≈ true ×
+(1 − k/390)) shows real's *true* within-session |r| ACF is nearly
+flat — ≈ 0.28–0.29 from lag 60 all the way to lag 250. Real intraday
+volatility clustering is not a decaying curve at the session scale;
+it is dominated by a *day-level volatility factor*. A volatile day
+stays volatile all session (March 2020), a calm day stays calm
+(September 2019), so |r_t| and |r_{t+k}| are correlated at *every*
+intraday lag roughly equally. No hyperbolically-decaying one-factor
+process can reproduce a flat plateau.
+
+## Attempt 2: single-factor LMSV — killed by per-path centering
+
+Long-Memory Stochastic Volatility (Breidt, Crato & de Lima, 1998)
+with log-vol driven by fractional Gaussian noise looked like the
+right class: fGn's ACF decays as k^(2H−2), nearly flat for H → 1.
+Exact fGn was sampled via Davies–Harte circulant embedding. The sweep
+showed the level and flatness *worsening* as H approached 1
+(H = 0.98: lag-60/lag-1 ratio 0.37 vs real's 0.63; H = 0.999: ACF
+collapsed to ≈ 0.02 everywhere).
+
+The mechanism is an estimator interaction, not a bug: M2 centers each
+ticker *within its own path* (per-ticker mean and variance over the
+sample window). As H → 1, fGn becomes almost perfectly correlated
+across the window — each path's log-vol is nearly one constant random
+level. Per-path centering removes exactly that level, leaving almost
+no within-path vol variation for the ACF to detect. The ensemble
+long memory is real, but invisible to a within-path estimator at
+finite T. What the estimator *can* see is vol variation across days
+within the window — which is again the day-level factor.
+
+## Attempt 3 (adopted): two-factor multi-scale SV
+
+Both failures point to the same structure, which is also the standard
+multi-scale stochastic volatility setup (fast + slow factors; Fouque,
+Papanicolaou & Sircar):
+
+    r_t = c_i · exp(ν_slow · s_d(t) + ν_fast · f_t) · z_t
+
+- **s_d** — slow factor: exact fGn (H = 0.9) across the 138 sessions,
+  held constant within each session. Produces the flat within-session
+  ACF plateau via day-level vol persistence.
+- **f_t** — fast factor: stationary AR(1) in minutes with
+  autocorrelation time τ, producing the short-lag decay from lag 1
+  down to the plateau.
+- **c_i** — per-ticker scale matched exactly to real's return std.
+
+Sweep over (ν_slow, ν_fast, τ) on the 100-ticker panel:
+
+| ν_slow | ν_fast | τ | lag 1 | lag 60 | lag 120 | lag 250 | curve distance |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.7 | 0.3 | 60 | 0.327 | 0.208 | 0.155 | 0.081 | 6.85 |
+| **0.9** | **0.3** | **20** | **0.391** | **0.244** | **0.195** | **0.106** | **1.85** |
+| 0.9 | 0.3 | 60 | 0.392 | 0.263 | 0.201 | 0.107 | 2.74 |
+| 0.9 | 0.5 | 60 | 0.431 | 0.238 | 0.166 | 0.084 | 4.85 |
+
+(real: 0.389 / 0.246 / 0.192 / 0.098)
+
+The selected parameters (ν_slow = 0.9, ν_fast = 0.3, τ = 20, H = 0.9)
+match real's measured curve nearly point-for-point, with a curve
+distance of 1.85 — *closer than AIL's 2.79*. MSV is intentionally an
+M2 specialist: it has no heavy-tail mechanism beyond the lognormal
+vol mixture and no regime-tail design, so it should beat AIL on M2
+while losing to it elsewhere — the signature of a valid
+single-purpose positive control.
+
+## Engineering notes from the same pass
+
+- **M2 vectorization.** The per-lag Python loop in
+  `VolatilityClustering.extract_features` was replaced by per-session
+  FFT autocorrelation (NaN→0 is exact under the pairwise-masking
+  semantics; zero-padding to ≥ 2n makes the circular correlation
+  linear). Verified bit-identical to the loop implementation
+  (max |Δ| = 1.1e-16) and ~18× faster; the full benchmark drops from
+  ~1.6 h to ~35 min.
+- **M6 rolling-vol.** The per-column `groupby().transform(lambda ...)`
+  was replaced with one vectorized rolling per session block —
+  verified identical output (values and NaN mask).
+- **Per-cell RNG streams.** The bootstrap engine originally drew all
+  ticker subsamples from one shared RNG stream, so *adding* a
+  generator changed the draw sequence and perturbed every other
+  generator's scores. Streams are now independent: `[seed, 0]` for
+  real draws, `[seed, 1, crc32(name)]` per generator,
+  `[seed, 2, crc32(metric), crc32(name)]` for each cell's CI
+  bootstrap. Every (metric, generator) cell is now reproducible in
+  isolation and invariant to the generator set. This restructure
+  changes the draw sequence once relative to the first benchmark run,
+  so scores move within their CIs against that run; they are stable
+  thereafter.
