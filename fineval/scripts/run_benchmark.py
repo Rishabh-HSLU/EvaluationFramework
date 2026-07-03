@@ -138,18 +138,17 @@ def main() -> None:
     results = engine.run(deseas_real, synthetics)
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     csv_path = (
         RESULTS_DIR
         / f"benchmark_B{args.n_resamples}_m{args.tickers_per_draw}_seed{args.seed}_{stamp}.csv"
     )
     results.to_csv(csv_path, index=False)
 
-    defaults = parser.parse_args([])
-    is_default_run = (args.n_resamples, args.tickers_per_draw, args.seed) == (
-        defaults.n_resamples,
-        defaults.tickers_per_draw,
-        defaults.seed,
+    is_default_run = (
+        args.n_resamples == parser.get_default("n_resamples")
+        and args.tickers_per_draw == parser.get_default("tickers_per_draw")
+        and args.seed == parser.get_default("seed")
     )
     if is_default_run:
         results.to_csv(RESULTS_DIR / "benchmark_results.csv", index=False)

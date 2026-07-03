@@ -96,8 +96,9 @@ class RegimeConditionalTails(BaseMetric):
         session = df.index.normalize()
         # One vectorized rolling per session block (not per column via
         # transform): identical output, ~10x faster on wide panels.
-        # groupby sorts by session and the index is time-sorted, so
-        # concatenating the blocks reproduces the original row order.
+        # Concatenation doesn't need to reproduce the original row order:
+        # every downstream consumer joins this result back by its
+        # (time, ticker) index label, not by row position.
         pieces = [
             group.rolling(window=self.window, min_periods=self.min_periods).std()
             for _, group in df.groupby(session)

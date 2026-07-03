@@ -94,6 +94,29 @@ class MatchedTickerBootstrap:
         sub.columns = [f"T{i:04d}" for i in range(sub.shape[1])]
         return sub
 
+    def _stream(self, role: int, *names: str) -> np.random.Generator:
+        """Independent RNG stream for one (role, *names) key.
+
+        role 0: real draws. role 1: one generator's draws, keyed by its
+        name. role 2: one (metric, generator) cell's CI bootstrap, keyed
+        by both names. A stable digest of each name (not its position)
+        means adding, removing or reordering generators never perturbs
+        any other stream.
+        """
+        return np.random.default_rng([self.seed, role, *(zlib.crc32(n.encode()) for n in names)])
+
+    @staticmethod
+    def _check_no_crc32_collision(names: list[str]) -> None:
+        """Guard against two names silently sharing an RNG stream.
+
+        crc32 collisions are astronomically unlikely for a handful of
+        generator names, but a collision would otherwise correlate two
+        supposedly-independent streams with no error at all.
+        """
+        digests = [zlib.crc32(n.encode()) for n in names]
+        if len(set(digests)) != len(names):
+            raise ValueError(f"crc32 collision among generator names {names!r}")
+
     def run(self, real: pd.DataFrame, synthetics: dict[str, pd.DataFrame]) -> pd.DataFrame:
         """Execute the bootstrap and return the benchmark results.
 
@@ -107,16 +130,15 @@ class MatchedTickerBootstrap:
             columns [metric, generator, score, ci_low, ci_high,
             g_rr_mean, g_sr_mean].
         """
-        # Independent streams: [seed, 0] for real draws, [seed, 1, crc32(name)]
-        # per generator (and per-cell CI streams in _summarize). Keying
-        # generators by a stable digest of their name (not position) keeps
-        # every cell's draws fixed under any addition, removal or
-        # reordering of generators.
-        rng_real = np.random.default_rng([self.seed, 0])
-        rng_synth = {
-            gen: np.random.default_rng([self.seed, 1, zlib.crc32(gen.encode())])
-            for gen in synthetics
-        }
+        # Independent streams keyed by role + a stable digest of each name
+        # (not position), so every cell's draws are fixed under any
+        # addition, removal or reordering of generators. Collision-checked
+        # below: two names hashing to the same crc32 would otherwise
+        # silently correlate their streams with no error.
+        names = list(synthetics)
+        self._check_no_crc32_collision(names)
+        rng_real = self._stream(0)
+        rng_synth = {gen: self._stream(1, gen) for gen in names}
 
         n_real = real.shape[1]
         m = min(self.tickers_per_draw, n_real)
@@ -157,9 +179,7 @@ class MatchedTickerBootstrap:
             g_rr = self.g_rr[mt.name]
             for gen in generators:
                 g_sr = self.g_sr[mt.name][gen]
-                rng = np.random.default_rng(
-                    [self.seed, 2, zlib.crc32(mt.name.encode()), zlib.crc32(gen.encode())]
-                )
+                rng = self._stream(2, mt.name, gen)
                 ci_low, ci_high = self._paired_ci(g_rr, g_sr, rng)
                 rows.append(
                     {

@@ -1,5 +1,5 @@
 """
-Generate the baseline synthetic datasets: GBM and FIGARCH.
+Generate the baseline synthetic datasets: GBM and MSV.
 
 The two baselines anchor opposite ends of the score range:
 
@@ -219,7 +219,7 @@ def generate_msv_prices(
 
     log_vol = nu_slow * slow + nu_fast * fast
     returns = np.exp(log_vol) * rng.standard_normal((t_len, n_tickers))
-    returns *= target_std / returns.std(axis=0)
+    returns *= target_std / returns.std(axis=0, ddof=1)
 
     returns[0, :] = 0.0  # anchor: first bar is the starting price itself
 

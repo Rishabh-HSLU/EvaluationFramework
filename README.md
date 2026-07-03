@@ -182,19 +182,28 @@ Sep 2019 – Mar 2020, 600-ticker universe.
 
 *(regenerate with `uv run python -m fineval.scripts.run_benchmark`)*
 
-| Metric | Stylized fact | AIL | GBM |
-|---|---|---|---|
-| M1 | Unconditional heavy tails | 0.484 [0.450, 0.517] | 0.028 [0.024, 0.031] |
-| M2 | Volatility clustering | 0.220 [0.199, 0.242] | 0.020 [0.018, 0.023] |
-| M4 | Aggregational Gaussianity | 0.380 [0.352, 0.410] | 0.125 [0.110, 0.141] |
-| M6 | Regime-conditional tails | 0.461 [0.431, 0.490] | 0.045 [0.041, 0.049] |
+| Metric | Stylized fact | AIL | GBM | MSV |
+|---|---|---|---|---|
+| M1 | Unconditional heavy tails | 0.478 [0.447, 0.509] | 0.025 [0.023, 0.028] | 0.025 [0.023, 0.028] |
+| M2 | Volatility clustering | 0.203 [0.181, 0.226] | 0.019 [0.016, 0.021] | 0.265 [0.237, 0.291] |
+| M4 | Aggregational Gaussianity | 0.378 [0.346, 0.410] | 0.121 [0.108, 0.136] | 0.170 [0.152, 0.189] |
+| M6 | Regime-conditional tails | 0.485 [0.456, 0.514] | 0.047 [0.043, 0.051] | 0.133 [0.122, 0.145] |
 
 AIL tracks real-sample parity (0.5) closely on M1 and M6, is weaker on M2
-
 (long-memory volatility clustering) and M4 (aggregational kurtosis decay).
 GBM is rejected by every metric — as expected for a Gaussian, memoryless
 baseline with no intraday structure — confirming all four metrics discriminate
-correctly between a strong and a trivial generator.
+correctly between a strong and a trivial generator. MSV, a positive control
+purpose-built to exhibit volatility clustering and nothing else, beats AIL on
+M2 (0.265 vs. 0.203) while losing to it everywhere else — the signature of a
+working single-purpose control that validates the benchmark itself, not just
+the generator.
+
+Between this run and the first (AIL/GBM only, `scripts/reasoning.md` §
+Benchmark Results), the bootstrap's RNG was restructured into independent
+per-cell streams (see `bootstrap/engine.py`); every score moved within its
+prior confidence interval, not outside it, confirming the restructure changed
+sampling machinery, not the underlying measurement.
 
 ---
 

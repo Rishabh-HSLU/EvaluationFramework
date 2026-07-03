@@ -1089,3 +1089,26 @@ single-purpose positive control.
   changes the draw sequence once relative to the first benchmark run,
   so scores move within their CIs against that run; they are stable
   thereafter.
+
+## The second full benchmark run
+
+Same protocol (B = 100, 200 tickers per draw, seed 42), now on the
+per-cell RNG streams and with MSV added:
+
+| Metric | Stylized fact | AIL | GBM | MSV |
+|---|---|---|---|---|
+| M1 | Unconditional heavy tails | 0.478 [0.447, 0.509] | 0.025 [0.023, 0.028] | 0.025 [0.023, 0.028] |
+| M2 | Volatility clustering | 0.203 [0.181, 0.226] | 0.019 [0.016, 0.021] | 0.265 [0.237, 0.291] |
+| M4 | Aggregational Gaussianity | 0.378 [0.346, 0.410] | 0.121 [0.108, 0.136] | 0.170 [0.152, 0.189] |
+| M6 | Regime-conditional tails | 0.485 [0.456, 0.514] | 0.047 [0.043, 0.051] | 0.133 [0.122, 0.145] |
+
+Every AIL and GBM score sits inside its first-run confidence interval
+(compare to the table in "The first full benchmark run" above) — the
+RNG restructure changed which tickers get drawn, not the measurement.
+MSV lands exactly where it was designed to: above AIL on M2 (0.265 vs.
+0.203, the metric it was built to specialize in) and below AIL on
+every other metric, since it has no heavy-tail or regime-conditional
+mechanism beyond its lognormal volatility mixture. This is the
+positive control behaving as a positive control — it validates that
+the benchmark can discriminate a generator that is *better* than AIL
+at the one property it targets, not only worse generators like GBM.
