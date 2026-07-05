@@ -189,19 +189,3 @@ class AggregationalGaussianity(BaseMetric):
         if not valid.any():
             return np.nan
         return float(np.mean(np.abs(fa[valid] - fb[valid])))
-
-    def normalize(self, g_rr: np.ndarray, g_sr: np.ndarray) -> float:
-        """Ratio-of-means similarity score.
-
-        Args:
-            g_rr: Array of real-vs-real self-distances across bootstrap draws.
-            g_sr: Array of synthetic-vs-real distances across bootstrap draws.
-
-        Returns:
-            Similarity score in [0, 1].
-        """
-        rr_mean = float(np.nanmean(g_rr))
-        sr_mean = float(np.nanmean(g_sr))
-        if rr_mean + sr_mean == 0.0:
-            return 1.0
-        return rr_mean / (rr_mean + sr_mean)

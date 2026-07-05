@@ -179,19 +179,3 @@ class RegimeConditionalTails(BaseMetric):
         w = self.regime_weights[valid]
         w = w / w.sum()
         return float(np.dot(w, abs_diff))
-
-    def normalize(self, g_rr: np.ndarray, g_sr: np.ndarray) -> float:
-        """Ratio-of-means similarity score, matching M1/M2's array convention.
-
-        Args:
-            g_rr: Array of real-vs-real self-distances across bootstrap draws.
-            g_sr: Array of synthetic-vs-real distances across bootstrap draws.
-
-        Returns:
-            Similarity score in [0, 1].
-        """
-        rr_mean = float(np.nanmean(g_rr))
-        sr_mean = float(np.nanmean(g_sr))
-        if rr_mean + sr_mean == 0.0:
-            return 1.0
-        return rr_mean / (rr_mean + sr_mean)

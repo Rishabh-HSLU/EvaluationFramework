@@ -1112,3 +1112,24 @@ mechanism beyond its lognormal volatility mixture. This is the
 positive control behaving as a positive control — it validates that
 the benchmark can discriminate a generator that is *better* than AIL
 at the one property it targets, not only worse generators like GBM.
+
+# M2 Lag Weighting: The Window Is the Weight (2026-07-05)
+
+While reconciling docstrings with code ahead of the mathematical
+foundations document, M2's docstrings described its distance as
+"lag-weighted," but the implementation applies no per-lag weights —
+it sums |Δρ(k)| uniformly over k ∈ [lag_min, lag_max]. Decision: the
+window restriction [lag_min, lag_max] is the *only* lag weighting, a
+deliberate 0/1 weight, and this is the authoritative definition.
+
+Two reasons. First, results are in hand: both full benchmark runs
+above were produced under this definition, and changing the distance
+now would invalidate them for no measurement benefit. Second, the
+window already encodes what a smooth weight would aim for — it
+excludes the short-memory regime entirely (lags below lag_min, which
+naive short-memory generators reproduce anyway) and treats every
+long-memory lag as equally informative, the honest choice absent
+evidence that any sub-band of [60, 390] matters more.
+
+The docstrings were corrected to read "unweighted L1 sum of absolute
+ACF gaps over the lag window"; the distance definition is unchanged.

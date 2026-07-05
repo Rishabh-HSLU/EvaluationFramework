@@ -2,8 +2,9 @@
 M2: Nonlinear Temporal Dependence (Volatility Clustering)
 
 Measures the long-memory volatility clustering of returns by evaluating the
-mean absolute gap in the empirical autocorrelation function (ACF) of absolute
-returns (|r|) across long lags (e.g., 60 to 390 minutes).
+unweighted L1 sum of absolute gaps in the empirical autocorrelation function
+(ACF) of absolute returns (|r|) over the lag window [lag_min, lag_max]
+(e.g., 60 to 390 minutes).
 """
 
 import numpy as np
@@ -98,10 +99,14 @@ class VolatilityClustering(BaseMetric):
 
     def compute_distance(self, features_real: np.ndarray, features_synth: np.ndarray) -> float:
         """
-        Computes the lag-weighted absolute ACF gap.
+        Computes the unweighted L1 sum of absolute ACF gaps over the lag
+        window [lag_min, lag_max].
 
-        Differences in the short-memory regime (lags < lag_min) are strictly excluded,
-        focusing the metric completely on the long-memory persistence.
+        The window restriction is the only lag weighting — a deliberate 0/1
+        weight (see scripts/reasoning.md). Differences in the short-memory
+        regime (lags < lag_min) are strictly excluded, focusing the metric
+        completely on the long-memory persistence; every lag inside the
+        window contributes equally.
 
         Args:
             features_real (np.ndarray): The empirical ACF curve of the real data.
@@ -119,22 +124,3 @@ class VolatilityClustering(BaseMetric):
         rho_synth = features_synth[start_idx:end_idx]
 
         return float(np.nansum(np.abs(rho_real - rho_synth)))
-
-    def normalize(self, g_rr: np.ndarray, g_sr: np.ndarray) -> float:
-        """
-        Converts raw ACF gaps into a bounded similarity score.
-
-        Args:
-            g_rr (np.ndarray): Array of real-vs-real baseline distances.
-            g_sr (np.ndarray): Array of synthetic-vs-real distances.
-
-        Returns:
-            float: A similarity score bounded in [0, 1].
-        """
-        rr_mean = float(g_rr.mean())
-        sr_mean = float(g_sr.mean())
-
-        if rr_mean + sr_mean == 0.0:
-            return 0.0
-
-        return rr_mean / (rr_mean + sr_mean)

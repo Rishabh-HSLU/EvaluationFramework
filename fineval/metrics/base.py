@@ -14,9 +14,10 @@ Design principles (see preprocessing/reasoning.md for full rationale):
    finite. This mirrors the framework's no-imputation principle:
    absence is preserved, never fabricated over.
 
-3. **Normalization on the metric.** Each subclass owns its normalize()
-   logic. This may be refactored to the coordinator once all six
-   metrics are implemented and their normalization turns out identical.
+3. **Normalization on the base.** The normalization turned out
+   identical across all implemented metrics, so normalize() is a
+   single concrete method here: a nanmean ratio-of-means score with
+   a 0.5 convention in the degenerate all-zero case.
 """
 
 from abc import ABC, abstractmethod
@@ -27,10 +28,12 @@ import numpy as np
 class BaseMetric(ABC):
     """Abstract base for a single fidelity metric.
 
-    Subclasses implement three methods:
+    Subclasses implement two methods:
         extract_features — panel sample → fixed-length feature vector
         compute_distance — two feature vectors → non-negative scalar
-        normalize — (self-distance, cross-distance) → [0, 1] score
+
+    normalize() — per-draw distance arrays → [0, 1] score — is
+    provided concretely here and shared by all metrics.
     """
 
     def __init__(self, name: str) -> None:
@@ -66,16 +69,31 @@ class BaseMetric(ABC):
             in both vectors.
         """
 
-    @abstractmethod
-    def normalize(self, g_rr: float, g_sr: float) -> float:
-        """Normalize raw distances into a [0, 1] similarity score.
+    def normalize(self, g_rr: np.ndarray, g_sr: np.ndarray) -> float:
+        """Normalize per-draw distances into a [0, 1] similarity score.
+
+        Ratio of means: s_b = mean(g_rr) / (mean(g_rr) + mean(g_sr)),
+        with NaN draws ignored via nanmean.
 
         Args:
-            g_rr: Mean self-distance (real vs real bootstrap draws).
-            g_sr: Mean cross-distance (synthetic vs real draws).
+            g_rr: Per-draw self-distances (real vs real bootstrap
+                draws), 1-D ndarray.
+            g_sr: Per-draw cross-distances (synthetic vs real draws),
+                1-D ndarray.
 
         Returns:
-            Similarity score in [0, 1], where 1 means the synthetic
-            generator is indistinguishable from real data at this
-            metric's resolution.
+            Similarity score in [0, 1]. s_b ≈ 0.5 means the
+            synthetic–real gap matches the real–real noise floor —
+            indistinguishable at this metric's resolution. s_b → 0
+            means the synthetic gap dominates the noise floor.
+            s_b → 1 means the synthetic–real gap is *smaller* than
+            the real–real noise floor — a red flag for memorization
+            or copying, not a good score. In the degenerate case
+            where both means are zero (synthetic exactly as close to
+            real as real is to itself), returns 0.5.
         """
+        rr_mean = float(np.nanmean(g_rr))
+        sr_mean = float(np.nanmean(g_sr))
+        if rr_mean + sr_mean == 0.0:
+            return 0.5
+        return rr_mean / (rr_mean + sr_mean)
