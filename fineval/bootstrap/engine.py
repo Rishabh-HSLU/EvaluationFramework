@@ -24,6 +24,13 @@ The similarity score is the metric's own normalize():
 and its confidence interval comes from a paired bootstrap over the
 resample index — the same index re-drawn into both arrays per
 iteration, preserving the per-b correlation created by sharing A_b.
+
+The aggregate fidelity score G (compute_aggregate) condenses one
+generator's row into a single number: the geometric mean of the
+per-metric gap ratios r_k = mean(g_sr) / mean(g_rr), computed in log
+space. Its CI is a *joint* paired bootstrap — one index set per
+iteration, shared across every metric's arrays — preserving the
+inter-metric correlation that sharing A_b creates within each draw.
 """
 
 from __future__ import annotations
@@ -64,6 +71,7 @@ class MatchedTickerBootstrap:
 
         engine = MatchedTickerBootstrap(metrics=[m1, m2, m4, m6])
         results = engine.run(deseas_real, {"AIL": deseas_ail, "GBM": deseas_gbm})
+        aggregate = engine.compute_aggregate()
     """
 
     def __init__(
@@ -99,9 +107,12 @@ class MatchedTickerBootstrap:
 
         role 0: real draws. role 1: one generator's draws, keyed by its
         name. role 2: one (metric, generator) cell's CI bootstrap, keyed
-        by both names. A stable digest of each name (not its position)
-        means adding, removing or reordering generators never perturbs
-        any other stream.
+        by both names. role 3: one generator's joint aggregate-CI
+        bootstrap, keyed by its name only — it iterates across all
+        metrics at once, so it must not reuse any per-cell role-2
+        stream. A stable digest of each name (not its position) means
+        adding, removing or reordering generators never perturbs any
+        other stream.
         """
         return np.random.default_rng([self.seed, role, *(zlib.crc32(n.encode()) for n in names)])
 
@@ -210,5 +221,91 @@ class MatchedTickerBootstrap:
             rr = np.nanmean(g_rr[idx], axis=1)
             sr = np.nanmean(g_sr[idx], axis=1)
             boot = rr / (rr + sr)
+        lo, hi = np.nanpercentile(boot, [2.5, 97.5])
+        return float(lo), float(hi)
+
+    def compute_aggregate(self, generators: list[str] | None = None) -> pd.DataFrame:
+        """Aggregate fidelity score G per generator, with a joint CI.
+
+        For each metric k the gap ratio r_k = mean(g_sr) / mean(g_rr)
+        compares the generator gap to the noise floor; G is the
+        geometric mean of the r_k, computed in log space:
+
+            G = exp(mean_k(ln r_k))
+
+        over the K metrics whose r_k is finite and positive. A metric
+        with a NaN, zero or negative ratio (degenerate — not expected
+        on real data) is dropped rather than raised on; k_used vs
+        k_total records how many metrics survived, and a generator
+        with no usable metric gets G = NaN. G = 1 means the generator
+        sits at the noise floor on the geometric-average metric;
+        larger G means a larger aggregate gap.
+
+        Reads the g_rr / g_sr arrays stored by run() — call it after
+        run(); it never re-runs the bootstrap.
+
+        Args:
+            generators: Generator names to aggregate. Defaults to
+                every generator present in the stored g_sr arrays.
+
+        Returns:
+            Tidy DataFrame with one row per generator: columns
+            [generator, G, ci_low, ci_high, k_used, k_total], the CI
+            being the 95% joint paired bootstrap over the resample
+            index (role-3 RNG stream, keyed by generator name).
+        """
+        if not self.g_rr:
+            raise RuntimeError("compute_aggregate() requires run() to have been called")
+        if generators is None:
+            generators = list(self.g_sr[self.metrics[0].name])
+
+        rows = []
+        for gen in generators:
+            log_ratios = []
+            for mt in self.metrics:
+                rr = np.nanmean(self.g_rr[mt.name])
+                sr = np.nanmean(self.g_sr[mt.name][gen])
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    r = sr / rr
+                if np.isfinite(r) and r > 0:
+                    log_ratios.append(np.log(r))
+            score = float(np.exp(np.mean(log_ratios))) if log_ratios else float("nan")
+            ci_low, ci_high = self._joint_paired_ci_aggregate(gen, self._stream(3, gen))
+            rows.append(
+                {
+                    "generator": gen,
+                    "G": score,
+                    "ci_low": ci_low,
+                    "ci_high": ci_high,
+                    "k_used": len(log_ratios),
+                    "k_total": len(self.metrics),
+                }
+            )
+        return pd.DataFrame(rows)
+
+    def _joint_paired_ci_aggregate(self, gen: str, rng: np.random.Generator) -> tuple[float, float]:
+        """95% joint paired-bootstrap CI on the aggregate score G.
+
+        Mirrors _paired_ci with one extra level of sharing: per
+        iteration a single resample index is drawn into *every*
+        metric's g_rr and g_sr arrays, preserving both the per-b
+        rr/sr correlation of the matched design and the inter-metric
+        correlation created by the shared real draw A_b. Each
+        iteration recomputes every metric's mean gap ratio and
+        aggregates exactly as the point estimate does — non-finite or
+        non-positive ratios drop out of that iteration's average, and
+        an iteration with no usable metric contributes NaN.
+        """
+        b_total = len(next(iter(self.g_rr.values())))
+        idx = rng.integers(0, b_total, size=(self.n_ci_boot, b_total))
+        log_ratios = np.full((len(self.metrics), self.n_ci_boot), np.nan)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            for i, mt in enumerate(self.metrics):
+                rr = np.nanmean(self.g_rr[mt.name][idx], axis=1)
+                sr = np.nanmean(self.g_sr[mt.name][gen][idx], axis=1)
+                r = sr / rr
+                valid = np.isfinite(r) & (r > 0)
+                log_ratios[i, valid] = np.log(r[valid])
+            boot = np.exp(np.nanmean(log_ratios, axis=0))
         lo, hi = np.nanpercentile(boot, [2.5, 97.5])
         return float(lo), float(hi)

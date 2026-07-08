@@ -13,9 +13,16 @@ End-to-end flow:
    metric's features, and accumulate g_rr / g_sr distance arrays.
 4. Normalize into [0, 1] similarity scores with 95% paired-bootstrap
    CIs, print the benchmark table, and save the tidy results to a
-   per-run CSV stamped with (B, tickers/draw, seed, timestamp). Only
-   a run at the default parameters also refreshes the canonical
-   benchmark_results.csv, so quick passes can never clobber it.
+   per-run CSV stamped with (B, tickers/draw, seed, timestamp). The
+   aggregate fidelity score G per generator (engine.compute_aggregate,
+   joint 95% CI) is printed below the per-metric table and saved to a
+   matching aggregate_*.csv. Only a run at the default parameters also
+   refreshes the canonical benchmark_results.csv and
+   aggregate_results.csv, so quick passes can never clobber them.
+5. Record every run — completed, crashed or interrupted alike — as one
+   row appended to results/runs_manifest.csv: sequential run number,
+   run id, start time, parameters, git commit, duration, output file
+   and status.
 
 Run from the repository root (defaults take ~1 min per resample):
 
@@ -24,6 +31,8 @@ Run from the repository root (defaults take ~1 min per resample):
 """
 
 import argparse
+import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -103,13 +112,62 @@ def format_table(results: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the fineval benchmark table.")
-    parser.add_argument("--n-resamples", type=int, default=100, help="bootstrap resamples B")
-    parser.add_argument("--tickers-per-draw", type=int, default=200, help="tickers per subsample")
-    parser.add_argument("--seed", type=int, default=SEED)
-    args = parser.parse_args()
+def format_aggregate_table(aggregate: pd.DataFrame) -> str:
+    """Render the aggregate G scores as a markdown table."""
+    lines = ["| Generator | G [95% CI] | metrics used |", "|---|---|---|"]
+    for _, row in aggregate.iterrows():
+        lines.append(
+            f"| {row['generator']} | {row['G']:.3f} "
+            f"[{row['ci_low']:.3f}, {row['ci_high']:.3f}] "
+            f"| {row['k_used']}/{row['k_total']} |"
+        )
+    return "\n".join(lines)
 
+
+def _git_commit() -> str:
+    """Short commit hash of the repository at run time, or "unknown"."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=Path(__file__).resolve().parent,
+        )
+        return out.stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+
+
+def _append_manifest(record: dict) -> int:
+    """Append one run record to results/runs_manifest.csv.
+
+    The manifest is the append-only registry of every benchmark run,
+    failed ones included. The assigned run number is one past the
+    highest already recorded.
+
+    Returns:
+        The run number assigned to this record.
+    """
+    manifest_path = RESULTS_DIR / "runs_manifest.csv"
+    has_rows = manifest_path.exists() and manifest_path.stat().st_size > 0
+    run_number = 1
+    if has_rows:
+        prev = pd.read_csv(manifest_path, usecols=["run_number"])
+        if len(prev):
+            run_number = int(prev["run_number"].max()) + 1
+    pd.DataFrame([{"run_number": run_number, **record}]).to_csv(
+        manifest_path, mode="a", header=not has_rows, index=False
+    )
+    return run_number
+
+
+def _execute(args: argparse.Namespace, is_default_run: bool, stamp: str, record: dict) -> None:
+    """Load, preprocess, bootstrap and save one benchmark run.
+
+    Mutates `record` in place as milestones are reached, so the
+    manifest row reflects how far the run got if a step raises.
+    """
     print("Loading curated datasets...")
     real = CuratedParquetLoader(
         parquet_path=str(CURATED_DIR / "real_prices.parquet"), name="Real", is_synthetic=False
@@ -136,22 +194,26 @@ def main() -> None:
         seed=args.seed,
     )
     results = engine.run(deseas_real, synthetics)
+    aggregate = engine.compute_aggregate()
 
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     csv_path = (
         RESULTS_DIR
         / f"benchmark_B{args.n_resamples}_m{args.tickers_per_draw}_seed{args.seed}_{stamp}.csv"
     )
     results.to_csv(csv_path, index=False)
+    record["results_csv"] = csv_path.name
 
-    is_default_run = (
-        args.n_resamples == parser.get_default("n_resamples")
-        and args.tickers_per_draw == parser.get_default("tickers_per_draw")
-        and args.seed == parser.get_default("seed")
+    agg_path = (
+        RESULTS_DIR
+        / f"aggregate_B{args.n_resamples}_m{args.tickers_per_draw}_seed{args.seed}_{stamp}.csv"
     )
+    aggregate.to_csv(agg_path, index=False)
+
     if is_default_run:
         results.to_csv(RESULTS_DIR / "benchmark_results.csv", index=False)
+        aggregate.to_csv(RESULTS_DIR / "aggregate_results.csv", index=False)
+        record["canonical_updated"] = True
+    record["status"] = "completed"
 
     print(
         f"\nBenchmark (B={args.n_resamples}, {args.tickers_per_draw} tickers/draw, "
@@ -159,9 +221,60 @@ def main() -> None:
         f"95% paired-bootstrap CI):\n"
     )
     print(format_table(results))
+    print(
+        "\nAggregate fidelity G = exp(mean_k ln r_k), r_k = mean(g_sr)/mean(g_rr);"
+        "\nG ≈ 1 is noise-floor parity, larger G = larger aggregate gap"
+        " (joint 95% CI):\n"
+    )
+    print(format_aggregate_table(aggregate))
     print(f"\nTidy results saved to: {csv_path}")
+    print(f"Aggregate results saved to: {agg_path}")
     if is_default_run:
         print(f"Canonical results updated: {RESULTS_DIR / 'benchmark_results.csv'}")
+        print(f"Canonical aggregate updated: {RESULTS_DIR / 'aggregate_results.csv'}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run the fineval benchmark table.")
+    parser.add_argument("--n-resamples", type=int, default=100, help="bootstrap resamples B")
+    parser.add_argument("--tickers-per-draw", type=int, default=200, help="tickers per subsample")
+    parser.add_argument("--seed", type=int, default=SEED)
+    args = parser.parse_args()
+
+    is_default_run = (
+        args.n_resamples == parser.get_default("n_resamples")
+        and args.tickers_per_draw == parser.get_default("tickers_per_draw")
+        and args.seed == parser.get_default("seed")
+    )
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    record = {
+        "run_id": stamp,
+        "started_at": datetime.now().isoformat(timespec="seconds"),
+        "n_resamples": args.n_resamples,
+        "tickers_per_draw": args.tickers_per_draw,
+        "seed": args.seed,
+        "git_commit": _git_commit(),
+        "status": "failed",
+        "duration_seconds": 0.0,
+        "results_csv": "",
+        "canonical_updated": False,
+        "error": "",
+    }
+    t0 = time.monotonic()
+    try:
+        _execute(args, is_default_run, stamp, record)
+    except BaseException as exc:  # record the run no matter what
+        record["error"] = f"{type(exc).__name__}: {exc}"
+        raise
+    finally:
+        record["duration_seconds"] = round(time.monotonic() - t0, 1)
+        run_number = _append_manifest(record)
+        print(
+            f"Run #{run_number} ({record['status']}) recorded in "
+            f"{RESULTS_DIR / 'runs_manifest.csv'}"
+        )
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from ..config import NUM_HARMONICS, TRADING_MINUTES
 from .fff import FFFDeseasonalizer
 
 
@@ -30,7 +31,9 @@ class PreprocessingPipeline:
 
     SESSION_OFFSET = 570  # 09:30 ET = 9*60 + 30
 
-    def __init__(self, num_harmonics: int = 4, trading_minutes: int = 390) -> None:
+    def __init__(
+        self, num_harmonics: int = NUM_HARMONICS, trading_minutes: int = TRADING_MINUTES
+    ) -> None:
         self.num_harmonics = num_harmonics
         self.trading_minutes = trading_minutes
         self.log_returns_real: pd.DataFrame | None = None

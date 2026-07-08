@@ -9,12 +9,10 @@ import numpy as np
 
 # Reproducibility
 SEED = 42
-RNG = np.random.default_rng(SEED)
 
-
-# Bootstrap hyper-parameters
-N_RESAMPLES = 500
-BLOCK_SIZE_MINUTES = 3900  # i.e. 10 trading days
+# Bootstrap hyper-parameters (B, tickers per draw) live as defaults on
+# MatchedTickerBootstrap and the run_benchmark CLI; the implemented
+# scheme is a cross-sectional ticker bootstrap with no temporal blocks.
 
 # Market clock
 TRADING_MINUTES = 390  # minutes per NYSE session (09:30–16:00)
@@ -46,7 +44,7 @@ M4_MIN_OBS = 100  # minimum pooled observations per scale for reliable kurtosis
 ## M6: Regime-conditional tail
 ROLLING_VOL_WINDOW = 60  # causal rolling-std window (minutes)
 ROLLING_VOL_MIN_FRAC = 1 / 2  # min valid obs as fraction of window; empirically validated
-ROLLING_VOL_MIN_PERIODS = math.ceil(ROLLING_VOL_WINDOW * ROLLING_VOL_MIN_FRAC)  # = 20
+ROLLING_VOL_MIN_PERIODS = math.ceil(ROLLING_VOL_WINDOW * ROLLING_VOL_MIN_FRAC)  # = 30
 N_REGIME_QUINTILES = 5  # number of volatility regime bins
 TAIL_QUANTILE = 0.05  # proportion of |returns| treated as extreme within each regime cell
 _RAW_REGIME_WEIGHTS = np.array([1.0, 1.0, 1.0, 2.0, 3.0])  # Q0(calm)→Q4(turbulent)

@@ -35,8 +35,8 @@ class RegimeConditionalTails(BaseMetric):
         name: Metric label, e.g. "regime_conditional_tails".
         window: Rolling window length in bars for the volatility proxy.
         min_periods: Minimum valid observations required within window
-            before a std estimate is emitted; empirically tuned to 20
-            (33% of window) to balance estimator stability against
+            before a std estimate is emitted; empirically tuned to 30
+            (50% of window) to balance estimator stability against
             coverage loss in calm-regime cells.
         n_regimes: Number of volatility quintiles (regime cells).
         tail_quantile: Fixed quantile defining the GPD exceedance
