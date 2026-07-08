@@ -28,3 +28,13 @@ paper/**/*.synctex.gz
 paper/**/*.fls
 paper/**/*.fdb_latexmk
 *.parquet
+
+# Benchmark result CSVs: only the canonical files and default-parameter
+# (B=100, tickers/draw=200, seed=42) runs are tracked. Other parameter
+# combinations are cheap to regenerate and would otherwise clutter
+# history with one-off/smoke-test runs; runs_manifest.csv still records
+# that every run happened, regardless of whether its CSV is tracked.
+fineval/scripts/results/benchmark_B*_m*_seed*_*.csv
+fineval/scripts/results/aggregate_B*_m*_seed*_*.csv
+!fineval/scripts/results/benchmark_B100_m200_seed42_*.csv
+!fineval/scripts/results/aggregate_B100_m200_seed42_*.csv
