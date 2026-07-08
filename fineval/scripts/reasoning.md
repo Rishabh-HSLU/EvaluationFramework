@@ -1133,3 +1133,115 @@ evidence that any sub-band of [60, 390] matters more.
 
 The docstrings were corrected to read "unweighted L1 sum of absolute
 ACF gaps over the lag window"; the distance definition is unchanged.
+
+# Seed-Sensitivity Audit: M2's Confidence Interval Runs Narrow (2026-07-08)
+
+### Why: does the reported CI actually bound what it claims to?
+
+Every benchmark run so far used `seed = 42`. The matched-N ticker
+bootstrap's paired CI (Section: Confidence intervals) is a bootstrap
+over the *B = 100 draws realized under one seed's RNG stream* — it was
+never structurally guaranteed to bound variability across *different*
+seeds, i.e. different realizations of which 200 tickers get drawn into
+each of those 100 resamples. To check whether it does anyway, the full
+benchmark (B = 100, 200 tickers/draw, all four metrics × AIL/GBM/MSV)
+was rerun at seven additional seeds — `1, 2, ..., 7` — holding
+everything else fixed
+(`fineval/scripts/notebooks/seed_sensitivity.ipynb`, self-contained,
+no external CSVs).
+
+### The good news first: every qualitative conclusion held
+
+Across all 8 seeds, the generator rank ordering by the aggregate score
+G was identical every time — `AIL < MSV < GBM` (best to worst) — and
+MSV beat AIL on M2 specifically in all 8 seeds, exactly as the
+positive-control design intends. Per-metric point estimates moved by
+the modest amount the sampling-noise story predicts (score ranges of
+0.004–0.05 across the 8 seeds, depending on the cell) — nothing that
+would change which generator wins, only enough that quoting a score to
+three decimals overstates its precision.
+
+### The finding: M2's CI does not bound its own across-seed spread
+
+Checking, for each metric × generator, what fraction of the other 7
+seeds' point estimates fell inside the `seed = 42` run's own CI:
+
+| Metric | Anchor-42 coverage |
+|---|---:|
+| M1 | 0.81 |
+| M2 | 0.33 |
+| M4 | 0.81 |
+| M6 | 0.71 |
+
+M2 stood out badly. Re-checked with a fairer diagnostic — every seed
+used as its own anchor in turn, coverage averaged across all 8 choices
+(leave-one-out) rather than trusting one arbitrary reference point:
+
+| Metric | LOO-averaged coverage |
+|---|---:|
+| M1 | 0.88 |
+| M2 | 0.61 |
+| M4 | 0.80 |
+| M6 | 0.83 |
+
+Roughly half of M2's apparent problem was that `seed = 42` happened to
+be an atypical (low) draw for M2/AIL specifically — M6/AIL's coverage
+recovered almost completely under LOO (0.43 → 0.82), confirming that
+kind of anchor artifact is real and worth correcting for. But M2
+remains the worst-covered metric even under the fair diagnostic, so an
+anchor artifact is not the whole story.
+
+### Confirming diagnostic: point-estimate range vs. reported CI width
+
+`point_range / anchor_ci_width` per cell — a ratio ≥ 1 means the true
+across-seed spread does not physically fit inside the reported
+interval:
+
+| | M1 | M2 | M4 | M6 |
+|---|---:|---:|---:|---:|
+| AIL | 0.41 | **1.13** | 0.77 | 0.81 |
+| GBM | 0.81 | **1.04** | 0.78 | 0.65 |
+| MSV | 0.83 | 0.94 | 0.73 | 0.75 |
+
+M2 is the only metric where every one of its three generator cells
+sits at or above 0.94; every other metric/generator cell sits at
+0.41–0.83. This is metric-wide, not confined to one generator or one
+choice of anchor.
+
+### Candidate mechanisms (unresolved — see TODO)
+
+1. **Cross-ticker heterogeneity in volatility-clustering persistence.**
+   The v1 variance-decomposition analysis (`paper/snippets/
+   methodology_snippet.tex`) found, for bucket B1 (marginal
+   distribution), that the noise floor's pooled CV barely shrank when
+   draws were restricted to a single ticker or regime (0.65 → 0.64 →
+   0.62) — a real share of the dispersion there is structural
+   cross-sectional heterogeneity, not estimation noise that more
+   resampling washes out. That result was for B1, not M2, but the same
+   mechanism plausibly applies more to M2 than to M1/M4/M6: volatility-
+   clustering persistence plausibly varies more across megacap/
+   small-cap microstructure than unconditional tail shape or kurtosis
+   decay does. If so, between-seed variance is partly driven by *which*
+   200 of the 600 tickers get drawn — which a bootstrap confined to one
+   seed's fixed draws structurally cannot see. Not yet measured
+   directly for M2 on v2.1.
+2. **331 summed lags are not independent.** `compute_distance` sums
+   `|Δρ(k)|` over k = 60..390; adjacent lags of an ACF curve are
+   strongly autocorrelated, so the effective independent-component
+   count behind that sum is far below 331. A sum of few, correlated,
+   non-negative terms converges to Gaussian more slowly, and
+   percentile-bootstrap CIs are known to under-cover skewed statistics
+   at modest B.
+3. **Lower priority:** the full-sample (not per-session) ACF
+   denominator reused across the session-confined numerator (Section:
+   M2, The fix) could introduce estimator behavior across draws not yet
+   characterized.
+
+Not resolved: raw per-draw `g_rr`/`g_sr` arrays are not persisted
+anywhere (only summary statistics survive a run), so (1) and (2) cannot
+be distinguished without new instrumentation. Confirmed and ruled out
+as a fix: increasing B alone will not correct this — CI width and the
+true across-seed spread both scale as ~1/√B, so doubling B narrows both
+together and likely preserves the same relative under-coverage, just at
+a smaller absolute scale (follows from standard bootstrap scaling, not
+independently tested).
