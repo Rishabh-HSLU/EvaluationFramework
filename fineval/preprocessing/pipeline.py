@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from ..config import NUM_HARMONICS, TRADING_MINUTES
 from .fff import FFFDeseasonalizer
+from .session_clock import overnight_masked_log_returns, session_minute_position
 
 
 class PreprocessingPipeline:
@@ -29,8 +29,6 @@ class PreprocessingPipeline:
             Final deseasonalised synthetic returns.
     """
 
-    SESSION_OFFSET = 570  # 09:30 ET = 9*60 + 30
-
     def __init__(
         self, num_harmonics: int = NUM_HARMONICS, trading_minutes: int = TRADING_MINUTES
     ) -> None:
@@ -43,15 +41,6 @@ class PreprocessingPipeline:
         self.deseas_real: pd.DataFrame | None = None
         self.deseas_synthetic: pd.DataFrame | None = None
 
-    def _compute_log_returns(self, prices: pd.DataFrame) -> pd.DataFrame:
-        """Convert prices to log-returns with overnight masking."""
-        log_returns = np.log(prices).diff()
-        ny_index = log_returns.index.tz_convert("America/New_York")
-        session_start = (ny_index.hour == 9) & (ny_index.minute == 31)
-        log_returns.loc[session_start] = np.nan
-        log_returns.iloc[0] = np.nan
-        return log_returns
-
     def _has_seasonality(self, log_returns: pd.DataFrame, threshold: float = 0.3) -> bool:
         """Detect whether a return series has a genuine intraday smile.
 
@@ -61,8 +50,7 @@ class PreprocessingPipeline:
         spike. Threshold of 0.3 separates GBM-like flat baselines
         (CV ~0.05) from real/AIL-like seasonal series (CV ~0.6+).
         """
-        ny_index = log_returns.index.tz_convert("America/New_York")
-        minute_pos = ny_index.hour * 60 + ny_index.minute - self.SESSION_OFFSET
+        minute_pos = session_minute_position(log_returns.index)
         profile = (log_returns**2).groupby(minute_pos).mean().mean(axis=1)
         profile = profile.loc[0 : self.trading_minutes - 1].dropna()
         cv = profile.std() / profile.mean()
@@ -72,8 +60,8 @@ class PreprocessingPipeline:
         self, real_prices: pd.DataFrame, synthetic_prices: pd.DataFrame
     ) -> PreprocessingPipeline:
         """Run prices → log returns → conditional per-series FFF."""
-        self.log_returns_real = self._compute_log_returns(real_prices)
-        self.log_returns_synthetic = self._compute_log_returns(synthetic_prices)
+        self.log_returns_real = overnight_masked_log_returns(real_prices)
+        self.log_returns_synthetic = overnight_masked_log_returns(synthetic_prices)
 
         self.deseas_real, self.fff_real = self._maybe_deseasonalize(self.log_returns_real)
         self.deseas_synthetic, self.fff_synthetic = self._maybe_deseasonalize(

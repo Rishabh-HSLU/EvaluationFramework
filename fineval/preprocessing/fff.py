@@ -25,6 +25,8 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit
 
+from .session_clock import session_minute_position
+
 
 class FFFDeseasonalizer:
     """Estimates and removes the U-shaped intraday volatility smile.
@@ -33,9 +35,12 @@ class FFFDeseasonalizer:
 
         log V(τ) = c₀ + Σⱼ₌₁ᴷ [ aⱼ cos(2πjτ/M) + bⱼ sin(2πjτ/M) ]
 
-    where τ ∈ {0, …, M−1} is the minute position within the session
-    (τ = 0 corresponds to 09:31 ET, the first return after the open)
-    and M = 390 is the number of NYSE trading minutes.
+    where τ ∈ {0, …, M−1} is the minute position within the session and
+    M = 390 is the number of NYSE trading minutes. In practice τ = 1
+    corresponds to 09:31 ET (the first return after the open); τ = 0 is
+    never populated and τ = M (16:00, the session close) falls outside
+    this range and is dropped by transform() — a known off-by-one, see
+    todo.md, "FFF drops every session's close bar".
 
     Fitting pools squared returns across all available days and tickers
     to produce a single cross-sectional variance profile, then fits
@@ -65,8 +70,6 @@ class FFFDeseasonalizer:
         deseas_real = fff.transform(log_returns_real)
         deseas_ail  = fff.transform(log_returns_ail)
     """
-
-    SESSION_OFFSET = 570  # 09:30 ET in minutes since midnight (9*60 + 30)
 
     def __init__(self, num_harmonics: int = 4, trading_minutes: int = 390) -> None:
         self.num_harmonics = num_harmonics
@@ -102,7 +105,7 @@ class FFFDeseasonalizer:
         America/New_York) so that session-relative minute positions
         can be computed unambiguously.
         """
-        minute_pos = self._minute_position(log_returns.index)
+        minute_pos = session_minute_position(log_returns.index)
 
         avg_var = (log_returns**2).groupby(minute_pos).mean().mean(axis=1)
 
@@ -131,7 +134,7 @@ class FFFDeseasonalizer:
         output.
         """
         self._require_fitted()
-        minute_pos = self._minute_position(log_returns.index)
+        minute_pos = session_minute_position(log_returns.index)
         smile_map = dict(enumerate(self._vol_smile))
         sigma_vec = minute_pos.map(smile_map).to_numpy().reshape(-1, 1)
         return log_returns / sigma_vec
@@ -139,19 +142,6 @@ class FFFDeseasonalizer:
     def fit_transform(self, log_returns: pd.DataFrame) -> pd.DataFrame:
         """Fit on log_returns, then return the transformed version."""
         return self.fit(log_returns).transform(log_returns)
-
-    def _minute_position(self, index: pd.DatetimeIndex) -> pd.Index:
-        """Map a tz-aware DatetimeIndex to session-relative minute slots.
-
-        Converts to America/New_York, then computes:
-            τ = hour × 60 + minute − 570
-
-        Session bars land in [0, 389]. Off-hours timestamps produce
-        negative or ≥ 390 values; these propagate as NaN through the
-        smile lookup in ``transform`` since they have no smile entry.
-        """
-        ny = index.tz_convert("America/New_York")
-        return ny.hour * 60 + ny.minute - self.SESSION_OFFSET
 
     def _fourier_log_variance(self, time_steps: np.ndarray, *coeffs: float) -> np.ndarray:
         """Evaluate the Fourier log-variance model at given minute slots."""

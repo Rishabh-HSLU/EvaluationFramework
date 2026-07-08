@@ -48,6 +48,7 @@ import pandas as pd
 from scipy.signal import lfilter
 
 from fineval.config import SEED
+from fineval.preprocessing.session_clock import overnight_masked_log_returns
 
 CURATED_DIR = Path(__file__).resolve().parent / "data" / "curated"
 REAL_PATH = CURATED_DIR / "real_prices.parquet"
@@ -62,20 +63,6 @@ MSV_TAU_FAST = 20.0  # fast-factor autocorrelation time in minutes
 MSV_H_SLOW = 0.90  # Hurst exponent of the across-session fGn factor
 MSV_SEED = SEED + 1  # decoupled from GBM's stream so the two
 # baselines don't share innovation draws
-
-
-def _masked_log_returns(prices: pd.DataFrame) -> pd.DataFrame:
-    """Log returns with the overnight (09:31 ET) bar masked.
-
-    Mirrors PreprocessingPipeline._compute_log_returns so that GBM
-    calibration sees exactly the return population the metrics see.
-    """
-    log_returns = np.log(prices).diff()
-    ny_index = log_returns.index.tz_convert("America/New_York")
-    session_start = (ny_index.hour == 9) & (ny_index.minute == 31)
-    log_returns.loc[session_start] = np.nan
-    log_returns.iloc[0] = np.nan
-    return log_returns
 
 
 def generate_gbm_prices(real_prices: pd.DataFrame, seed: int = SEED) -> pd.DataFrame:
@@ -99,7 +86,7 @@ def generate_gbm_prices(real_prices: pd.DataFrame, seed: int = SEED) -> pd.DataF
     """
     rng = np.random.default_rng(seed)
 
-    log_returns = _masked_log_returns(real_prices)
+    log_returns = overnight_masked_log_returns(real_prices)
     mu = log_returns.mean().to_numpy()
     sigma = log_returns.std().to_numpy()
 
@@ -201,7 +188,7 @@ def generate_msv_prices(
     """
     rng = np.random.default_rng(seed)
 
-    log_returns = _masked_log_returns(real_prices)
+    log_returns = overnight_masked_log_returns(real_prices)
     target_std = log_returns.std().to_numpy()
 
     t_len, n_tickers = real_prices.shape
