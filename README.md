@@ -113,8 +113,8 @@ EvaluationFramework/
 │   │   ├── base.py                 # BaseMetric ABC (features / distance / normalize contract)
 │   │   ├── unconditional_heavy_tails.py    # M1
 │   │   ├── volatility_clustering.py        # M2
-│   │   ├── aggregational_gaussianity.py    # M4
-│   │   └── regime_tails.py                 # M6
+│   │   ├── aggregational_gaussianity.py    # M3
+│   │   └── regime_tails.py                 # M4
 │   ├── bootstrap/
 │   │   └── engine.py               # MatchedTickerBootstrap + paired-bootstrap CI
 │   ├── scripts/
@@ -183,11 +183,11 @@ Sep 2019 – Mar 2020, 600-ticker universe.
 *(regenerate with `uv run python -m fineval.scripts.run_benchmark`)*
 
 | Metric | Stylized fact | AIL | GBM | MSV |
-|---|---|---|---|---|
-| M1 | Unconditional heavy tails | 0.478 [0.447, 0.509] | 0.025 [0.023, 0.028] | 0.025 [0.023, 0.028] |
-| M2 | Volatility clustering | 0.203 [0.181, 0.226] | 0.019 [0.016, 0.021] | 0.265 [0.237, 0.291] |
-| M4 | Aggregational Gaussianity | 0.378 [0.346, 0.410] | 0.121 [0.108, 0.136] | 0.170 [0.152, 0.189] |
-| M6 | Regime-conditional tails | 0.485 [0.456, 0.514] | 0.047 [0.043, 0.051] | 0.133 [0.122, 0.145] |
+|--------|---|---|---|---|
+| M1     | Unconditional heavy tails | 0.478 [0.447, 0.509] | 0.025 [0.023, 0.028] | 0.025 [0.023, 0.028] |
+| M2     | Volatility clustering | 0.203 [0.181, 0.226] | 0.019 [0.016, 0.021] | 0.265 [0.237, 0.291] |
+| M3     | Aggregational Gaussianity | 0.378 [0.346, 0.410] | 0.121 [0.108, 0.136] | 0.170 [0.152, 0.189] |
+| M4     | Regime-conditional tails | 0.485 [0.456, 0.514] | 0.047 [0.043, 0.051] | 0.133 [0.122, 0.145] |
 
 AIL tracks real-sample parity (0.5) closely on M1 and M6, is weaker on M2
 (long-memory volatility clustering) and M4 (aggregational kurtosis decay).
@@ -245,3 +245,4 @@ Sharing the index per iteration preserves the per-i correlation from constructio
 ## Citation
 
 If you use this benchmark, please cite the accompanying paper (forthcoming).
+
