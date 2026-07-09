@@ -17,6 +17,7 @@ ablation_output/
 runs/
 paper/
 fineval/scripts/notebooks/conditional_heavy_tails.ipynb
+fineval/scripts/notebooks/redundant.ipynb
 methodology.html
 todo.md
 
