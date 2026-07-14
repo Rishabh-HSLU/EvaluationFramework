@@ -29,7 +29,7 @@ cd EvaluationFramework
 uv sync
 ```
 
-**1. Download raw data from Alpaca
+**1. Download raw data from Alpaca** (once). The canonical 948-ticker corpus is used for all experiments.
 
 ```python
 pip install "alpaca-py>=0.13"
