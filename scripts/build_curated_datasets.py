@@ -7,9 +7,9 @@ data/curated/.
 
 from fineval.data import AILSyntheticLoader, CurationPipeline, RealDataLoader
 
-REAL_DIR = "/home/rishabh/PycharmProjects/SyntheticGenerators/data/raw_intraday"
-AIL_PATH = "/home/rishabh/PycharmProjects/SyntheticGenerators/data/ail_synthetic_data/dataset_US_1-10B_2019-09-2020-03.parquet"
-OUTPUT = "data/curated"
+REAL_DIR = "../data/raw_intraday"
+AIL_PATH = "../data/ail_synthetic_data/dataset_US_1-10B_2019-09-2020-03.parquet"
+OUTPUT = "../data/curated"
 
 real = RealDataLoader(directory=REAL_DIR).load()
 ail = AILSyntheticLoader(parquet_path=AIL_PATH).load()
