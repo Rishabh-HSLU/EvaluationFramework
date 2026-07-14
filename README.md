@@ -34,19 +34,7 @@ wide-format contract; the curation pipeline aligns everything onto the NYSE
 1-minute market clock:
 
 ```python
-from fineval.data import RealDataLoader, AILSyntheticLoader, CurationPipeline
-
-real = RealDataLoader(directory="data/raw_intraday").load()
-ail  = AILSyntheticLoader(parquet_path="data/ail.parquet").load()
-
-pipeline = CurationPipeline(
-    real_dataset=real,
-    synthetic_datasets=[ail],
-    start_date="2019-09-03",
-    end_date="2020-03-20",
-    output_dir="data/curated",
-)
-pipeline.run()
+uv run python -m scripts.build_curated_datasets
 ```
 
 **2. Generate the baselines** (deterministic, seeds from `fineval/config.py`).
@@ -57,7 +45,7 @@ curated real data and generated on the same market clock with real's NaN mask
 imposed:
 
 ```bash
-uv run python -m fineval.scripts.baseline_generation
+uv run python -m scripts.baseline_generation
 ```
 
 **3. Run the benchmark.** Loads Real, AIL, GBM and MSV through their loaders,
@@ -65,15 +53,15 @@ preprocesses each pair, runs the matched-N ticker bootstrap over all metrics,
 and prints the benchmark table:
 
 ```bash
-uv run python -m fineval.scripts.run_benchmark              # B=100 resamples
-uv run python -m fineval.scripts.run_benchmark --n-resamples 20   # quick pass
+uv run python -m scripts.run_benchmark              # B=100 resamples
+uv run python -m scripts.run_benchmark --n-resamples 20   # quick pass
 ```
 
 Results are printed as a markdown table and saved to a per-run CSV in
-`fineval/scripts/results/`, stamped with the run parameters and a
+`scripts/results/`, stamped with the run parameters and a
 timestamp (e.g. `benchmark_B100_m200_seed42_20260702-123500.csv`).
 Only a run at the default parameters also refreshes the canonical
-`fineval/scripts/results/benchmark_results.csv`; quick passes
+`scripts/results/benchmark_results.csv`; quick passes
 (`--n-resamples 20`, reduced `--tickers-per-draw`, non-default seeds)
 never overwrite it.
 
@@ -168,7 +156,7 @@ Then pass it to `CurationPipeline` alongside the real dataset. The pipeline hand
 | M4 | Regime-conditional tails   | GPD shape parameter ξ gap across 5 self-labeled volatility quintiles | Regime-stratified, pooled | ✅ |
 
 The rationale behind every statistic, hyperparameter and design revision is
-documented with its empirical evidence in `fineval/scripts/reasoning.md`.
+documented with its empirical evidence in `scripts/reasoning.md`.
 
 ---
 
@@ -178,7 +166,7 @@ Similarity scores `s ∈ [0, 1]` (95% paired-bootstrap CI in brackets);
 0.5 means real-sample parity. B=100 resamples, 200 tickers per draw, seed 42,
 Sep 2019 – Mar 2020, 600-ticker universe.
 
-*(regenerate with `uv run python -m fineval.scripts.run_benchmark`)*
+*(regenerate with `uv run python -m scripts.run_benchmark`)*
 
 | Metric | Stylized fact | AIL | GBM | MSV |
 |--------|---|---|---|---|

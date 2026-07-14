@@ -38,7 +38,7 @@ pass is needed: the data is curated by construction.
 
 Run from the repository root:
 
-    uv run python -m fineval.scripts.baseline_generation
+    uv run python -m scripts.baseline_generation
 """
 
 from pathlib import Path

@@ -26,8 +26,8 @@ End-to-end flow:
 
 Run from the repository root (defaults take ~1 min per resample):
 
-    uv run python -m fineval.scripts.run_benchmark
-    uv run python -m fineval.scripts.run_benchmark --n-resamples 20
+    uv run python -m scripts.run_benchmark
+    uv run python -m scripts.run_benchmark --n-resamples 20
 """
 
 import argparse
