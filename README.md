@@ -29,7 +29,22 @@ cd EvaluationFramework
 uv sync
 ```
 
-**1. Curate the raw data** (once). Loaders normalize each raw format into the
+**1. Download raw data from Alpaca
+
+```python
+pip install "alpaca-py>=0.13"
+
+python -m scripts.fetch_alpaca \
+    --api-key  <YOUR_KEY> \
+    --secret   <YOUR_SECRET> \
+    --out-dir  data/raw_intraday
+```
+
+This downloads 948 tickers of 1-minute bars (Sep 2019 – Mar 2020, split-adjusted, SIP feed) to `data/raw_intraday/`.
+A checkpoint log (`download_log.csv`) lets interrupted runs resume.
+Expect 30–60 minutes on a standard Alpaca connection. Sign up for free credentials at [alpaca.markets](alpaca.markets).
+
+**2. Curate the raw data** (once). Loaders normalize each raw format into the
 wide-format contract; the curation pipeline aligns everything onto the NYSE
 1-minute market clock:
 
@@ -37,7 +52,7 @@ wide-format contract; the curation pipeline aligns everything onto the NYSE
 uv run python -m scripts.build_curated_datasets
 ```
 
-**2. Generate the baselines** (deterministic, seeds from `fineval/config.py`).
+**3. Generate the baselines** (deterministic, seeds from `fineval/config.py`).
 GBM is the negative control (Gaussian, memoryless, rejected by every metric);
 MSV — a two-factor multi-scale stochastic volatility model — is the positive
 control for volatility clustering (M2). Both are calibrated per ticker to the
@@ -48,7 +63,7 @@ imposed:
 uv run python -m scripts.baseline_generation
 ```
 
-**3. Run the benchmark.** Loads Real, AIL, GBM and MSV through their loaders,
+**4. Run the benchmark.** Loads Real, AIL, GBM and MSV through their loaders,
 preprocesses each pair, runs the matched-N ticker bootstrap over all metrics,
 and prints the benchmark table:
 
@@ -105,14 +120,13 @@ EvaluationFramework/
 │   │   └── regime_tails.py                 # M4
 │   ├── bootstrap/
 │   │   └── engine.py               # MatchedTickerBootstrap + paired-bootstrap CI
-│   ├── scripts/
-│   │   ├── build_curated_datasets.py       # raw sources → data/curated/*.parquet
-│   │   ├── baseline_generation.py          # GBM + MSV baselines → data/curated/*.parquet
-│   │   ├── run_benchmark.py                # full benchmark table (this is the entry point)
-│   │   ├── reasoning.md                    # design decisions + empirical evidence
-│   │   └── data/curated/                   # evaluation-ready parquet files + metadata
 │   └── walkthrough.md              # narrative tour of the whole framework
-│
+├── scripts/
+│   ├── build_curated_datasets.py       # raw sources → data/curated/*.parquet
+│   ├── baseline_generation.py          # GBM + MSV baselines → data/curated/*.parquet
+│   ├── fetch_alpaca.py                 # download the canonical 948-ticker raw corpus
+│   ├── reasoning.md                    # design decisions + empirical evidence
+│   └── run_benchmark.py                # full benchmark table (this is the entry point)
 ├── tests/
 ├── pyproject.toml
 └── README.md
