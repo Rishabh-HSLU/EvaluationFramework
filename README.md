@@ -160,12 +160,13 @@ Then pass it to `CurationPipeline` alongside the real dataset. The pipeline hand
 
 ## The Metrics
 
-| ID | Stylized fact             | Statistic | Aggregation | Status |
-|----|---------------------------|-----------|-------------|--------|
-| M1 | Unconditional Heavy Tails | Tail-weighted Wasserstein-1 on the quantile function (α=0.3, λ=1.0) | Pooled | ✅ |
-| M2 | Volatility clustering     | Summed ACF gap on \|r\|, lags 60–390, session-confined pairs | Per-path, cross-sectional mean | ✅ |
-| M3 | Aggregational Gaussianity | Excess-kurtosis decay ratio κ(k)/κ(1) across scales {1, 5, 15, 30} min | Session-confined blocks, pooled | ✅ |
-| M4 | Regime-conditional tails   | GPD shape parameter ξ gap across 5 self-labeled volatility quintiles | Regime-stratified, pooled | ✅ |
+| ID | Stylized fact             | Statistic | Aggregation |
+|----|---------------------------|-----------|-------------|
+| M1 | Unconditional Heavy Tails | Tail-weighted Wasserstein-1 on the quantile function (α=0.3, λ=1.0) | Pooled |
+| M2 | Volatility clustering     | Summed ACF gap on \|r\|, lags 60–390, session-confined pairs | Per-path, cross-sectional mean |
+| M3 | Aggregational Gaussianity | Excess-kurtosis decay ratio κ(k)/κ(1) across scales {1, 5, 15, 30} min | Session-confined blocks, pooled |
+| M4 | Regime-conditional tails   | GPD shape parameter ξ gap across 5 self-labeled volatility quintiles | Regime-stratified, pooled |
+
 
 The rationale behind every statistic, hyperparameter and design revision is
 documented with its empirical evidence in `fineval/scripts/reasoning.md`.
