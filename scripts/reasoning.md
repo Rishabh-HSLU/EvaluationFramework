@@ -1147,7 +1147,7 @@ each of those 100 resamples. To check whether it does anyway, the full
 benchmark (B = 100, 200 tickers/draw, all four metrics × AIL/GBM/MSV)
 was rerun at seven additional seeds — `1, 2, ..., 7` — holding
 everything else fixed
-(`fineval/scripts/notebooks/seed_sensitivity.ipynb`, self-contained,
+(`scripts/notebooks/seed_sensitivity.ipynb`, self-contained,
 no external CSVs).
 
 ### The good news first: every qualitative conclusion held

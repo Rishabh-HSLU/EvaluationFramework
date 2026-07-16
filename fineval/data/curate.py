@@ -395,7 +395,7 @@ class CuratedParquetLoader(BaseLoader):
 class GBMBaselineLoader(CuratedParquetLoader):
     """
     Loads the GBM baseline dataset produced by
-    fineval/scripts/baseline_generation.py.
+    scripts/baseline_generation.py.
 
     The GBM baseline is generated directly on the curated market clock
     with real's NaN mask imposed, so it is curated by construction and
@@ -419,7 +419,7 @@ class GBMBaselineLoader(CuratedParquetLoader):
 class MSVBaselineLoader(CuratedParquetLoader):
     """
     Loads the multi-scale stochastic volatility (MSV) baseline dataset
-    produced by fineval/scripts/baseline_generation.py.
+    produced by scripts/baseline_generation.py.
 
     MSV is the positive-control baseline for volatility clustering
     (M2): a slow long-memory per-session log-vol factor plus a fast

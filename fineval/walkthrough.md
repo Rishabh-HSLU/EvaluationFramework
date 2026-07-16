@@ -342,9 +342,9 @@ benchmark table                score [95% CI] per (metric, generator)
 Run it from the repository root:
 
 ```bash
-uv run python -m fineval.scripts.run_benchmark
+uv run python -m scripts.run_benchmark
 # or, for a quick pass:
-uv run python -m fineval.scripts.run_benchmark --n-resamples 20
+uv run python -m scripts.run_benchmark --n-resamples 20
 ```
 
 It prints the markdown benchmark table and writes the tidy results to
@@ -376,7 +376,7 @@ coverage instead of dynamics):
 Regenerate both (deterministic, seeds from `config.py`) with:
 
 ```bash
-uv run python -m fineval.scripts.baseline_generation
+uv run python -m scripts.baseline_generation
 ```
 
 The anchors make every score interpretable: the real-vs-real baseline
