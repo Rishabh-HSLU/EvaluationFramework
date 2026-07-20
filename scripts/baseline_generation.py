@@ -132,8 +132,30 @@ def _fgn_eigenvalues(h: float, n_steps: int) -> np.ndarray:
     """
     k = np.arange(n_steps + 1, dtype=float)
     rho = 0.5 * ((k + 1) ** (2 * h) - 2 * k ** (2 * h) + np.abs(k - 1) ** (2 * h))
-    row = np.concatenate([rho, rho[-2:0:-1]])  # length 2 * n_steps
-    return np.clip(np.fft.fft(row).real, 0.0, None)
+
+    # First row of the symmetric circulant embedding:
+    #
+    # rho(0), ..., rho(n), rho(n - 1), ..., rho(1)
+    circulant_row = np.concatenate([rho, rho[-2:0:-1]])
+
+    eigenvalues = np.fft.fft(circulant_row).real
+
+    # Permit only numerical round-off below zero. A materially negative
+    # value means that the circulant embedding is not positive semidefinite.
+    tolerance = 1e-10 * max(
+        1.0,
+        float(np.max(np.abs(eigenvalues))),
+    )
+
+    minimum = float(eigenvalues.min())
+
+    if minimum < -tolerance:
+        raise ValueError(
+            "fGn circulant embedding is not positive semidefinite: "
+            f"minimum eigenvalue={minimum:.3e}."
+        )
+
+    return np.maximum(eigenvalues, 0.0)
 
 
 def _sample_fgn(rng: np.random.Generator, eigenvalues: np.ndarray, n_paths: int) -> np.ndarray:
@@ -149,6 +171,7 @@ def _sample_fgn(rng: np.random.Generator, eigenvalues: np.ndarray, n_paths: int)
     """
     m = len(eigenvalues)
     n_steps = m // 2
+    # NumPy's FFT is unnormalised, so we scale by sqrt(lambda / m) to get unit marginal variance.
     scale = np.sqrt(eigenvalues / m)
     paths = np.empty((n_steps, n_paths))
     for j in range(0, n_paths, 2):
@@ -158,6 +181,70 @@ def _sample_fgn(rng: np.random.Generator, eigenvalues: np.ndarray, n_paths: int)
         if j + 1 < n_paths:
             paths[:, j + 1] = x.imag[:n_steps]
     return paths
+
+
+def _sample_session_fast_factor(
+    rng: np.random.Generator,
+    day_index: np.ndarray,
+    n_tickers: int,
+    tau_fast: float,
+) -> np.ndarray:
+    """Sample a stationary AR(1) fast factor independently per session.
+
+    The process follows
+
+        f_t = phi * f_{t-1} + sqrt(1 - phi**2) * epsilon_t,
+
+    where ``phi = exp(-1 / tau_fast)``. At the start of each session,
+    the factor is redrawn from its stationary N(0, 1) distribution so
+    short-term dependence is not propagated across overnight gaps.
+    """
+    day_index = np.asarray(day_index)
+
+    phi = np.exp(-1.0 / tau_fast)
+    innovation_std = np.sqrt(1.0 - phi**2)
+
+    t_len = len(day_index)
+    fast = np.empty(
+        (t_len, n_tickers),
+        dtype=float,
+    )
+
+    session_starts = np.concatenate(
+        [
+            np.array([0]),
+            np.flatnonzero(day_index[1:] != day_index[:-1]) + 1,
+        ]
+    )
+    session_ends = np.concatenate(
+        [
+            session_starts[1:],
+            np.array([t_len]),
+        ]
+    )
+
+    for start, end in zip(
+        session_starts,
+        session_ends,
+        strict=True,
+    ):
+        session_length = end - start
+
+        shocks = rng.standard_normal((session_length, n_tickers))
+
+        # The first input is the stationary initial state N(0, 1).
+        # Subsequent inputs are AR(1) innovations.
+        if session_length > 1:
+            shocks[1:] *= innovation_std
+
+        fast[start:end] = lfilter(
+            [1.0],
+            [1.0, -phi],
+            shocks,
+            axis=0,
+        )
+
+    return fast
 
 
 def generate_msv_prices(
@@ -209,24 +296,48 @@ def generate_msv_prices(
     log_returns = overnight_masked_log_returns(real_prices)
     target_std = log_returns.std().to_numpy()
 
+    invalid = ~np.isfinite(target_std) | (target_std == 0.0)
+    if invalid.any():
+        raise ValueError(
+            f"Cannot estimate MSV volatility for: {real_prices.columns[invalid].tolist()}"
+        )
+
     t_len, n_tickers = real_prices.shape
-    day_index = pd.factorize(real_prices.index.normalize())[0]
-    n_days = int(day_index[-1]) + 1
+    day_index, sessions = pd.factorize(real_prices.index.normalize())
+    n_days = len(sessions)
 
     # Slow factor: long-memory fGn across sessions, constant within each
     slow = _sample_fgn(rng, _fgn_eigenvalues(h_slow, n_days), n_tickers)[day_index]
 
     # Fast factor: stationary AR(1) with unit marginal variance
-    phi = np.exp(-1.0 / tau_fast)
-    shocks = rng.standard_normal((t_len, n_tickers)) * np.sqrt(1.0 - phi**2)
-    shocks[0] /= np.sqrt(1.0 - phi**2)  # draw x_0 from the stationary law
-    fast = lfilter([1.0], [1.0, -phi], shocks, axis=0)
+    fast = _sample_session_fast_factor(
+        rng=rng,
+        day_index=day_index,
+        n_tickers=n_tickers,
+        tau_fast=tau_fast,
+    )
 
     log_vol = nu_slow * slow + nu_fast * fast
     returns = np.exp(log_vol) * rng.standard_normal((t_len, n_tickers))
-    returns *= target_std / returns.std(axis=0, ddof=1)
 
     returns[0, :] = 0.0  # anchor: first bar is the starting price itself
+    session_start = session_minute_position(real_prices.index) == 1
+    returns[session_start, :] = 0.0
+
+    valid_return = log_returns.notna().to_numpy()
+    simulated_std = np.std(
+        returns,
+        axis=0,
+        where=valid_return,
+        ddof=1,
+    )
+    invalid_simulated = ~np.isfinite(simulated_std) | (simulated_std <= 0.0)
+    if invalid_simulated.any():
+        raise ValueError(
+            "Cannot calibrate simulated MSV volatility for: "
+            f"{real_prices.columns[invalid_simulated].tolist()}"
+        )
+    returns *= target_std / simulated_std
 
     p0 = real_prices.bfill().iloc[0].to_numpy()
     paths = p0 * np.exp(np.cumsum(returns, axis=0))
