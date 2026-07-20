@@ -8,9 +8,11 @@ inflates absolute-return ACF at session-periodic lags, and
 contaminates the leverage curve.
 
 The FFF models log intraday variance as a Fourier series over the
-trading session and divides each return by the corresponding minute's
-estimated seasonal volatility, producing approximately unit-variance
-returns whose remaining structure is the signal each metric targets.
+trading session. The fitted volatility profile is normalized to have
+unit mean squared scale, and each return is divided by the corresponding
+minute's normalized seasonal multiplier. This removes the relative
+intraday volatility pattern while approximately preserving each
+series' overall variance level.
 
 Reference
 ---------
@@ -23,7 +25,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import curve_fit
 
 from .session_clock import session_minute_position
 
@@ -63,10 +64,11 @@ class FFFDeseasonalizer:
             remains 390 even though only 389 close-to-close returns
             are available.
         coefficients
-            Fitted FFF coefficients for each series.
+            Coefficients of the normalized FFF profile for each series.
         vol_smile
-            Estimated seasonal volatility for valid FFF slots
-            1, ..., 389, with one column per fitted series.
+            Normalized seasonal volatility multiplier for valid FFF slots
+            1, ..., 389, with one column per fitted series. Each profile
+            has mean squared value one across the observed slots.
 
     Example::
 
@@ -91,14 +93,14 @@ class FFFDeseasonalizer:
 
     @property
     def coefficients(self) -> dict[object, np.ndarray]:
-        """FFF coefficients (c₀, a₁, b₁, …, aK, bK) for each fitted series."""
+        """Coefficients of the normalized FFF profile for each fitted series."""
         self._require_fitted()
         assert self._coefficients is not None
         return self._coefficients
 
     @property
     def vol_smile(self) -> pd.DataFrame:
-        """Seasonal volatility indexed by valid FFF slot."""
+        """Normalized seasonal volatility multiplier indexed by FFF slot."""
         self._require_fitted()
         assert self._vol_smile is not None
         return self._vol_smile
@@ -128,6 +130,37 @@ class FFFDeseasonalizer:
 
         return slots
 
+    def _validate_opening_slot(
+        self,
+        log_returns: pd.DataFrame,
+        minute_slots: pd.Series,
+    ) -> None:
+        """Ensure that the unavailable 09:31 return is structurally missing."""
+        opening_returns = log_returns.loc[minute_slots.eq(0)]
+
+        if opening_returns.empty:
+            return
+
+        invalid_columns = opening_returns.columns[opening_returns.notna().any(axis=0)].tolist()
+
+        if invalid_columns:
+            raise ValueError(
+                "Found non-NaN returns at 09:31 for columns "
+                f"{invalid_columns}. With close prices beginning at 09:31, "
+                "these values likely contain the overnight return."
+            )
+
+    def _fourier_design_matrix(self, time_steps: np.ndarray) -> np.ndarray:
+        """Construct the linear FFF design matrix."""
+        columns = [np.ones_like(time_steps, dtype=float)]
+
+        for j in range(1, self.num_harmonics + 1):
+            angle = 2 * np.pi * j * time_steps / self.trading_minutes
+            columns.append(np.cos(angle))
+            columns.append(np.sin(angle))
+
+        return np.column_stack(columns)
+
     def fit(self, log_returns: pd.DataFrame) -> FFFDeseasonalizer:
         """Estimate one FFF profile per real return series.
 
@@ -135,7 +168,11 @@ class FFFDeseasonalizer:
         structurally unavailable and excluded. The model is fitted on
         slots 1, ..., 389, corresponding to 09:32 through 16:00.
         """
+        self._coefficients = None
+        self._vol_smile = None
+
         minute_slots = self._session_slots(log_returns.index)
+        self._validate_opening_slot(log_returns, minute_slots)
 
         # Slot 0 is unavailable with close-only prices starting at 09:31.
         valid_mask = minute_slots.gt(0)
@@ -171,28 +208,36 @@ class FFFDeseasonalizer:
             dtype=float,
         )
 
+        design_matrix = self._fourier_design_matrix(time_steps)
         for column in log_returns.columns:
             log_variance = np.log(var_profile[column].to_numpy(dtype=float) + 1e-12)
 
-            p0 = np.zeros(1 + 2 * self.num_harmonics)
-            p0[0] = log_variance.mean()
-
-            fitted_coefficients, _ = curve_fit(
-                self._fourier_log_variance,
-                time_steps,
+            fitted_coefficients, _, rank, _ = np.linalg.lstsq(
+                design_matrix,
                 log_variance,
-                p0=p0,
-                maxfev=10_000,
+                rcond=None,
             )
 
-            fitted_log_variance = self._fourier_log_variance(
-                time_steps,
-                *fitted_coefficients,
-            )
+            if rank < design_matrix.shape[1]:
+                raise RuntimeError(f"FFF design matrix is rank deficient for series {column!r}.")
 
-            coefficients[column] = fitted_coefficients
+            fitted_log_variance = design_matrix @ fitted_coefficients
+            fitted_sigma = np.exp(0.5 * fitted_log_variance)
+
+            # Normalize the seasonal multiplier so its mean squared value is one.
+            normalization_scale = np.sqrt(np.mean(fitted_sigma**2))
+            fitted_sigma /= normalization_scale
+
+            # Keep the coefficients consistent with the normalized profile.
+            # Dividing sigma by q is equivalent to subtracting 2 * log(q)
+            # from the fitted log-variance intercept.
+            normalized_coefficients = fitted_coefficients.copy()
+            normalized_coefficients[0] -= 2.0 * np.log(normalization_scale)
+
+            coefficients[column] = normalized_coefficients
+
             vol_smile[column] = np.clip(
-                np.exp(0.5 * fitted_log_variance),
+                fitted_sigma,
                 a_min=1e-8,
                 a_max=None,
             )
@@ -210,7 +255,6 @@ class FFFDeseasonalizer:
         preserved.
         """
         self._require_fitted()
-        assert self._vol_smile is not None
 
         missing_columns = [
             column for column in log_returns.columns if column not in self._vol_smile.columns
@@ -219,9 +263,9 @@ class FFFDeseasonalizer:
             raise ValueError(f"No fitted FFF profile is available for columns {missing_columns}.")
 
         minute_slots = self._session_slots(log_returns.index)
+        self._validate_opening_slot(log_returns, minute_slots)
 
         valid_mask = minute_slots.gt(0)
-        valid_returns = log_returns.loc[valid_mask]
         valid_slots = minute_slots.loc[valid_mask]
 
         sigma = self._vol_smile.loc[
@@ -229,23 +273,20 @@ class FFFDeseasonalizer:
             log_returns.columns,
         ].to_numpy(dtype=float)
 
-        transformed = log_returns.copy()
+        values = log_returns.to_numpy(dtype=np.float64, copy=True)
 
-        transformed.loc[valid_mask, :] = valid_returns.to_numpy(dtype=float, copy=False) / sigma
+        valid_rows = valid_mask.to_numpy()
+        values[valid_rows, :] /= sigma
 
-        return transformed
+        return pd.DataFrame(
+            values,
+            index=log_returns.index,
+            columns=log_returns.columns,
+        )
 
     def fit_transform(self, log_returns: pd.DataFrame) -> pd.DataFrame:
         """Fit on log_returns and return the transformed data."""
         return self.fit(log_returns).transform(log_returns)
-
-    def _fourier_log_variance(self, time_steps: np.ndarray, *coeffs: float) -> np.ndarray:
-        """Evaluate the Fourier log-variance model at given minute slots."""
-        est = np.full_like(time_steps, coeffs[0], dtype=float)
-        for j in range(1, self.num_harmonics + 1):
-            angle = 2 * np.pi * j * time_steps / self.trading_minutes
-            est += coeffs[2 * j - 1] * np.cos(angle) + coeffs[2 * j] * np.sin(angle)
-        return est
 
     def _require_fitted(self) -> None:
         if not self.is_fitted:
