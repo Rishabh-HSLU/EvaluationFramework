@@ -3,7 +3,7 @@
 Intraday equity returns exhibit a pronounced U-shaped variance profile
 across the trading session — high at the open, low at midday, rising
 again toward the close. This diurnal pattern is a nuisance for every
-metric : without removal it dominates the marginal distribution,
+metric: without removal it dominates the marginal distribution,
 inflates absolute-return ACF at session-periodic lags, and
 contaminates the leverage curve.
 
@@ -29,35 +29,44 @@ from .session_clock import session_minute_position
 
 
 class FFFDeseasonalizer:
-    """Estimates and removes the U-shaped intraday volatility smile.
+    """Estimates and removes intraday volatility seasonality.
 
     The log-variance profile is represented as:
 
-        log V(τ) = c₀ + Σⱼ₌₁ᴷ [ aⱼ cos(2πjτ/M) + bⱼ sin(2πjτ/M) ]
+        log V(τ) = c₀ + Σⱼ₌₁ᴷ [aⱼ cos(2πjτ/M) + bⱼ sin(2πjτ/M)]
 
-    where τ ∈ {0, …, M−1} is the zero-based return-bar position
-    within the session and M = 390 is the number of one-minute returns.
-    Thus τ = 0 corresponds to the return timestamped 09:31 ET and
-    τ = 389 corresponds to the return timestamped 16:00 ET.
+    where M = 390 is the number of one-minute intervals in the regular
+    NYSE session and τ ∈ {0, ..., 389} is the zero-based interval slot.
 
-    For each series independently, fitting averages squared returns across
-    available sessions at each minute slot and fits a separate Fourier
-    variance profile.
+    With end-of-bar close timestamps:
+
+        τ = 0   corresponds to 09:30–09:31, timestamped 09:31
+        τ = 1   corresponds to 09:31–09:32, timestamped 09:32
+        ...
+        τ = 389 corresponds to 15:59–16:00, timestamped 16:00
+
+    Because the input contains close prices starting at 09:31, the
+    return for τ = 0 cannot be calculated without the 09:30 opening
+    price. It is therefore a structural NaN. The FFF is fitted on the
+    389 valid close-to-close return slots τ = 1, ..., 389.
+
+    For each series independently, fitting averages squared returns
+    across available sessions at each valid slot and fits a separate
+    Fourier variance profile.
 
     Attributes:
         num_harmonics
-            Number of Fourier harmonics K. Total free parameters in
-            the model is 1 + 2K. K = 4 follows Andersen & Bollerslev
-            (1997) and captures the open/close peaks plus the midday
-            trough without overfitting intraday microstructure.
+            Number of Fourier harmonics K. The model has 1 + 2K free
+            parameters.
         trading_minutes
-            Session length in minutes. 390 for NYSE (09:30–16:00 ET).
+            Length of the regular trading session in minutes. This
+            remains 390 even though only 389 close-to-close returns
+            are available.
         coefficients
-            Fitted FFF coefficients (c₀, a₁, b₁, …, aK, bK). Only
-            available after ``fit`` has been called.
+            Fitted FFF coefficients for each series.
         vol_smile
-            Estimated σ(τ) for τ = 0, …, M−1, with one column per
-            fitted return series.
+            Estimated seasonal volatility for valid FFF slots
+            1, ..., 389, with one column per fitted series.
 
     Example::
 
@@ -84,15 +93,17 @@ class FFFDeseasonalizer:
     def coefficients(self) -> dict[object, np.ndarray]:
         """FFF coefficients (c₀, a₁, b₁, …, aK, bK) for each fitted series."""
         self._require_fitted()
+        assert self._coefficients is not None
         return self._coefficients
 
     @property
     def vol_smile(self) -> pd.DataFrame:
-        """Estimated σ(τ), indexed by minute slot and with one column per series."""
+        """Seasonal volatility indexed by valid FFF slot."""
         self._require_fitted()
+        assert self._vol_smile is not None
         return self._vol_smile
 
-    def _session_slots(self, index: pd.DatetimeIndex) -> pd.Index:
+    def _session_slots(self, index: pd.DatetimeIndex) -> pd.Series:
         """Return zero-based return-bar slots: 09:31 -> 0, 16:00 -> 389.
 
         session_minute_position() measures elapsed minutes from 09:30,
@@ -101,39 +112,46 @@ class FFFDeseasonalizer:
         """
         raw_positions = pd.Series(
             np.asarray(session_minute_position(index)),
-            copy=False,
+            index=index,
+            name="session_minute_position",
         )
         slots = raw_positions.astype(np.int64) - 1
+        slots.name = "fff_slot"
 
         invalid = (slots < 0) | (slots >= self.trading_minutes)
         if invalid.any():
             invalid_values = sorted(slots.loc[invalid].unique().tolist())
             raise ValueError(
-                "Found session positions outside the expected FFF range "
+                "Found FFF slots outside the expected range "
                 f"0, ..., {self.trading_minutes - 1}: {invalid_values}"
             )
 
-        return pd.Index(slots.to_numpy(), name="fff_slot")
+        return slots
 
     def fit(self, log_returns: pd.DataFrame) -> FFFDeseasonalizer:
-        """Estimate one intraday volatility profile per real return series.
+        """Estimate one FFF profile per real return series.
 
-        For each series, squared returns are averaged across available
-        sessions at each zero-based return-bar slot. A separate Fourier
-        variance profile is then fitted to each series.
-
-        The resulting profiles may subsequently be applied to both the
-        real reference data and corresponding synthetic series.
+        Slot 0, corresponding to the return timestamped 09:31, is
+        structurally unavailable and excluded. The model is fitted on
+        slots 1, ..., 389, corresponding to 09:32 through 16:00.
         """
         minute_slots = self._session_slots(log_returns.index)
-        expected_slots = pd.RangeIndex(self.trading_minutes, name="fff_slot")
 
-        # One empirical variance estimate per series and minute slot.
-        var_profile = (
-            log_returns.pow(2).groupby(minute_slots, sort=True).mean().reindex(expected_slots)
+        # Slot 0 is unavailable with close-only prices starting at 09:31.
+        valid_mask = minute_slots.gt(0)
+        valid_returns = log_returns.loc[valid_mask]
+        valid_slots = minute_slots.loc[valid_mask]
+
+        expected_slots = pd.RangeIndex(
+            start=1,
+            stop=self.trading_minutes,
+            name="fff_slot",
         )
 
-        # Do not silently fit an incomplete intraday profile.
+        var_profile = (
+            valid_returns.pow(2).groupby(valid_slots, sort=True).mean().reindex(expected_slots)
+        )
+
         missing_slots = {
             column: var_profile.index[var_profile[column].isna()].tolist()
             for column in var_profile.columns
@@ -145,6 +163,7 @@ class FFFDeseasonalizer:
             )
 
         time_steps = expected_slots.to_numpy(dtype=float)
+
         coefficients: dict[object, np.ndarray] = {}
         vol_smile = pd.DataFrame(
             index=expected_slots,
@@ -183,32 +202,41 @@ class FFFDeseasonalizer:
         return self
 
     def transform(self, log_returns: pd.DataFrame) -> pd.DataFrame:
-        """Divide each return by its series-specific seasonal volatility."""
+        """Remove series-specific intraday volatility seasonality.
+
+        Slot 0 is preserved unchanged. It should be NaN because the
+        corresponding 09:31 return cannot be computed from close-only
+        prices starting at 09:31. All other structural NaNs are also
+        preserved.
+        """
         self._require_fitted()
+        assert self._vol_smile is not None
 
         missing_columns = [
             column for column in log_returns.columns if column not in self._vol_smile.columns
         ]
         if missing_columns:
-            raise ValueError(f"No fitted FFF profile is available for columns: {missing_columns}")
+            raise ValueError(f"No fitted FFF profile is available for columns {missing_columns}.")
 
         minute_slots = self._session_slots(log_returns.index)
 
+        valid_mask = minute_slots.gt(0)
+        valid_returns = log_returns.loc[valid_mask]
+        valid_slots = minute_slots.loc[valid_mask]
+
         sigma = self._vol_smile.loc[
-            minute_slots.to_numpy(),
+            valid_slots.to_numpy(),
             log_returns.columns,
         ].to_numpy(dtype=float)
 
-        transformed = log_returns.to_numpy(dtype=float, copy=False) / sigma
+        transformed = log_returns.copy()
 
-        return pd.DataFrame(
-            transformed,
-            index=log_returns.index,
-            columns=log_returns.columns,
-        )
+        transformed.loc[valid_mask, :] = valid_returns.to_numpy(dtype=float, copy=False) / sigma
+
+        return transformed
 
     def fit_transform(self, log_returns: pd.DataFrame) -> pd.DataFrame:
-        """Fit on log_returns, then return the transformed version."""
+        """Fit on log_returns and return the transformed data."""
         return self.fit(log_returns).transform(log_returns)
 
     def _fourier_log_variance(self, time_steps: np.ndarray, *coeffs: float) -> np.ndarray:
