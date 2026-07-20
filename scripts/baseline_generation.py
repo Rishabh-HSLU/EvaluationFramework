@@ -15,11 +15,21 @@ The two baselines anchor opposite ends of the score range:
   session, reproducing the day-level volatility persistence that
   dominates real's within-session |r| ACF — and a *fast* intraday
   OU/AR(1) factor reproducing the short-lag decay. A model *designed*
-  to satisfy the fact M2 measures should score well on M2, validating
-  the metric's top end with an independent generator (a
+  to satisfy the fact M2 measures should score well on M2, providing
+  a model-based positive control for the metric's top end (a
   resampled-real control would be tautological; single-factor
   FIGARCH and LMSV attempts decayed far too steeply — all documented
   in scripts/reasoning.md).
+- **MSV** (multi-scale stochastic volatility, in the two-timescale
+  spirit of Fouque, Papanicolaou & Sircar) is a model-based positive
+  control for M2. Log-volatility is the sum of a *slow* factor —
+  long-memory fractional Gaussian noise across sessions, constant
+  within each session, reproducing day-level volatility persistence —
+  and a *fast* intraday OU/AR(1) factor reproducing short-lag decay.
+  Its parameters were selected by matching the simulated and real
+  absolute-return ACF curves. The baseline therefore tests whether M2
+  assigns a high score to a generator explicitly calibrated to reproduce
+  the multiscale volatility dependence measured by the metric.
 
 Both baselines are deliberately matched to the curated real dataset on
 everything *except* the return-generating process:
@@ -58,8 +68,9 @@ REAL_PATH = CURATED_DIR / "real_prices.parquet"
 GBM_OUTPUT_PATH = CURATED_DIR / "gbm_prices.parquet"
 MSV_OUTPUT_PATH = CURATED_DIR / "msv_prices.parquet"
 
-# MSV parameters, selected by sweeping the simulated |r| ACF curve
-# against real's (see scripts/reasoning.md, MSV baseline section).
+# MSV parameters calibrated by matching the simulated and real |r| ACF
+# curves (see scripts/reasoning.md, MSV baseline section). The MSV
+# baseline is therefore a model-based positive control for M2.
 MSV_NU_SLOW = 0.9  # amplitude of the slow (per-session) log-vol factor
 MSV_NU_FAST = 0.3  # amplitude of the fast intraday log-vol factor
 MSV_TAU_FAST = 20.0  # fast-factor autocorrelation time in minutes
