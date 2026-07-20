@@ -3,9 +3,9 @@
 Intraday equity returns exhibit a pronounced U-shaped variance profile
 across the trading session — high at the open, low at midday, rising
 again toward the close. This diurnal pattern is a nuisance for every
-metric : without removal it dominates the marginal distribution
-, inflates absolute-return ACF at session-periodic lags , and
-contaminates the leverage curve .
+metric : without removal it dominates the marginal distribution,
+inflates absolute-return ACF at session-periodic lags, and
+contaminates the leverage curve.
 
 The FFF models log intraday variance as a Fourier series over the
 trading session and divides each return by the corresponding minute's
@@ -35,16 +35,14 @@ class FFFDeseasonalizer:
 
         log V(τ) = c₀ + Σⱼ₌₁ᴷ [ aⱼ cos(2πjτ/M) + bⱼ sin(2πjτ/M) ]
 
-    where τ ∈ {0, …, M−1} is the minute position within the session and
-    M = 390 is the number of NYSE trading minutes. In practice τ = 1
-    corresponds to 09:31 ET (the first return after the open); τ = 0 is
-    never populated and τ = M (16:00, the session close) falls outside
-    this range and is dropped by transform() — a known off-by-one, see
-    todo.md, "FFF drops every session's close bar".
+    where τ ∈ {0, …, M−1} is the zero-based return-bar position
+    within the session and M = 390 is the number of one-minute returns.
+    Thus τ = 0 corresponds to the return timestamped 09:31 ET and
+    τ = 389 corresponds to the return timestamped 16:00 ET.
 
-    Fitting pools squared returns across all available days and tickers
-    to produce a single cross-sectional variance profile, then fits
-    the Fourier model via nonlinear least squares.
+    For each series independently, fitting averages squared returns across
+    available sessions at each minute slot and fits a separate Fourier
+    variance profile.
 
     Attributes:
         num_harmonics
@@ -58,9 +56,8 @@ class FFFDeseasonalizer:
             Fitted FFF coefficients (c₀, a₁, b₁, …, aK, bK). Only
             available after ``fit`` has been called.
         vol_smile
-            Estimated σ(τ) for τ = 0, …, M−1 indexed by integer
-            minute slot. The per-minute seasonal volatility used to
-            divide returns in ``transform``.
+            Estimated σ(τ) for τ = 0, …, M−1, with one column per
+            fitted return series.
 
     Example::
 
@@ -74,70 +71,141 @@ class FFFDeseasonalizer:
     def __init__(self, num_harmonics: int = 4, trading_minutes: int = 390) -> None:
         self.num_harmonics = num_harmonics
         self.trading_minutes = trading_minutes
-        self._coefficients: np.ndarray | None = None
-        self._vol_smile: pd.Series | None = None
+        # One coefficient vector and one volatility profile per series.
+        self._coefficients: dict[object, np.ndarray] | None = None
+        self._vol_smile: pd.DataFrame | None = None
 
     @property
     def is_fitted(self) -> bool:
-        """True after ``fit`` has been called successfully."""
-        return self._coefficients is not None
+        """True after fit() has completed successfully."""
+        return self._coefficients is not None and self._vol_smile is not None
 
     @property
-    def coefficients(self) -> np.ndarray:
-        """Fitted FFF coefficients (c₀, a₁, b₁, …, aK, bK)."""
+    def coefficients(self) -> dict[object, np.ndarray]:
+        """FFF coefficients (c₀, a₁, b₁, …, aK, bK) for each fitted series."""
         self._require_fitted()
         return self._coefficients
 
     @property
-    def vol_smile(self) -> pd.Series:
-        """Estimated σ(τ) for each minute slot in the session."""
+    def vol_smile(self) -> pd.DataFrame:
+        """Estimated σ(τ), indexed by minute slot and with one column per series."""
         self._require_fitted()
         return self._vol_smile
 
-    def fit(self, log_returns: pd.DataFrame) -> FFFDeseasonalizer:
-        """Estimate the intraday volatility profile from real log-returns.
+    def _session_slots(self, index: pd.DatetimeIndex) -> pd.Index:
+        """Return zero-based return-bar slots: 09:31 -> 0, 16:00 -> 389.
 
-        Pools squared returns across all days and tickers per minute
-        slot to produce a single cross-sectional variance profile,
-        then fits the Fourier model via nonlinear least squares.
-
-        The input must carry a tz-aware DatetimeIndex (UTC or
-        America/New_York) so that session-relative minute positions
-        can be computed unambiguously.
+        session_minute_position() measures elapsed minutes from 09:30,
+        producing positions 1, ..., 390. FFF slots instead use
+        zero-based return-bar positions 0, ..., 389.
         """
-        minute_pos = session_minute_position(log_returns.index)
-
-        avg_var = (log_returns**2).groupby(minute_pos).mean().mean(axis=1)
-
-        valid = avg_var.loc[0 : self.trading_minutes - 1].dropna()
-        m_arr = valid.index.values.astype(float)
-        lv_tgt = np.log(valid.values + 1e-12)
-
-        p0 = np.zeros(1 + 2 * self.num_harmonics)
-        p0[0] = lv_tgt.mean()
-        coefficients, _ = curve_fit(self._fourier_log_variance, m_arr, lv_tgt, p0=p0, maxfev=10_000)
-        self._coefficients = coefficients
-
-        all_slots = np.arange(self.trading_minutes, dtype=float)
-        log_var_hat = self._fourier_log_variance(all_slots, *coefficients)
-        self._vol_smile = pd.Series(
-            np.exp(0.5 * log_var_hat), index=np.arange(self.trading_minutes)
+        raw_positions = pd.Series(
+            np.asarray(session_minute_position(index)),
+            copy=False,
         )
+        slots = raw_positions.astype(np.int64) - 1
+
+        invalid = (slots < 0) | (slots >= self.trading_minutes)
+        if invalid.any():
+            invalid_values = sorted(slots.loc[invalid].unique().tolist())
+            raise ValueError(
+                "Found session positions outside the expected FFF range "
+                f"0, ..., {self.trading_minutes - 1}: {invalid_values}"
+            )
+
+        return pd.Index(slots.to_numpy(), name="fff_slot")
+
+    def fit(self, log_returns: pd.DataFrame) -> FFFDeseasonalizer:
+        """Estimate one intraday volatility profile per real return series.
+
+        For each series, squared returns are averaged across available
+        sessions at each zero-based return-bar slot. A separate Fourier
+        variance profile is then fitted to each series.
+
+        The resulting profiles may subsequently be applied to both the
+        real reference data and corresponding synthetic series.
+        """
+        minute_slots = self._session_slots(log_returns.index)
+        expected_slots = pd.RangeIndex(self.trading_minutes, name="fff_slot")
+
+        # One empirical variance estimate per series and minute slot.
+        var_profile = (
+            log_returns.pow(2).groupby(minute_slots, sort=True).mean().reindex(expected_slots)
+        )
+
+        # Do not silently fit an incomplete intraday profile.
+        missing_slots = {
+            column: var_profile.index[var_profile[column].isna()].tolist()
+            for column in var_profile.columns
+            if var_profile[column].isna().any()
+        }
+        if missing_slots:
+            raise ValueError(
+                f"Missing empirical variance estimates for one or more series: {missing_slots}"
+            )
+
+        time_steps = expected_slots.to_numpy(dtype=float)
+        coefficients: dict[object, np.ndarray] = {}
+        vol_smile = pd.DataFrame(
+            index=expected_slots,
+            columns=log_returns.columns,
+            dtype=float,
+        )
+
+        for column in log_returns.columns:
+            log_variance = np.log(var_profile[column].to_numpy(dtype=float) + 1e-12)
+
+            p0 = np.zeros(1 + 2 * self.num_harmonics)
+            p0[0] = log_variance.mean()
+
+            fitted_coefficients, _ = curve_fit(
+                self._fourier_log_variance,
+                time_steps,
+                log_variance,
+                p0=p0,
+                maxfev=10_000,
+            )
+
+            fitted_log_variance = self._fourier_log_variance(
+                time_steps,
+                *fitted_coefficients,
+            )
+
+            coefficients[column] = fitted_coefficients
+            vol_smile[column] = np.clip(
+                np.exp(0.5 * fitted_log_variance),
+                a_min=1e-8,
+                a_max=None,
+            )
+
+        self._coefficients = coefficients
+        self._vol_smile = vol_smile
         return self
 
     def transform(self, log_returns: pd.DataFrame) -> pd.DataFrame:
-        """Divide each return by its minute slot's seasonal volatility.
-
-        Structural NaN values (session boundaries, intraday gaps) pass
-        through unchanged — dividing NaN by a scalar is still NaN, so
-        the NaN structure of the input is exactly preserved in the
-        output.
-        """
+        """Divide each return by its series-specific seasonal volatility."""
         self._require_fitted()
-        minute_pos = session_minute_position(log_returns.index)
-        smile_map = dict(enumerate(self._vol_smile))
-        sigma_vec = minute_pos.map(smile_map).to_numpy().reshape(-1, 1)
-        return log_returns / sigma_vec
+
+        missing_columns = [
+            column for column in log_returns.columns if column not in self._vol_smile.columns
+        ]
+        if missing_columns:
+            raise ValueError(f"No fitted FFF profile is available for columns: {missing_columns}")
+
+        minute_slots = self._session_slots(log_returns.index)
+
+        sigma = self._vol_smile.loc[
+            minute_slots.to_numpy(),
+            log_returns.columns,
+        ].to_numpy(dtype=float)
+
+        transformed = log_returns.to_numpy(dtype=float, copy=False) / sigma
+
+        return pd.DataFrame(
+            transformed,
+            index=log_returns.index,
+            columns=log_returns.columns,
+        )
 
     def fit_transform(self, log_returns: pd.DataFrame) -> pd.DataFrame:
         """Fit on log_returns, then return the transformed version."""
