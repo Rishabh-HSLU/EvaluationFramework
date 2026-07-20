@@ -48,9 +48,12 @@ import pandas as pd
 from scipy.signal import lfilter
 
 from fineval.config import SEED
-from fineval.preprocessing.session_clock import overnight_masked_log_returns
+from fineval.preprocessing.session_clock import (
+    overnight_masked_log_returns,
+    session_minute_position,
+)
 
-CURATED_DIR = Path(__file__).resolve().parent / "data" / "curated"
+CURATED_DIR = Path(__file__).resolve().parent.parent / "data" / "curated"
 REAL_PATH = CURATED_DIR / "real_prices.parquet"
 GBM_OUTPUT_PATH = CURATED_DIR / "gbm_prices.parquet"
 MSV_OUTPUT_PATH = CURATED_DIR / "msv_prices.parquet"
@@ -90,12 +93,27 @@ def generate_gbm_prices(real_prices: pd.DataFrame, seed: int = SEED) -> pd.DataF
     mu = log_returns.mean().to_numpy()
     sigma = log_returns.std().to_numpy()
 
+    invalid = ~np.isfinite(mu) | ~np.isfinite(sigma)
+    if invalid.any():
+        raise ValueError(
+            f"Cannot estimate GBM parameters for: {real_prices.columns[invalid].tolist()}"
+        )
+
     t_len, n_tickers = real_prices.shape
     increments = mu + sigma * rng.standard_normal((t_len, n_tickers))
-    increments[0, :] = 0.0  # anchor: first bar is the starting price itself
+
+    # The first row is the initial price, not a simulated return.
+    increments[0, :] = 0.0
+
+    # Do not generate returns across trading-session boundaries.
+    session_start = session_minute_position(real_prices.index) == 1
+    increments[session_start, :] = 0.0
 
     p0 = real_prices.bfill().iloc[0].to_numpy()  # first observed price per ticker
     paths = p0 * np.exp(np.cumsum(increments, axis=0))
+
+    # Availability mask. This only hides the generated values. It does not stop
+    # the latent process from evolving during missing observations.
     paths[real_prices.isna().to_numpy()] = np.nan
 
     return pd.DataFrame(paths, index=real_prices.index, columns=real_prices.columns)
