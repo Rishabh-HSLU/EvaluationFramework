@@ -152,6 +152,8 @@ class MatchedTickerBootstrap:
                         "score": metric.normalize(g_rr, g_sr),
                         "g_rr_mean": rr_mean,
                         "g_sr_mean": sr_mean,
+                        "n_valid_draws": n_valid,
+                        "n_total_draws": int(g_rr.size),
                     }
                 )
         return pd.DataFrame(rows)
@@ -178,27 +180,37 @@ class MatchedTickerBootstrap:
         rows = []
         for generator in generators:
             log_deviations: list[float] = []
+            valid_draw_counts: list[int] = []
+
             for metric in self.metrics:
                 rr, sr, n_valid = matched_gap_means(
                     self.g_rr[metric.name],
                     self.g_sr[metric.name][generator],
                 )
-                with np.errstate(invalid="ignore", divide="ignore"):
+
+                if not np.isfinite(rr) or not np.isfinite(sr) or rr <= 0.0 or sr <= 0.0:
+                    ratio = float("nan")
+                else:
                     ratio = sr / rr
+
                 if np.isfinite(ratio) and ratio > 0:
                     log_deviations.append(abs(float(np.log(ratio))))
+                    valid_draw_counts.append(n_valid)
+
             k_used = len(log_deviations)
             score = (
                 float(np.exp(np.mean(log_deviations)))
                 if k_used == len(self.metrics)
                 else float("nan")
             )
+
             rows.append(
                 {
                     "generator": generator,
                     "G_dev": score,
                     "k_used": k_used,
                     "k_total": len(self.metrics),
+                    "min_valid_draws": (min(valid_draw_counts) if valid_draw_counts else 0),
                 }
             )
         return pd.DataFrame(rows)
