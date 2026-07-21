@@ -21,7 +21,7 @@ from fineval.config import (
 from fineval.metrics import (
     AggregationalGaussianity,
     RegimeConditionalTails,
-    UnconditionalHeavyTails,
+    TailWeightedMarginal,
     VolatilityClustering,
 )
 
@@ -33,7 +33,7 @@ MIN_OUTER_REPLICATES_FOR_CI = 40
 RECOMMENDED_OUTER_REPLICATES = 1000
 
 METRIC_LABELS = {
-    "M1": "Unconditional heavy tails",
+    "M1": "Tail-weighted marginal distribution",
     "M2": "Volatility clustering",
     "M3": "Aggregational Gaussianity",
     "M4": "Regime-conditional tails",
@@ -43,7 +43,7 @@ METRIC_LABELS = {
 def build_metrics() -> list:
     """Construct all configured benchmark metrics."""
     return [
-        UnconditionalHeavyTails(
+        TailWeightedMarginal(
             name="M1",
             n_grid=M1_N_GRID,
             tail_alpha=M1_TAIL_ALPHA,

@@ -28,7 +28,7 @@ COVERAGE_FLOOR = 0.70  # minimum joint coverage required to retain a ticker
 
 # Stylized fact scales
 
-## M1: Marginal distribution (Unconditional heavy tails)
+## M1: Tail-weighted marginal distribution
 M1_N_GRID = 5001  # resolution of the empirical quantile grid
 M1_TAIL_ALPHA = 0.3  # tail-emphasis sharpness; controls how fast w(u) rises near u→0,1
 M1_TAIL_LAMBDA = 1.0  # tail-emphasis magnitude; 0 recovers plain W1

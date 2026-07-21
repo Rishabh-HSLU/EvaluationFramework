@@ -252,7 +252,7 @@ EvaluationFramework/
 │   │   └── fff.py                   # Flexible Fourier Form deseasonalizer
 │   ├── metrics/
 │   │   ├── base.py                  # feature, distance and normalization contract
-│   │   ├── unconditional_heavy_tails.py   # M1
+│   │   ├── tail_weighted_marginal.py      # M1
 │   │   ├── volatility_clustering.py       # M2
 │   │   ├── aggregational_gaussianity.py   # M4
 │   │   └── regime_tails.py                # M6
@@ -326,11 +326,11 @@ contract.
 ## Metrics
 
 | ID | Stylized fact | Statistic | Aggregation |
-|---|---|---|---|
-| M1 | Unconditional heavy tails | Tail-weighted Wasserstein-1 distance on the quantile function | Pooled marginal |
+|----|---|---|---|
+| M1 | Tail-weighted marginal distribution | Tail-weighted L1 distance between pooled empirical quantile functions | Pooled marginal |
 | M2 | Volatility clustering | Gap between absolute-return ACFs over configured intraday lags | Per path, then cross-sectional mean |
-| M4 | Aggregational Gaussianity | Difference in excess-kurtosis decay across configured aggregation scales | Session-confined pooled blocks |
-| M6 | Regime-conditional tails | Difference in GPD tail-shape estimates across volatility quintiles | Regime-stratified pooled tails |
+| M3 | Aggregational Gaussianity | Difference in excess-kurtosis decay across configured aggregation scales | Session-confined pooled blocks |
+| M4 | Regime-conditional tails | Difference in GPD tail-shape estimates across volatility quintiles | Regime-stratified pooled tails |
 
 Metric hyperparameters are defined in `fineval/config.py`. The metric suite used
 by the full benchmark is assembled in `fineval/benchmark/config.py`.
