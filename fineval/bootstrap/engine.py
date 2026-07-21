@@ -155,32 +155,45 @@ class MatchedTickerBootstrap:
                 )
         return pd.DataFrame(rows)
 
-    def compute_aggregate(self, generators: list[str] | None = None) -> pd.DataFrame:
-        """Compute geometric-mean gap ratio ``G`` for each generator."""
+    def compute_aggregate(
+        self,
+        generators: list[str] | None = None,
+    ) -> pd.DataFrame:
+        """Compute the symmetric aggregate deviation score ``G_dev``.
+
+        For each metric, the gap ratio is ``r = mean(g_sr) / mean(g_rr)``.
+        The aggregate is
+
+            G_dev = exp(mean(abs(log(r)))).
+
+        ``G_dev`` is at least one and equals one only when every included
+        metric-specific ratio equals one. Ratios above and below one therefore
+        cannot cancel.
+        """
         if not self.g_rr:
             raise RuntimeError("compute_aggregate() requires run() to have been called")
         if generators is None:
             generators = list(self.g_sr[self.metrics[0].name])
-
         rows = []
         for generator in generators:
-            log_ratios = []
+            log_deviations: list[float] = []
             for metric in self.metrics:
                 rr = float(np.nanmean(self.g_rr[metric.name]))
                 sr = float(np.nanmean(self.g_sr[metric.name][generator]))
                 with np.errstate(invalid="ignore", divide="ignore"):
                     ratio = sr / rr
                 if np.isfinite(ratio) and ratio > 0:
-                    log_ratios.append(float(np.log(ratio)))
-
-            k_used = len(log_ratios)
+                    log_deviations.append(abs(float(np.log(ratio))))
+            k_used = len(log_deviations)
             score = (
-                float(np.exp(np.mean(log_ratios))) if k_used == len(self.metrics) else float("nan")
+                float(np.exp(np.mean(log_deviations)))
+                if k_used == len(self.metrics)
+                else float("nan")
             )
             rows.append(
                 {
                     "generator": generator,
-                    "G": score,
+                    "G_dev": score,
                     "k_used": k_used,
                     "k_total": len(self.metrics),
                 }

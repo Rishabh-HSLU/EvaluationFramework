@@ -41,9 +41,9 @@ def attach_outer_diagnostics(
     results["point_in_outer_interval"] = results["score"].ge(results["ci_low"]) & results[
         "score"
     ].le(results["ci_high"])
-    aggregate["outer_bias"] = aggregate["outer_mean"] - aggregate["G"]
-    aggregate["point_in_outer_interval"] = aggregate["G"].ge(aggregate["ci_low"]) & aggregate[
-        "G"
+    aggregate["outer_bias"] = aggregate["outer_mean"] - aggregate["G_dev"]
+    aggregate["point_in_outer_interval"] = aggregate["G_dev"].ge(aggregate["ci_low"]) & aggregate[
+        "G_dev"
     ].le(aggregate["ci_high"])
     return results, aggregate
 
@@ -68,7 +68,7 @@ def log_outer_diagnostics(
     ]
     aggregate_outside = aggregate.loc[
         ~aggregate["point_in_outer_interval"],
-        ["generator", "G", "ci_low", "ci_high", "outer_bias"],
+        ["generator", "G_dev", "ci_low", "ci_high", "outer_bias"],
     ]
     if outside.empty and aggregate_outside.empty:
         log("Every point estimate lies within its outer percentile limits.")
@@ -88,7 +88,7 @@ def log_outer_diagnostics(
         )
     for row in aggregate_outside.itertuples(index=False):
         log(
-            f"  aggregate/{row.generator}: point={row.G:.4f}, "
+            f"  aggregate/{row.generator}: point={row.G_dev:.4f}, "
             f"outer=[{row.ci_low:.4f}, {row.ci_high:.4f}], "
             f"bias={row.outer_bias:+.4f}"
         )
@@ -124,10 +124,10 @@ def format_aggregate_table(
 ) -> str:
     """Render aggregate point estimates and optional outer intervals."""
     has_interval = {"ci_low", "ci_high"}.issubset(aggregate.columns)
-    value_header = f"G [{outer_label}]" if has_interval and outer_label else "G"
+    value_header = f"G_dev [{outer_label}]" if has_interval and outer_label else "G_dev"
     lines = [f"| Generator | {value_header} | metrics used |", "|---|---|---|"]
     for row in aggregate.itertuples(index=False):
-        value = f"{row.G:.3f}"
+        value = f"{row.G_dev:.3f}"
         if has_interval and pd.notna(row.ci_low) and pd.notna(row.ci_high):
             value += f" [{row.ci_low:.3f}, {row.ci_high:.3f}]"
         lines.append(f"| {row.generator} | {value} | {int(row.k_used)}/{int(row.k_total)} |")
@@ -147,7 +147,7 @@ def format_mc_table(summary: pd.DataFrame, value_column: str) -> str:
                 f"{row.mc_sd:.3f} | {row.mc_min:.3f}-{row.mc_max:.3f} |"
             )
     else:
-        lines = ["| Generator | mean G ± SD | min-max |", "|---|---|---|"]
+        lines = ["| Generator | mean G_dev ± SD | min-max |", "|---|---|---|"]
         for row in summary.itertuples(index=False):
             lines.append(
                 f"| {row.generator} | {row.mc_mean:.3f} ± {row.mc_sd:.3f} | "
