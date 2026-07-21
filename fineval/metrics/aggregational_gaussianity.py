@@ -48,7 +48,6 @@ class AggregationalGaussianity(BaseMetric):
             Sorted list of positive aggregation scales in minutes. Scale 1 must
             be included. All scales are evaluated on the largest common
             within-session support divisible by every configured scale.
-
         support_anchor:
             Determines whether the common support is anchored at the beginning
             or end of the valid within-session return sequence. ``"close"`` retains
