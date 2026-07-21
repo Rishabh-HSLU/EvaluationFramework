@@ -17,6 +17,9 @@ SEED = 42
 # Market clock
 TRADING_MINUTES = 390  # minutes per NYSE session (09:30–16:00)
 
+# Preprocessing Intraday-seasonality CV threshold
+SEASONALITY_CV_THRESHOLD = 0.3
+
 # FFF deseasonalization
 NUM_HARMONICS = 4  # BIC-selected; Andersen & Bollerslev (1997)
 
