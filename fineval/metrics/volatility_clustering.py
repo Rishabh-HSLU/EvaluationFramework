@@ -1,10 +1,11 @@
 """
 M2: Nonlinear Temporal Dependence (Volatility Clustering)
 
-Measures the long-memory volatility clustering of returns by evaluating the
-unweighted L1 sum of absolute gaps in the empirical autocorrelation function
-(ACF) of absolute returns (|r|) over the lag window [lag_min, lag_max]
-(e.g., 60 to 390 minutes).
+Measures long-memory volatility clustering through the empirical
+autocorrelation function (ACF) of absolute returns.
+
+The distance is the mean absolute gap between the real and synthetic
+cross-sectionally averaged ACF curves over [lag_min, lag_max].
 """
 
 import numpy as np
@@ -17,15 +18,12 @@ class VolatilityClustering(BaseMetric):
     """
     Evaluates the volatility clustering fidelity of synthetic financial returns.
 
-    The metric computes the autocorrelation function (ACF) of absolute returns (|r|)
-    over a designated long-memory lag window. It specifically targets the long-lag
-    behavior (e.g., k=60 to k=390) because short-lag autocorrelation is easily
-    reproduced by naive short-memory generators (like standard GARCH). Furthermore,
-    it utilizes |r| instead of r^2 to prevent multiplicative outlier amplification,
-    which severely degrades the signal-to-noise ratio of the estimator at long lags.
+    For each ticker, the metric computes the ACF of absolute returns while
+    excluding all pairs that cross a trading-session boundary. The resulting
+    ticker-level ACF curves are averaged cross-sectionally.
 
-    The final distance is the summed absolute difference between the real and
-    synthetic cross-sectional average ACF curves over the defined lag window.
+    The final distance is the mean absolute difference between two averaged
+    ACF curves over the configured long-lag window.
 
     Attributes:
         name (str): Identifier for the metric instance.
@@ -47,80 +45,106 @@ class VolatilityClustering(BaseMetric):
         self.lag_max = lag_max
 
     def extract_features(self, returns: pd.DataFrame) -> np.ndarray:
-        """
-        Extracts the empirical ACF of absolute returns for the panel.
+        """Extract the cross-sectionally averaged absolute-return ACF.
 
-        This method operates per-path (per-ticker) to strictly preserve the temporal
-        ordering of the sequence. It computes the per-ticker ACF for all lags up to
-        `lag_max`, utilizing pairwise masking to gracefully ignore `NaN` values without
-        artificially stitching non-adjacent timestamps. The resulting per-ticker ACF
-        curves are then averaged cross-sectionally.
+        The mean and variance normalization are computed over the complete
+        sample of each ticker. Lagged cross-products are accumulated only
+        within trading sessions.
+
+        Unsupported lags and tickers with zero variance are represented by
+        NaN rather than being treated as zero.
 
         Args:
-            returns (pd.DataFrame): A wide matrix of deseasonalized log returns
-                (T timestamps x N tickers).
+            returns (pd.DataFrame): Deseasonalized log returns with shape
+                ``(timestamps, tickers)`` and a DatetimeIndex.
 
         Returns:
-            np.ndarray: A 1D array of shape `(lag_max,)` representing the
-                cross-sectionally averaged ACF values for lags 1 through `lag_max`.
+            np.ndarray: Array of shape ``(lag_max,)``. Index zero represents lag one.
         """
-
-        a = returns.abs().values
-        means = np.nanmean(a, axis=0)
-        centered = a - means
+        absolute_returns = returns.abs().to_numpy(dtype=float)
+        means = np.nanmean(absolute_returns, axis=0)
+        centered = absolute_returns - means
+        # Full-sample variance denominator. Keeping this denominator fixed
+        # gives the intended biased-style shrinkage at long lags.
         denominator = np.nansum(centered**2, axis=0)
 
-        # Session boundaries from the calendar clock, not a fixed 390 stride,
-        # because the sample contains variable-length half-day sessions.
+        # Identify sessions from calendar dates rather than assuming a fixed
+        # number of observations per session.
         session_ids = returns.index.normalize()
-        bounds = np.flatnonzero(session_ids[1:].values != session_ids[:-1].values) + 1
-        blocks = np.split(centered, bounds, axis=0)
+        # Find every position where the date changes.
+        boundaries = np.flatnonzero(np.asarray(session_ids[1:] != session_ids[:-1])) + 1
+        blocks = np.split(centered, boundaries, axis=0)
 
-        # Per-block lag-k cross-product sums via FFT autocorrelation.
-        # NaN -> 0 is exact here: the original nansum skipped any pair
-        # with a NaN member, and a zero factor contributes zero to the
-        # sum. Zero-padding to >= 2n makes the circular correlation
-        # linear, so s[k] = sum_t c[t] * c[t+k] within the block.
-        num = np.zeros((self.lag_max, a.shape[1]))
-        for blk in blocks:
-            n = blk.shape[0]
-            if n < 2:
+        n_tickers = absolute_returns.shape[1]
+        numerator = np.zeros((self.lag_max, n_tickers), dtype=float)
+        # Track the number of genuinely available pairs so that structurally
+        # unsupported lags are emitted as NaN rather than zero.
+        pair_counts = np.zeros((self.lag_max, n_tickers), dtype=int)
+        for block in blocks:
+            n_observations = block.shape[0]
+            if n_observations < 2:
                 continue
-            c = np.nan_to_num(blk, nan=0.0)
-            pad = 1 << int(np.ceil(np.log2(2 * n)))
-            f = np.fft.rfft(c, n=pad, axis=0)
-            s = np.fft.irfft(f * np.conj(f), n=pad, axis=0)
-            kmax = min(self.lag_max, n - 1)
-            num[:kmax] += s[1 : kmax + 1]
+            supported_lag_max = min(self.lag_max, n_observations - 1)
+            fft_length = 1 << int(np.ceil(np.log2(2 * n_observations)))
+
+            # Replacing NaN by zero is exact for the numerator because any
+            # product containing a missing value must contribute nothing.
+            values = np.nan_to_num(block, nan=0.0)
+            value_fft = np.fft.rfft(values, n=fft_length, axis=0)
+            autocovariance_sums = np.fft.irfft(value_fft * np.conj(value_fft), n=fft_length, axis=0)
+            numerator[:supported_lag_max] += autocovariance_sums[1 : supported_lag_max + 1]
+
+            # Compute the number of finite observation pairs at each lag.
+            valid = np.isfinite(block).astype(float)
+            valid_fft = np.fft.rfft(valid, n=fft_length, axis=0)
+            valid_pair_sums = np.fft.irfft(valid_fft * np.conj(valid_fft), n=fft_length, axis=0)
+            block_pair_counts = np.rint(valid_pair_sums[1 : supported_lag_max + 1])
+            block_pair_counts = np.maximum(
+                block_pair_counts,
+                0,
+            ).astype(int)
+            pair_counts[:supported_lag_max] += block_pair_counts
 
         with np.errstate(invalid="ignore", divide="ignore"):
-            ticker_acfs = num / denominator
-        return np.nanmean(ticker_acfs, axis=1)
+            ticker_acfs = numerator / denominator[None, :]
 
-    def compute_distance(self, features_real: np.ndarray, features_synth: np.ndarray) -> float:
-        """
-        Computes the unweighted L1 sum of absolute ACF gaps over the lag
-        window [lag_min, lag_max].
+        # Without this line, unsupported lags incorrectly appear as an
+        # estimated autocorrelation of zero.
+        ticker_acfs[pair_counts == 0] = np.nan
+        # Equal-weight average over tickers with finite estimates.
+        finite = np.isfinite(ticker_acfs)
+        finite_counts = finite.sum(axis=1)
 
-        The window restriction is the only lag weighting — a deliberate 0/1
-        weight (see scripts/reasoning.md). Differences in the short-memory
-        regime (lags < lag_min) are strictly excluded, focusing the metric
-        completely on the long-memory persistence; every lag inside the
-        window contributes equally.
+        average_acf = np.full(self.lag_max, np.nan, dtype=float)
+        supported = finite_counts > 0
+        average_acf[supported] = (
+            np.nansum(ticker_acfs[supported], axis=1) / finite_counts[supported]
+        )
+        return average_acf
+
+    def compute_distance(self, features_a: np.ndarray, features_b: np.ndarray) -> float:
+        """Compute the mean absolute ACF gap over the selected lag window.
+
+        Only lags for which both feature vectors contain finite estimates
+        are compared. If no common finite lag exists, the distance is NaN.
 
         Args:
-            features_real (np.ndarray): The empirical ACF curve of the real data.
-            features_synth (np.ndarray): The empirical ACF curve of the synthetic data.
+            features_a (np.ndarray): The empirical ACF curve of the real data.
+            features_b (np.ndarray): The empirical ACF curve of the synthetic data.
 
         Returns:
-            float: The sum of the absolute differences over the lag window.
+            float: Mean absolute difference over common finite lags, or NaN if
+                no lag can be compared.
         """
         # Arrays are 0-indexed where index 0 represents lag 1.
         # So lag_min corresponds to index lag_min - 1.
         start_idx = self.lag_min - 1
         end_idx = self.lag_max
 
-        rho_real = features_real[start_idx:end_idx]
-        rho_synth = features_synth[start_idx:end_idx]
+        acf_a = features_a[start_idx:end_idx]
+        acf_b = features_b[start_idx:end_idx]
 
-        return float(np.nansum(np.abs(rho_real - rho_synth)))
+        finite = np.isfinite(acf_a) & np.isfinite(acf_b)
+        if not np.any(finite):
+            return float("nan")
+        return float(np.mean(np.abs(acf_a[finite] - acf_b[finite])))

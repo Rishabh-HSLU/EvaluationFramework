@@ -35,7 +35,7 @@ M1_TAIL_LAMBDA = 1.0  # tail-emphasis magnitude; 0 recovers plain W1
 
 ## M2: Nonlinear temporal dependence (Volatility clustering)
 M2_LAG_MIN = 60  # shortest lag (in minutes) included in the ACF gap
-M2_LAG_MAX = 390  # longest lag (in minutes) included in the ACF gap (1 trading day)
+M2_LAG_MAX = 388  # longest lag (in minutes) included in the ACF gap
 
 ## M4: Aggregational Gaussianity
 M4_SCALES = [1, 5, 15, 30]
