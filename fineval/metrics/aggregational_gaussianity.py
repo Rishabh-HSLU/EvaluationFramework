@@ -102,7 +102,8 @@ class AggregationalGaussianity(BaseMetric):
         pooled = []
 
         for _, group in returns.groupby(session_ids):
-            vals = group.values  # (T_session, N_tickers)
+            # Remove first row -09:31— as it is structurally NaN
+            vals = group.iloc[1:].values  # (T_session, N_tickers)
             n_blocks = vals.shape[0] // scale
             if n_blocks == 0:
                 continue
