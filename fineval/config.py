@@ -41,11 +41,11 @@ M2_LAG_MAX = 388  # longest lag (in minutes) included in the ACF gap
 M3_SCALES = [1, 5, 15, 30]
 M3_MIN_OBS = 100  # minimum pooled observations per scale for reliable kurtosis
 
-## M6: Regime-conditional tail
+## M4: Regime-conditional tail
 ROLLING_VOL_WINDOW = 60  # causal rolling-std window (minutes)
 ROLLING_VOL_MIN_FRAC = 1 / 2  # min valid obs as fraction of window; empirically validated
 ROLLING_VOL_MIN_PERIODS = math.ceil(ROLLING_VOL_WINDOW * ROLLING_VOL_MIN_FRAC)  # = 30
 N_REGIME_QUINTILES = 5  # number of volatility regime bins
-TAIL_QUANTILE = 0.05  # proportion of |returns| treated as extreme within each regime cell
+TAIL_FRACTION = 0.05  # proportion of |returns| treated as extreme within each regime cell
 _RAW_REGIME_WEIGHTS = np.array([1.0, 1.0, 1.0, 2.0, 3.0])  # Q0(calm)→Q4(turbulent)
 REGIME_WEIGHTS = _RAW_REGIME_WEIGHTS / _RAW_REGIME_WEIGHTS.sum()  # normalized to sum to 1
