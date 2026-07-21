@@ -93,8 +93,9 @@ class BaseMetric(ABC):
             where both means are zero (synthetic exactly as close to
             real as real is to itself), returns 0.5.
         """
-        rr_mean = float(np.nanmean(g_rr))
-        sr_mean = float(np.nanmean(g_sr))
+        valid = np.isfinite(g_rr) & np.isfinite(g_sr)
+        rr_mean = np.mean(g_rr[valid])
+        sr_mean = np.mean(g_sr[valid])
         if rr_mean + sr_mean == 0.0:
             return 0.5
         return rr_mean / (rr_mean + sr_mean)
