@@ -43,6 +43,7 @@ M2_LAG_MAX = 388  # longest lag (in minutes) included in the ACF gap
 ## M3: Aggregational Gaussianity
 M3_SCALES = [1, 5, 15, 30]
 M3_MIN_OBS = 100  # minimum pooled observations per scale for reliable kurtosis
+M3_SUPPORT_ANCHOR = "close"
 
 ## M4: Regime-conditional tail
 ROLLING_VOL_WINDOW = 60  # causal rolling-std window (minutes)

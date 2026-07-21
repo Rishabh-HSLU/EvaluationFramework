@@ -12,6 +12,7 @@ from fineval.config import (
     M2_LAG_MIN,
     M3_MIN_OBS,
     M3_SCALES,
+    M3_SUPPORT_ANCHOR,
     N_REGIME_QUINTILES,
     REGIME_WEIGHTS,
     ROLLING_VOL_MIN_PERIODS,
@@ -50,7 +51,9 @@ def build_metrics() -> list:
             tail_lambda=M1_TAIL_LAMBDA,
         ),
         VolatilityClustering(name="M2", lag_min=M2_LAG_MIN, lag_max=M2_LAG_MAX),
-        AggregationalGaussianity(name="M3", scales=M3_SCALES, min_obs=M3_MIN_OBS),
+        AggregationalGaussianity(
+            name="M3", scales=M3_SCALES, min_obs=M3_MIN_OBS, support_anchor=M3_SUPPORT_ANCHOR
+        ),
         RegimeConditionalTails(
             name="M4",
             window=ROLLING_VOL_WINDOW,
