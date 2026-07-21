@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 from ..config import SEED
-from ..metrics.base import BaseMetric
+from ..metrics.base import BaseMetric, matched_gap_means
 from .execution import execute_inner_draws, resolve_n_jobs, subsample_panel
 from .models import ReplicateAnalysis
 
@@ -144,13 +144,14 @@ class MatchedTickerBootstrap:
             g_rr = self.g_rr[metric.name]
             for generator in generators:
                 g_sr = self.g_sr[metric.name][generator]
+                rr_mean, sr_mean, n_valid = matched_gap_means(g_rr, g_sr)
                 rows.append(
                     {
                         "metric": metric.name,
                         "generator": generator,
                         "score": metric.normalize(g_rr, g_sr),
-                        "g_rr_mean": float(np.nanmean(g_rr)),
-                        "g_sr_mean": float(np.nanmean(g_sr)),
+                        "g_rr_mean": rr_mean,
+                        "g_sr_mean": sr_mean,
                     }
                 )
         return pd.DataFrame(rows)
@@ -178,8 +179,10 @@ class MatchedTickerBootstrap:
         for generator in generators:
             log_deviations: list[float] = []
             for metric in self.metrics:
-                rr = float(np.nanmean(self.g_rr[metric.name]))
-                sr = float(np.nanmean(self.g_sr[metric.name][generator]))
+                rr, sr, n_valid = matched_gap_means(
+                    self.g_rr[metric.name],
+                    self.g_sr[metric.name][generator],
+                )
                 with np.errstate(invalid="ignore", divide="ignore"):
                     ratio = sr / rr
                 if np.isfinite(ratio) and ratio > 0:

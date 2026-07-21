@@ -26,6 +26,54 @@ import numpy as np
 import pandas as pd
 
 
+def matched_gap_means(
+    g_rr: np.ndarray,
+    g_sr: np.ndarray,
+) -> tuple[float, float, int]:
+    """Return means computed over jointly valid matched draws.
+
+    A draw is retained only when both its real-real and synthetic-real
+    gaps are finite. This preserves the matched design: both means are
+    always calculated from exactly the same draw indices.
+
+    Args:
+        g_rr: Per-draw real-real gaps.
+        g_sr: Per-draw synthetic-real gaps.
+
+    Returns:
+        A tuple ``(g_rr_mean, g_sr_mean, n_valid)``.
+
+        If no jointly valid draws are available, both means are NaN and
+        ``n_valid`` is zero.
+
+    Raises:
+        ValueError: If the inputs are not one-dimensional arrays with the
+            same shape.
+    """
+    rr = np.asarray(g_rr, dtype=float)
+    sr = np.asarray(g_sr, dtype=float)
+
+    if rr.ndim != 1 or sr.ndim != 1:
+        raise ValueError("g_rr and g_sr must be one-dimensional arrays")
+
+    if rr.shape != sr.shape:
+        raise ValueError(
+            f"g_rr and g_sr must have the same shape; received {rr.shape} and {sr.shape}"
+        )
+
+    valid = np.isfinite(rr) & np.isfinite(sr)
+    n_valid = int(valid.sum())
+
+    if n_valid == 0:
+        return float("nan"), float("nan"), 0
+
+    return (
+        float(np.mean(rr[valid])),
+        float(np.mean(sr[valid])),
+        n_valid,
+    )
+
+
 class BaseMetric(ABC):
     """Abstract base for a single fidelity metric.
 
@@ -74,7 +122,8 @@ class BaseMetric(ABC):
         """Normalize per-draw distances into a [0, 1] similarity score.
 
         Ratio of means: s_b = mean(g_rr) / (mean(g_rr) + mean(g_sr)),
-        with NaN draws ignored via nanmean.
+        using only draws for which both the real-real and synthetic-real
+        gaps are finite.
 
         Args:
             g_rr: Per-draw self-distances (real vs real bootstrap
@@ -93,9 +142,10 @@ class BaseMetric(ABC):
             where both means are zero (synthetic exactly as close to
             real as real is to itself), returns 0.5.
         """
-        valid = np.isfinite(g_rr) & np.isfinite(g_sr)
-        rr_mean = np.mean(g_rr[valid])
-        sr_mean = np.mean(g_sr[valid])
-        if rr_mean + sr_mean == 0.0:
+        rr_mean, sr_mean, n_valid = matched_gap_means(g_rr, g_sr)
+        if n_valid == 0:
+            return float("nan")
+        denominator = rr_mean + sr_mean
+        if denominator == 0.0:
             return 0.5
-        return rr_mean / (rr_mean + sr_mean)
+        return rr_mean / denominator
