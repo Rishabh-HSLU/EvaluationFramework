@@ -37,9 +37,9 @@ M1_TAIL_LAMBDA = 1.0  # tail-emphasis magnitude; 0 recovers plain W1
 M2_LAG_MIN = 60  # shortest lag (in minutes) included in the ACF gap
 M2_LAG_MAX = 388  # longest lag (in minutes) included in the ACF gap
 
-## M4: Aggregational Gaussianity
-M4_SCALES = [1, 5, 15, 30]
-M4_MIN_OBS = 100  # minimum pooled observations per scale for reliable kurtosis
+## M3: Aggregational Gaussianity
+M3_SCALES = [1, 5, 15, 30]
+M3_MIN_OBS = 100  # minimum pooled observations per scale for reliable kurtosis
 
 ## M6: Regime-conditional tail
 ROLLING_VOL_WINDOW = 60  # causal rolling-std window (minutes)
