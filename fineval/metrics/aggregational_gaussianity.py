@@ -1,15 +1,13 @@
-"""M4 — Aggregational Gaussianity.
+"""M3 — Aggregational Gaussianity.
 
-Measures whether the generator reproduces the convergence of return
-distributions toward Gaussianity as the aggregation scale increases.
-Real financial returns are leptokurtic at fine scales but converge
-toward Gaussian at coarser scales — the rate of this convergence is
-a stylized fact (Cont, 2001 §2.5) that naive generators cannot
-reproduce. GBM is Gaussian at every scale (flat ratio curve);
-GARCH converges too fast; a good generator should track the
-empirical decay rate.
+Measures whether the generator reproduces the evolution of return
+kurtosis as the aggregation scale increases.
 
-See preprocessing/reasoning.md for full metric derivation context.
+Real financial returns are typically leptokurtic at fine scales and
+become more Gaussian at coarser scales. The metric compares normalized
+Pearson-kurtosis curves across aggregation horizons.
+
+See preprocessing/reasoning.md for the full metric derivation.
 """
 
 import numpy as np
@@ -20,18 +18,23 @@ from fineval.metrics.base import BaseMetric
 
 
 class AggregationalGaussianity(BaseMetric):
-    """Normalized excess kurtosis decay across aggregation scales.
+    """Normalized kurtosis evolution across aggregation scales.
 
-    For each scale k in the configured scale set, aggregates k
-    consecutive 1-minute log returns within each session into
-    non-overlapping k-minute returns, pools across tickers, and
-    computes excess kurtosis. The feature vector is the normalized
-    ratio κ(k)/κ(1), capturing the rate at which the distribution
-    converges toward Gaussian as the scale increases.
+    For each configured scale, consecutive one-minute log returns are
+    aggregated within each trading session into non-overlapping blocks.
+    Aggregated returns are then pooled across assets and sessions.
 
-    Aggregation is confined within session boundaries (calendar-date
-    grouping) so that no aggregated return ever spans an overnight
-    gap — the same session-boundary discipline enforced in M2 and M6.
+    With classical kurtosis, the feature at scale ``k`` is
+
+        K(k) / K(1),
+
+    where ``K`` is Pearson kurtosis. Pearson kurtosis is used instead
+    of excess kurtosis because its Gaussian reference value is 3,
+    avoiding unstable normalization when base-scale excess kurtosis is
+    close to zero.
+
+    If ``use_moors`` is enabled, the same base-scale normalization is
+    applied to the Moors octile-kurtosis coefficient.
 
     Attributes:
         name: Metric label, e.g. "aggregational_gaussianity".
@@ -41,10 +44,8 @@ class AggregationalGaussianity(BaseMetric):
             a reliable kurtosis estimate. Scales with fewer valid
             aggregated returns emit NaN.
         use_moors: If True, use Moors (1988) octile kurtosis
-            (quantile-based, outlier-resistant) instead of standard
-            excess kurtosis. Default False — classical kurtosis is
-            the quantity the stylized fact describes, and pooled
-            sample sizes are large enough to estimate it reliably.
+            (quantile-based, outlier-resistant) instead of
+            classical Pearson kurtosis.
 
     Example::
 
@@ -70,32 +71,28 @@ class AggregationalGaussianity(BaseMetric):
         self.use_moors = use_moors
 
         if 1 not in self.scales:
-            raise ValueError(
-                "Scale 1 must be in the scale set — κ(k)/κ(1) normalization requires it."
-            )
+            raise ValueError("Scale 1 must be included for base-scale normalization.")
+        if len(self.scales) < 2:
+            raise ValueError("At least one aggregation scale greater than 1 is required.")
         from fineval.config import TRADING_MINUTES
 
         bad = [k for k in self.scales if TRADING_MINUTES % k != 0]
         if bad:
             raise ValueError(
                 f"Scales {bad} do not divide {TRADING_MINUTES}. "
-                f"Non-divisible scales cause systematic data loss on "
-                f"full sessions."
+                "Using only exact divisors avoids systematically "
+                "discarding observations at the end of each session."
             )
 
-    # ── internal helpers ─────────────────────────────────────────────
-
     def _aggregate_scale(self, returns: pd.DataFrame, scale: int) -> np.ndarray:
-        """Aggregate returns to a given scale within session boundaries.
+        """Aggregate returns within trading-session boundaries.
 
-        For scale 1, pools and drops NaN directly. For scale > 1,
-        groups by calendar date, splits each session into
-        non-overlapping blocks of exactly ``scale`` bars, sums log
-        returns within each block (NaN propagates naturally — any
-        block with a missing bar becomes NaN and is dropped).
+        Aggregation is performed separately for each asset. A given
+        asset-block is retained only when all returns in that block are
+        finite.
 
         Returns:
-            1-D array of valid aggregated returns, NaN-free.
+            1-D array of valid aggregated returns pooled across assets and sessions.
         """
         if scale == 1:
             flat = returns.values.flatten()
@@ -105,18 +102,20 @@ class AggregationalGaussianity(BaseMetric):
         pooled = []
 
         for _, group in returns.groupby(session_ids):
-            vals = group.values  # (T_session, N_tickers)
+            # Remove first row -09:31— as it is structurally NaN
+            vals = group.iloc[1:].values  # (T_session, N_tickers)
             n_blocks = vals.shape[0] // scale
             if n_blocks == 0:
                 continue
             trimmed = vals[: n_blocks * scale, :]
             blocks = trimmed.reshape(n_blocks, scale, -1)
-            agg = np.sum(blocks, axis=1)  # NaN propagates honestly
+            # np.sum propagates NaN or infinite values, causing the
+            # corresponding asset-block to be removed below.
+            agg = np.sum(blocks, axis=1)
             pooled.append(agg.flatten())
 
         if not pooled:
             return np.array([])
-
         all_agg = np.concatenate(pooled)
         return all_agg[~np.isnan(all_agg)]
 
@@ -135,48 +134,32 @@ class AggregationalGaussianity(BaseMetric):
         return ((e7 - e5) + (e3 - e1)) / denom
 
     def _compute_kurtosis(self, x: np.ndarray) -> float:
-        """Excess kurtosis via standard or Moors estimator."""
+        """Compute Pearson kurtosis or the Moors coefficient."""
         if len(x) < self.min_obs:
             return np.nan
         if self.use_moors:
             return self._moors_kurtosis(x)
-        return float(scipy_kurtosis(x, fisher=True))
-
-    # ── public interface ─────────────────────────────────────────────
+        return float(scipy_kurtosis(x, fisher=False, bias=False))
 
     def extract_features(self, sample: pd.DataFrame) -> np.ndarray:
-        """Compute normalized kurtosis ratio curve κ(k)/κ(1).
-
-        Pipeline:
-            1. For each scale k, aggregate within-session returns
-               into non-overlapping k-minute blocks, pool across
-               tickers, drop NaN.
-            2. Compute excess kurtosis (or Moors) at each scale.
-            3. Normalize by κ(1) to produce the decay curve.
-
-        Args:
-            sample: Panel of deseasonalized returns, DataFrame with
-                tickers as columns and a time index.
+        """Compute the normalized aggregation curve.
 
         Returns:
-            1-D ndarray of length len(scales). κ(1)/κ(1) = 1.0
-            by construction. Scales with too few observations or
-            a degenerate κ(1) emit NaN.
+            One-dimensional array with one entry per configured scale.
+            The base-scale entry equals 1. Scales with insufficient
+            observations emit NaN.
         """
         raw_kurtosis = np.full(len(self.scales), np.nan)
-
         for i, scale in enumerate(self.scales):
             agg = self._aggregate_scale(sample, scale)
             raw_kurtosis[i] = self._compute_kurtosis(agg)
-
-        kappa_1 = raw_kurtosis[0]  # scales is sorted; index 0 = scale 1
-        if not np.isfinite(kappa_1) or kappa_1 == 0.0:
+        base_kurtosis = raw_kurtosis[self.scales.index(1)]
+        if not np.isfinite(base_kurtosis) or base_kurtosis == 0.0:
             return np.full(len(self.scales), np.nan)
-
-        return raw_kurtosis / kappa_1
+        return raw_kurtosis / base_kurtosis
 
     def compute_distance(self, fa: np.ndarray, fb: np.ndarray) -> float:
-        """Masked mean absolute difference between kurtosis ratio curves.
+        """Compute the masked mean absolute curve difference.
 
         Args:
             fa: Normalized kurtosis curve from sample A.
