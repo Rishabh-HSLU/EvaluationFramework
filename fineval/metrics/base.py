@@ -23,6 +23,7 @@ Design principles (see preprocessing/reasoning.md for full rationale):
 from abc import ABC, abstractmethod
 
 import numpy as np
+import pandas as pd
 
 
 class BaseMetric(ABC):
@@ -40,7 +41,7 @@ class BaseMetric(ABC):
         self.name = name
 
     @abstractmethod
-    def extract_features(self, sample: np.ndarray) -> np.ndarray:
+    def extract_features(self, sample: pd.DataFrame) -> np.ndarray:
         """Extract a feature vector from a single panel sample.
 
         Args:
