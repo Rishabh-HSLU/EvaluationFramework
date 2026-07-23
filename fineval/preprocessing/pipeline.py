@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..config import NUM_HARMONICS, TRADING_MINUTES
+from ..config import NUM_HARMONICS, SEASONALITY_CV_THRESHOLD, TRADING_MINUTES
 from .fff import FFFDeseasonalizer
 from .session_clock import overnight_masked_log_returns, session_minute_position
 
@@ -50,7 +50,7 @@ class PreprocessingPipeline:
         self.deseas_real: pd.DataFrame | None = None
         self.deseas_synthetic: pd.DataFrame | None = None
 
-    def _has_seasonality(self, log_returns: pd.DataFrame, threshold: float = 0.3) -> bool:
+    def _has_seasonality(self, log_returns: pd.DataFrame) -> bool:
         """Detect whether returns have meaningful intraday seasonality.
 
         The statistic is the coefficient of variation of the pooled
@@ -92,7 +92,7 @@ class PreprocessingPipeline:
 
         mean_variance = float(profile.mean())
         cv = float(profile.std() / mean_variance)
-        return bool(cv > threshold)
+        return bool(cv > SEASONALITY_CV_THRESHOLD)
 
     def run(
         self, real_prices: pd.DataFrame, synthetic_prices: pd.DataFrame

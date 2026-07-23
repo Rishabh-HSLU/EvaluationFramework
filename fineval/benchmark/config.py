@@ -12,6 +12,7 @@ from fineval.config import (
     M2_LAG_MIN,
     M3_MIN_OBS,
     M3_SCALES,
+    M3_SUPPORT_ANCHOR,
     N_REGIME_QUINTILES,
     REGIME_WEIGHTS,
     ROLLING_VOL_MIN_PERIODS,
@@ -21,7 +22,7 @@ from fineval.config import (
 from fineval.metrics import (
     AggregationalGaussianity,
     RegimeConditionalTails,
-    UnconditionalHeavyTails,
+    TailWeightedMarginal,
     VolatilityClustering,
 )
 
@@ -33,7 +34,7 @@ MIN_OUTER_REPLICATES_FOR_CI = 40
 RECOMMENDED_OUTER_REPLICATES = 1000
 
 METRIC_LABELS = {
-    "M1": "Unconditional heavy tails",
+    "M1": "Tail-weighted marginal distribution",
     "M2": "Volatility clustering",
     "M3": "Aggregational Gaussianity",
     "M4": "Regime-conditional tails",
@@ -43,14 +44,16 @@ METRIC_LABELS = {
 def build_metrics() -> list:
     """Construct all configured benchmark metrics."""
     return [
-        UnconditionalHeavyTails(
+        TailWeightedMarginal(
             name="M1",
             n_grid=M1_N_GRID,
             tail_alpha=M1_TAIL_ALPHA,
             tail_lambda=M1_TAIL_LAMBDA,
         ),
         VolatilityClustering(name="M2", lag_min=M2_LAG_MIN, lag_max=M2_LAG_MAX),
-        AggregationalGaussianity(name="M3", scales=M3_SCALES, min_obs=M3_MIN_OBS),
+        AggregationalGaussianity(
+            name="M3", scales=M3_SCALES, min_obs=M3_MIN_OBS, support_anchor=M3_SUPPORT_ANCHOR
+        ),
         RegimeConditionalTails(
             name="M4",
             window=ROLLING_VOL_WINDOW,

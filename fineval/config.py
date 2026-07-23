@@ -17,6 +17,9 @@ SEED = 42
 # Market clock
 TRADING_MINUTES = 390  # minutes per NYSE session (09:30–16:00)
 
+# Preprocessing Intraday-seasonality CV threshold
+SEASONALITY_CV_THRESHOLD = 0.3
+
 # FFF deseasonalization
 NUM_HARMONICS = 4  # BIC-selected; Andersen & Bollerslev (1997)
 
@@ -28,7 +31,7 @@ COVERAGE_FLOOR = 0.70  # minimum joint coverage required to retain a ticker
 
 # Stylized fact scales
 
-## M1: Marginal distribution (Unconditional heavy tails)
+## M1: Tail-weighted marginal distribution
 M1_N_GRID = 5001  # resolution of the empirical quantile grid
 M1_TAIL_ALPHA = 0.3  # tail-emphasis sharpness; controls how fast w(u) rises near u→0,1
 M1_TAIL_LAMBDA = 1.0  # tail-emphasis magnitude; 0 recovers plain W1
@@ -40,6 +43,7 @@ M2_LAG_MAX = 388  # longest lag (in minutes) included in the ACF gap
 ## M3: Aggregational Gaussianity
 M3_SCALES = [1, 5, 15, 30]
 M3_MIN_OBS = 100  # minimum pooled observations per scale for reliable kurtosis
+M3_SUPPORT_ANCHOR = "close"
 
 ## M4: Regime-conditional tail
 ROLLING_VOL_WINDOW = 60  # causal rolling-std window (minutes)

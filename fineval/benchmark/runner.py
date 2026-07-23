@@ -90,8 +90,8 @@ def _print_tables(
             "corpora; this is not a confidence interval."
         )
         tqdm.write("\n" + format_mc_table(mc.metric_summary, "score") + "\n")
-        log("Aggregate Monte Carlo stability for G on the fixed observed corpora.")
-        tqdm.write("\n" + format_mc_table(mc.aggregate_summary, "G") + "\n")
+        log("Aggregate Monte Carlo stability for G_dev on the fixed observed corpora.")
+        tqdm.write("\n" + format_mc_table(mc.aggregate_summary, "G_dev") + "\n")
 
 
 def run_benchmark(args, stamp: str, record: dict) -> None:

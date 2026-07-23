@@ -1,12 +1,12 @@
-"""
-M1: Unconditional Heavy Tails
+"""M1 — Tail-weighted marginal distribution.
 
-Measures the mismatch in the marginal distribution of returns by evaluating a
-tail-emphasized (soft-weighted) Wasserstein-1 distance in quantile
-representation. This metric targets absolute tail thickness across the entire
-sample, ignoring temporal ordering. The raw weighting combines a uniform
-component with symmetric inverse-boundary terms and is normalized to unit
-mean over the quantile grid.
+Compares the complete pooled marginal return distributions through a
+tail-weighted L1 distance between empirical quantile functions.
+
+The metric emphasizes tail discrepancies but retains positive weight
+throughout the distribution. It is therefore sensitive to location, scale,
+bulk shape, and tail behavior and should not be interpreted as an isolated
+measure of tail thickness.
 """
 
 import numpy as np
@@ -15,33 +15,12 @@ import pandas as pd
 from fineval.metrics.base import BaseMetric
 
 
-class UnconditionalHeavyTails(BaseMetric):
-    r"""
-    Evaluates marginal-distribution fidelity using a normalized,
-    tail-weighted L1 quantile distance:
+class TailWeightedMarginal(BaseMetric):
+    r"""Evaluate marginal-distribution fidelity with tail emphasis.
 
-        W1_tail = \int_0^1 w(u) |F^{-1}(u) - \hat{F}^{-1}(u)| du
-    with the smooth, strictly positive weight
-        w(u) = 1 + tail_lambda * (u^{-tail_alpha} + (1 - u)^{-tail_alpha}),
-    evaluated on a midpoint grid excluding 0 and 1. The discrete weights
-    are normalized to have mean one, so tail emphasis redistributes
-    sensitivity without mechanically changing the distance scale.
-
-    Standard metrics like the Kolmogorov-Smirnov test are geometrically bounded in
-    the tails and thus inherently bulk-biased. Moment-matching approaches (e.g.,
-    kurtosis) suffer from multiplicative outlier amplification, leading to extreme
-    sample noise. This metric resolves both defects by integrating the absolute
-    difference between the empirical quantile functions under a weight that
-    emphasizes the tail regions without discarding the bulk.
-
-    Attributes:
-        name (str): Identifier for the metric instance.
-        n_grid (int): Resolution of the uniform grid used to evaluate the quantile function.
-        tail_alpha (float): Exponent controlling how sharply the weight grows
-            as u approaches 0 or 1 (larger values concentrate the emphasis
-            deeper in the tails).
-        tail_lambda (float): Multiplier on the tail term, setting the strength
-            of tail emphasis relative to the baseline bulk weight of 1.
+    The metric compares pooled empirical quantile functions using a smooth,
+    strictly positive weight over the entire quantile grid. Tail observations
+    receive greater weight, but bulk discrepancies remain part of the metric.
     """
 
     def __init__(self, name: str, n_grid: int, tail_alpha: float, tail_lambda: float):

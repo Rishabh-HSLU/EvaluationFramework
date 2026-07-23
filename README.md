@@ -2,8 +2,8 @@
 
 A multi-metric fidelity benchmark for synthetic 1-minute financial return generators.
 Each metric targets an empirical stylized fact, and every synthetic-real gap is
-normalized against a real-real noise floor so the scores remain interpretable
-without selecting a reference generator.
+benchmarked against an empirical real-corpus resampling baseline so the scores
+remain interpretable without selecting a reference generator.
 
 ```text
 raw market data ──► loaders/curation ──► preprocessing ──► matched estimator ──► metric scores
@@ -23,21 +23,38 @@ synthetic-real distance.
 
 Interpretation:
 
-- `s_b = 0.5`: synthetic-real discrepancy equals the natural real-real noise floor.
-- `s_b < 0.5`: synthetic data deviate more from real data than two real samples do.
-- `s_b > 0.5`: synthetic data are closer to the reference real sample than an independent real sample is; very high values can indicate copying or memorization.
-- `s_b → 0`: increasing structural divergence under metric `b`.
+- `s_b = 0.5`: the estimated synthetic-real and real-real resampling gaps
+  are equal under the observed corpora and configured sampling protocol.
+- `s_b < 0.5`: the estimated synthetic-real gap is larger than the empirical
+  real-corpus resampling gap.
+- `s_b > 0.5`: the estimated synthetic-real gap is smaller than that
+  resampling gap; this can reflect close agreement, but also over-smoothing
+  or reduced synthetic variability.
+- The score is a relative gap comparison, not an equivalence test and not a
+  grade to maximize.
 
-The aggregate score is the geometric mean of the per-metric gap ratios:
+The optional aggregate deviation score is
 
 \[
-G = \exp\!\left(\frac{1}{K}\sum_{k=1}^{K}
-\log\frac{\operatorname{mean}(g_{sr,k})}
-          {\operatorname{mean}(g_{rr,k})}\right).
+G_{\mathrm{dev}}
+=
+\exp\!\left(
+\frac{1}{K}
+\sum_{k=1}^{K}
+\left|
+\log
+\frac{\operatorname{mean}(g_{sr,k})}
+     {\operatorname{mean}(g_{rr,k})}
+\right|
+\right).
 \]
 
-`G = 1` is aggregate real-real parity; larger values indicate a larger overall
-synthetic-real gap.
+- `G_dev = 1` only when every included estimated gap ratio equals one.
+- `G_dev > 1` indicates aggregate multiplicative departure from the empirical
+  real-corpus reference.
+- Ratios above and below one cannot cancel.
+- `G_dev` loses the direction and identity of individual discrepancies and
+  must therefore be reported alongside the per-metric results.
 
 ---
 
@@ -235,7 +252,7 @@ EvaluationFramework/
 │   │   └── fff.py                   # Flexible Fourier Form deseasonalizer
 │   ├── metrics/
 │   │   ├── base.py                  # feature, distance and normalization contract
-│   │   ├── unconditional_heavy_tails.py   # M1
+│   │   ├── tail_weighted_marginal.py      # M1
 │   │   ├── volatility_clustering.py       # M2
 │   │   ├── aggregational_gaussianity.py   # M4
 │   │   └── regime_tails.py                # M6
@@ -246,7 +263,6 @@ EvaluationFramework/
 │   │   ├── replicate_execution.py   # parallel replicate workers and chunk execution
 │   │   └── models.py                # repeated-analysis result container
 │   └── benchmark/
-│       ├── cli.py                   # argument parsing, validation and run lifecycle
 │       ├── runner.py                # high-level benchmark orchestration
 │       ├── config.py                # benchmark paths, labels and metric suite
 │       ├── datasets.py              # curated loading and preprocessing
@@ -310,11 +326,11 @@ contract.
 ## Metrics
 
 | ID | Stylized fact | Statistic | Aggregation |
-|---|---|---|---|
-| M1 | Unconditional heavy tails | Tail-weighted Wasserstein-1 distance on the quantile function | Pooled marginal |
+|----|---|---|---|
+| M1 | Tail-weighted marginal distribution | Tail-weighted L1 distance between pooled empirical quantile functions | Pooled marginal |
 | M2 | Volatility clustering | Gap between absolute-return ACFs over configured intraday lags | Per path, then cross-sectional mean |
-| M4 | Aggregational Gaussianity | Difference in excess-kurtosis decay across configured aggregation scales | Session-confined pooled blocks |
-| M6 | Regime-conditional tails | Difference in GPD tail-shape estimates across volatility quintiles | Regime-stratified pooled tails |
+| M3 | Aggregational Gaussianity | Difference in excess-kurtosis decay across configured aggregation scales | Session-confined pooled blocks |
+| M4 | Regime-conditional tails | Difference in GPD tail-shape estimates across volatility quintiles | Regime-stratified pooled tails |
 
 Metric hyperparameters are defined in `fineval/config.py`. The metric suite used
 by the full benchmark is assembled in `fineval/benchmark/config.py`.

@@ -52,11 +52,11 @@ def _summarize_outer(
         n_outer_valid=("score", "count"),
     )
     aggregate_summary = aggregate_replicates.groupby("generator", as_index=False, sort=False).agg(
-        outer_mean=("G", "mean"),
-        outer_sd=("G", "std"),
-        ci_low=("G", lambda values: values.quantile(0.025)),
-        ci_high=("G", lambda values: values.quantile(0.975)),
-        n_outer_valid=("G", "count"),
+        outer_mean=("G_dev", "mean"),
+        outer_sd=("G_dev", "std"),
+        ci_low=("G_dev", lambda values: values.quantile(0.025)),
+        ci_high=("G_dev", lambda values: values.quantile(0.975)),
+        n_outer_valid=("G_dev", "count"),
     )
     return metric_summary, aggregate_summary
 
@@ -77,13 +77,13 @@ def _summarize_mc(
         n_mc_valid=("score", "count"),
     )
     aggregate_summary = aggregate_replicates.groupby("generator", as_index=False, sort=False).agg(
-        mc_mean=("G", "mean"),
-        mc_sd=("G", "std"),
-        mc_min=("G", "min"),
-        mc_max=("G", "max"),
-        mc_q025=("G", lambda values: values.quantile(0.025)),
-        mc_q975=("G", lambda values: values.quantile(0.975)),
-        n_mc_valid=("G", "count"),
+        mc_mean=("G_dev", "mean"),
+        mc_sd=("G_dev", "std"),
+        mc_min=("G_dev", "min"),
+        mc_max=("G_dev", "max"),
+        mc_q025=("G_dev", lambda values: values.quantile(0.025)),
+        mc_q975=("G_dev", lambda values: values.quantile(0.975)),
+        n_mc_valid=("G_dev", "count"),
     )
     return metric_summary, aggregate_summary
 

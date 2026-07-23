@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 from ..config import SEED
-from ..metrics.base import BaseMetric
+from ..metrics.base import BaseMetric, matched_gap_means
 from .execution import execute_inner_draws, resolve_n_jobs, subsample_panel
 from .models import ReplicateAnalysis
 
@@ -144,45 +144,73 @@ class MatchedTickerBootstrap:
             g_rr = self.g_rr[metric.name]
             for generator in generators:
                 g_sr = self.g_sr[metric.name][generator]
+                rr_mean, sr_mean, n_valid = matched_gap_means(g_rr, g_sr)
                 rows.append(
                     {
                         "metric": metric.name,
                         "generator": generator,
                         "score": metric.normalize(g_rr, g_sr),
-                        "g_rr_mean": float(np.nanmean(g_rr)),
-                        "g_sr_mean": float(np.nanmean(g_sr)),
+                        "g_rr_mean": rr_mean,
+                        "g_sr_mean": sr_mean,
+                        "n_valid_draws": n_valid,
+                        "n_total_draws": int(g_rr.size),
                     }
                 )
         return pd.DataFrame(rows)
 
-    def compute_aggregate(self, generators: list[str] | None = None) -> pd.DataFrame:
-        """Compute geometric-mean gap ratio ``G`` for each generator."""
+    def compute_aggregate(
+        self,
+        generators: list[str] | None = None,
+    ) -> pd.DataFrame:
+        """Compute the symmetric aggregate deviation score ``G_dev``.
+
+        For each metric, the gap ratio is ``r = mean(g_sr) / mean(g_rr)``.
+        The aggregate is
+
+            G_dev = exp(mean(abs(log(r)))).
+
+        ``G_dev`` is at least one and equals one only when every included
+        metric-specific ratio equals one. Ratios above and below one therefore
+        cannot cancel.
+        """
         if not self.g_rr:
             raise RuntimeError("compute_aggregate() requires run() to have been called")
         if generators is None:
             generators = list(self.g_sr[self.metrics[0].name])
-
         rows = []
         for generator in generators:
-            log_ratios = []
-            for metric in self.metrics:
-                rr = float(np.nanmean(self.g_rr[metric.name]))
-                sr = float(np.nanmean(self.g_sr[metric.name][generator]))
-                with np.errstate(invalid="ignore", divide="ignore"):
-                    ratio = sr / rr
-                if np.isfinite(ratio) and ratio > 0:
-                    log_ratios.append(float(np.log(ratio)))
+            log_deviations: list[float] = []
+            valid_draw_counts: list[int] = []
 
-            k_used = len(log_ratios)
+            for metric in self.metrics:
+                rr, sr, n_valid = matched_gap_means(
+                    self.g_rr[metric.name],
+                    self.g_sr[metric.name][generator],
+                )
+
+                if not np.isfinite(rr) or not np.isfinite(sr) or rr <= 0.0 or sr <= 0.0:
+                    ratio = float("nan")
+                else:
+                    ratio = sr / rr
+
+                if np.isfinite(ratio) and ratio > 0:
+                    log_deviations.append(abs(float(np.log(ratio))))
+                    valid_draw_counts.append(n_valid)
+
+            k_used = len(log_deviations)
             score = (
-                float(np.exp(np.mean(log_ratios))) if k_used == len(self.metrics) else float("nan")
+                float(np.exp(np.mean(log_deviations)))
+                if k_used == len(self.metrics)
+                else float("nan")
             )
+
             rows.append(
                 {
                     "generator": generator,
-                    "G": score,
+                    "G_dev": score,
                     "k_used": k_used,
                     "k_total": len(self.metrics),
+                    "min_valid_draws": (min(valid_draw_counts) if valid_draw_counts else 0),
                 }
             )
         return pd.DataFrame(rows)
