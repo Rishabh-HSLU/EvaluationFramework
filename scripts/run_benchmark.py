@@ -63,8 +63,8 @@ from fineval.metrics import (
 )
 from fineval.preprocessing import PreprocessingPipeline
 
-CURATED_DIR = Path(__file__).resolve().parent / "data" / "curated"
-RESULTS_DIR = Path(__file__).resolve().parent / "results"
+CURATED_DIR = Path(__file__).resolve().parent.parent / "data" / "curated"
+RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 
 METRIC_LABELS = {
     "M1": "Unconditional heavy tails",

@@ -73,10 +73,10 @@ uv run python -m scripts.run_benchmark --n-resamples 20   # quick pass
 ```
 
 Results are printed as a markdown table and saved to a per-run CSV in
-`scripts/results/`, stamped with the run parameters and a
+`results/`, stamped with the run parameters and a
 timestamp (e.g. `benchmark_B100_m200_seed42_20260702-123500.csv`).
 Only a run at the default parameters also refreshes the canonical
-`scripts/results/benchmark_results.csv`; quick passes
+`results/benchmark_results.csv`; quick passes
 (`--n-resamples 20`, reduced `--tickers-per-draw`, non-default seeds)
 never overwrite it.
 

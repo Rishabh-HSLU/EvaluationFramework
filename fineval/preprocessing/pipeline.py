@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from ..config import NUM_HARMONICS, TRADING_MINUTES
@@ -10,23 +11,31 @@ from .session_clock import overnight_masked_log_returns, session_minute_position
 
 
 class PreprocessingPipeline:
-    """Transforms paired (real, synthetic) prices into deseasonalised
-    log-returns on a shared NYSE market clock.
+    """Transform paired real and synthetic prices on a shared market clock.
+
+    Overnight-masked log returns are computed for both datasets.
+    Intraday seasonality is then detected independently in each dataset.
+
+    When a dataset exhibits meaningful intraday seasonality, an FFF
+    profile is fitted to that dataset and used to deseasonalize it.
+    Flat datasets such as GBM and MSV are left unchanged to avoid
+    injecting an artificial inverse seasonal pattern.
 
     Attributes:
         log_returns_real
-            (T, N) overnight-masked log returns for real, before FFF.
-            Set by run(). Diagnostic access to the pre-FFF state.
+            (T, N) overnight-masked real log returns before FFF.
         log_returns_synthetic
-            Same for synthetic.
+            Overnight-masked synthetic log returns before FFF.
         fff_real
-            Fitted FFFDeseasonalizer for real (None if no smile).
+            FFF fitted to the real returns, or None if no meaningful
+            seasonality was detected.
         fff_synthetic
-            Fitted FFFDeseasonalizer for synthetic (None if no smile).
+            FFF fitted to the synthetic returns, or None if no meaningful
+            seasonality was detected.
         deseas_real
-            Final deseasonalised real returns.
+            Final real returns after conditional deseasonalization.
         deseas_synthetic
-            Final deseasonalised synthetic returns.
+            Final synthetic returns after conditional deseasonalization.
     """
 
     def __init__(
@@ -42,24 +51,53 @@ class PreprocessingPipeline:
         self.deseas_synthetic: pd.DataFrame | None = None
 
     def _has_seasonality(self, log_returns: pd.DataFrame, threshold: float = 0.3) -> bool:
-        """Detect whether a return series has a genuine intraday smile.
+        """Detect whether returns have meaningful intraday seasonality.
 
-        Uses the coefficient of variation of the pooled per-minute
-        variance profile: a flat (non-seasonal) series has near-zero
-        CV, while real equities show a large CV driven by the open
-        spike. Threshold of 0.3 separates GBM-like flat baselines
-        (CV ~0.05) from real/AIL-like seasonal series (CV ~0.6+).
+        The statistic is the coefficient of variation of the pooled
+        per-slot variance profile.
+
+        With close prices beginning at 09:31, the return timestamped
+        09:31 is structurally unavailable. Seasonality detection
+        therefore uses the 389 valid returns timestamped 09:32–16:00.
         """
-        minute_pos = session_minute_position(log_returns.index)
-        profile = (log_returns**2).groupby(minute_pos).mean().mean(axis=1)
-        profile = profile.loc[0 : self.trading_minutes - 1].dropna()
-        cv = profile.std() / profile.mean()
-        return cv > threshold
+        session_positions = pd.Series(
+            np.asarray(session_minute_position(log_returns.index)),
+            index=log_returns.index,
+            name="session_minute_position",
+        )
+
+        valid_mask = session_positions.gt(1)
+        valid_returns = log_returns.loc[valid_mask]
+        valid_positions = session_positions.loc[valid_mask]
+
+        expected_positions = pd.RangeIndex(
+            start=2,
+            stop=self.trading_minutes + 1,
+            name="session_minute_position",
+        )
+
+        profile = (
+            valid_returns.pow(2)
+            .groupby(valid_positions, sort=True)
+            .mean()
+            .mean(axis=1)
+            .reindex(expected_positions)
+        )
+
+        if profile.isna().any():
+            missing_positions = profile.index[profile.isna()].tolist()
+            raise ValueError(
+                f"Missing pooled variance estimates for session positions {missing_positions}."
+            )
+
+        mean_variance = float(profile.mean())
+        cv = float(profile.std() / mean_variance)
+        return bool(cv > threshold)
 
     def run(
         self, real_prices: pd.DataFrame, synthetic_prices: pd.DataFrame
     ) -> PreprocessingPipeline:
-        """Run prices → log returns → conditional per-series FFF."""
+        """Compute returns and conditionally deseasonalize each dataset."""
         self.log_returns_real = overnight_masked_log_returns(real_prices)
         self.log_returns_synthetic = overnight_masked_log_returns(synthetic_prices)
 
@@ -72,10 +110,10 @@ class PreprocessingPipeline:
     def _maybe_deseasonalize(
         self, log_returns: pd.DataFrame
     ) -> tuple[pd.DataFrame, FFFDeseasonalizer | None]:
-        """Apply FFF only if the series shows a genuine intraday smile.
+        """Deseasonalize only when meaningful seasonality is detected.
 
-        A flat series (e.g. GBM) is returned unchanged rather than
-        having a smile injected by dividing by someone else's profile.
+        Flat datasets are returned unchanged. This avoids injecting an
+        inverse seasonal profile into generators such as GBM and MSV.
         """
         if not self._has_seasonality(log_returns):
             return log_returns, None
