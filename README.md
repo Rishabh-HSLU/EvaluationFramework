@@ -1,23 +1,43 @@
 # fineval
 
 A multi-metric fidelity benchmark for synthetic 1-minute financial return generators.
-Each metric measures empirical stylized fact; scores are normalized against a
-real-vs-real baseline so results are interpretable without a reference model.
+Each metric targets an empirical stylized fact, and every synthetic-real gap is
+normalized against a real-real noise floor so the scores remain interpretable
+without selecting a reference generator.
 
-```
-real market data  ──► loader ──► curate ──► preprocess ──► metrics ──► s_b ∈ [0, 1]
-synthetic data    ──►        ──►        ──►            ──►
+```text
+raw market data ──► loaders/curation ──► preprocessing ──► matched estimator ──► metric scores
+synthetic data  ──►                  ──►               ──►                   ├─► outer bootstrap CI
+                                                                                └─► seed-stability audit
 ```
 
-`s_b = mean(g_rr) / (mean(g_rr) + mean(g_sr))`
+For metric \(b\), the similarity score is
+
+\[
+s_b = \frac{\operatorname{mean}(g_{rr,b})}
+           {\operatorname{mean}(g_{rr,b}) + \operatorname{mean}(g_{sr,b})},
+\]
+
+where \(g_{rr,b}\) is the real-real distance and \(g_{sr,b}\) is the
+synthetic-real distance.
 
 Interpretation:
 
-- `s_b = 1.0` means zero measured discrepancy between synthetic and real data under bucket `b`.
-- `s_b = 0.5` means the synthetic data are at real-sample parity: the synthetic-vs-real gap equals the natural real-vs-real baseline variability.
-- `s_b > 0.5` means the synthetic-vs-real gap is smaller than the real-vs-real baseline gap. In other words, the synthetic data are closer to the reference real sample than an independent real sample would be under that bucket.
-- `s_b < 0.5` means the synthetic data deviate more from real data than two independent real samples deviate from each other.
-- `s_b → 0` indicates increasing structural divergence from the real data along that bucket.
+- `s_b = 0.5`: synthetic-real discrepancy equals the natural real-real noise floor.
+- `s_b < 0.5`: synthetic data deviate more from real data than two real samples do.
+- `s_b > 0.5`: synthetic data are closer to the reference real sample than an independent real sample is; very high values can indicate copying or memorization.
+- `s_b → 0`: increasing structural divergence under metric `b`.
+
+The aggregate score is the geometric mean of the per-metric gap ratios:
+
+\[
+G = \exp\!\left(\frac{1}{K}\sum_{k=1}^{K}
+\log\frac{\operatorname{mean}(g_{sr,k})}
+          {\operatorname{mean}(g_{rr,k})}\right).
+\]
+
+`G = 1` is aggregate real-real parity; larger values indicate a larger overall
+synthetic-real gap.
 
 ---
 
@@ -29,56 +49,157 @@ cd EvaluationFramework
 uv sync
 ```
 
-**1. Download raw data from Alpaca** (once). The canonical 948-ticker corpus is used for all experiments.
+### 1. Download the raw market data
 
-```python
+The canonical experiment uses 948 tickers of 1-minute Alpaca bars from
+September 2019 to March 2020.
+
+```bash
 pip install "alpaca-py>=0.13"
 
 python -m scripts.fetch_alpaca \
-    --api-key  <YOUR_KEY> \
-    --secret   <YOUR_SECRET> \
-    --out-dir  data/raw_intraday
+    --api-key <YOUR_KEY> \
+    --secret <YOUR_SECRET> \
+    --out-dir data/raw_intraday
 ```
 
-This downloads 948 tickers of 1-minute bars (Sep 2019 – Mar 2020, split-adjusted, SIP feed) to `data/raw_intraday/`.
-A checkpoint log (`download_log.csv`) lets interrupted runs resume.
-Expect 30–60 minutes on a standard Alpaca connection. Sign up for free credentials at [alpaca.markets](alpaca.markets).
+The downloader writes a checkpoint log to `download_log.csv`, so interrupted
+runs can resume.
 
-**2. Curate the raw data** (once). Loaders normalize each raw format into the
-wide-format contract; the curation pipeline aligns everything onto the NYSE
-1-minute market clock:
+### 2. Curate the datasets
 
-```python
+Loaders normalize each raw source into the common wide-format contract. The
+curation pipeline aligns all datasets to the NYSE 1-minute market clock and
+writes evaluation-ready parquet files.
+
+```bash
 uv run python -m scripts.build_curated_datasets
 ```
 
-**3. Generate the baselines** (deterministic, seeds from `fineval/config.py`).
-GBM is the negative control (Gaussian, memoryless, rejected by every metric);
-MSV — a two-factor multi-scale stochastic volatility model — is the positive
-control for volatility clustering (M2). Both are calibrated per ticker to the
-curated real data and generated on the same market clock with real's NaN mask
-imposed:
+### 3. Generate the controls
+
+GBM is the Gaussian, memoryless negative control. MSV is a multi-scale
+stochastic-volatility positive control designed primarily for volatility
+clustering. Both are generated on the real market clock with the real missing
+value mask imposed.
 
 ```bash
 uv run python -m scripts.baseline_generation
 ```
 
-**4. Run the benchmark.** Loads Real, AIL, GBM and MSV through their loaders,
-preprocesses each pair, runs the matched-N ticker bootstrap over all metrics,
-and prints the benchmark table:
+### 4. Run the benchmark
+
+Point estimate only:
 
 ```bash
-uv run python -m scripts.run_benchmark              # B=100 resamples
-uv run python -m scripts.run_benchmark --n-resamples 20   # quick pass
+uv run python -m scripts.run_benchmark
 ```
 
-Results are printed as a markdown table and saved to a per-run CSV in
-`results/`, stamped with the run parameters and a
-timestamp (e.g. `benchmark_B100_m200_seed42_20260702-123500.csv`).
-Only a run at the default parameters also refreshes the canonical
-`results/benchmark_results.csv`; quick passes
-(`--n-resamples 20`, reduced `--tickers-per-draw`, non-default seeds)
-never overwrite it.
+Fast development run:
+
+```bash
+uv run python -m scripts.run_benchmark \
+    --n-resamples 20 \
+    --n-jobs 4
+```
+
+Final run with corpus-level outer bootstrap intervals and an independent-seed
+numerical-stability audit:
+
+```bash
+uv run python -m scripts.run_benchmark \
+    --n-resamples 100 \
+    --n-outer-resamples 1000 \
+    --n-mc-repeats 20 \
+    --n-jobs 0 \
+    --update-canonical
+```
+
+Worker settings:
+
+- `--n-jobs 0`: automatic worker budget; leaves one logical CPU free and caps the default at 8.
+- `--n-jobs -1`: use every logical CPU.
+- `--inner-chunk-size`: matched draws per submitted inner task.
+- `--replicate-chunk-size`: outer or Monte Carlo replicates per process task.
+
+Random indices and replicate seeds are generated before parallel execution, so
+results are independent of worker completion order, worker count, and chunk
+size.
+
+---
+
+## Uncertainty and numerical stability
+
+The benchmark separates three different quantities.
+
+### Point estimate
+
+The inner matched estimator repeatedly draws ticker subsets from the fixed
+observed panels and estimates the mean real-real and synthetic-real gaps. The
+number of inner draws is controlled by `--n-resamples`.
+
+Increasing `--n-resamples` reduces Monte Carlo error in the score calculation.
+It does not create a corpus-level confidence interval.
+
+### Outer-bootstrap confidence interval
+
+With `--n-outer-resamples O`, each outer replicate:
+
+1. resamples the complete real ticker corpus with replacement;
+2. resamples each complete synthetic corpus with replacement;
+3. reruns the full inner matched estimator on those resampled corpora;
+4. returns one metric score and one aggregate score.
+
+The reported interval is the 2.5th to 97.5th percentile of the resulting outer
+scores.
+The CLI requires at least 40 outer replicates before canonical results can be
+updated; approximately 1,000 are recommended for final reporting.
+
+The current outer bootstrap starts from the already preprocessed real and
+synthetic panels. Its interval therefore measures ticker-corpus resampling
+uncertainty conditional on:
+
+- the fitted preprocessing transformation;
+- the fitted generator;
+- the available generated synthetic panel.
+
+It does not include generator retraining, synthetic regeneration, or
+re-estimation of preprocessing inside each outer replicate.
+
+### Monte Carlo stability
+
+With `--n-mc-repeats R`, the benchmark reruns the inner estimator under
+independent seeds while keeping the real and synthetic corpora fixed. It reports
+mean, standard deviation, and range across seeds.
+
+These values quantify numerical stability and are not confidence intervals.
+
+---
+
+## Outputs
+
+Every run writes parameter- and timestamp-stamped files to `results/`:
+
+```text
+benchmark_B...csv
+aggregate_B...csv
+outer_metric_replicates_B...csv       # when outer bootstrap is enabled
+outer_aggregate_replicates_B...csv
+mc_metric_replicates_B...csv          # when MC stability is enabled
+mc_aggregate_replicates_B...csv
+runs_manifest.csv
+```
+
+`runs_manifest.csv` records completed, failed, and interrupted runs, including
+parameters, git commit, duration, output files, and status.
+
+Canonical files are refreshed only when `--update-canonical` is explicitly
+passed together with a qualifying outer-bootstrap run:
+
+```text
+results/benchmark_results.csv
+results/aggregate_results.csv
+```
 
 ---
 
@@ -102,45 +223,69 @@ uv run pytest
 
 ## Repository layout
 
-```
+```text
 EvaluationFramework/
-├── fineval/                        # core package
-│   ├── config.py                   # global constants (seed, market clock, metric hyperparameters)
+├── fineval/                         # reusable package code
+│   ├── config.py                    # global seeds, market clock and metric hyperparameters
 │   ├── data/
-│   │   ├── loader.py               # BaseLoader ABC + MarketDataset contract
-│   │   └── curate.py               # CurationPipeline + loaders (Real, AIL, curated parquet, GBM, MSV)
+│   │   ├── loader.py                # BaseLoader and MarketDataset contract
+│   │   └── curate.py                # curation pipeline and concrete dataset loaders
 │   ├── preprocessing/
-│   │   ├── pipeline.py             # log returns, overnight mask, conditional deseasonalization
-│   │   └── fff.py                  # Flexible Fourier Form intraday volatility deseasonalizer
+│   │   ├── pipeline.py              # log returns, overnight mask and conditional FFF
+│   │   └── fff.py                   # Flexible Fourier Form deseasonalizer
 │   ├── metrics/
-│   │   ├── base.py                 # BaseMetric ABC (features / distance / normalize contract)
-│   │   ├── unconditional_heavy_tails.py    # M1
-│   │   ├── volatility_clustering.py        # M2
-│   │   ├── aggregational_gaussianity.py    # M3
-│   │   └── regime_tails.py                 # M4
+│   │   ├── base.py                  # feature, distance and normalization contract
+│   │   ├── unconditional_heavy_tails.py   # M1
+│   │   ├── volatility_clustering.py       # M2
+│   │   ├── aggregational_gaussianity.py   # M4
+│   │   └── regime_tails.py                # M6
 │   ├── bootstrap/
-│   │   └── engine.py               # MatchedTickerBootstrap + paired-bootstrap CI
-│   └── walkthrough.md              # narrative tour of the whole framework
-├── scripts/
-│   ├── build_curated_datasets.py       # raw sources → data/curated/*.parquet
-│   ├── baseline_generation.py          # GBM + MSV baselines → data/curated/*.parquet
-│   ├── fetch_alpaca.py                 # download the canonical 948-ticker raw corpus
-│   ├── reasoning.md                    # design decisions + empirical evidence
-│   └── run_benchmark.py                # full benchmark table (this is the entry point)
+│   │   ├── engine.py                # public MatchedTickerBootstrap API
+│   │   ├── execution.py             # deterministic parallel inner draws
+│   │   ├── uncertainty.py           # outer bootstrap and seed-stability analyses
+│   │   ├── replicate_execution.py   # parallel replicate workers and chunk execution
+│   │   └── models.py                # repeated-analysis result container
+│   └── benchmark/
+│       ├── cli.py                   # argument parsing, validation and run lifecycle
+│       ├── runner.py                # high-level benchmark orchestration
+│       ├── config.py                # benchmark paths, labels and metric suite
+│       ├── datasets.py              # curated loading and preprocessing
+│       ├── reporting.py             # logs, progress bars, diagnostics and tables
+│       └── artifacts.py             # CSV persistence and run manifest
+├── scripts/                         # executable entry points only
+│   ├── fetch_alpaca.py
+│   ├── build_curated_datasets.py
+│   ├── baseline_generation.py
+│   └── run_benchmark.py
+├── docs/
+│   ├── walkthrough.md               # narrative framework tour
+│   └── reasoning.md                 # design decisions and empirical evidence
 ├── tests/
+├── data/
+├── results/
 ├── pyproject.toml
 └── README.md
 ```
 
+The distinction is intentional:
+
+- `fineval/` contains importable and testable application logic;
+- `scripts/` contains thin command-line launchers;
+- `docs/` contains project documentation;
+- `results/` contains generated artifacts, not source code.
+
 ---
 
-## Adding your own generator
+## Adding a generator
 
-Subclass `BaseLoader` and implement `_load_raw()` to return a wide-format price DataFrame:
+Subclass `BaseLoader` and implement `_load_raw()` to return a wide-format price
+DataFrame:
 
 ```python
-from fineval.data.loader import BaseLoader
 import pandas as pd
+
+from fineval.data.loader import BaseLoader
+
 
 class MyLoader(BaseLoader):
     def __init__(self, path: str):
@@ -148,63 +293,31 @@ class MyLoader(BaseLoader):
         self.path = path
 
     def _load_raw(self) -> pd.DataFrame:
-        df = pd.read_parquet(self.path)
-        # pivot to wide format: index=timestamps (UTC DatetimeIndex),
-        # columns=ticker symbols, values=float64 close prices
-        return df
-
-dataset = MyLoader("path/to/data.parquet").load()
+        dataframe = pd.read_parquet(self.path)
+        # Required format:
+        # index   = UTC DatetimeIndex
+        # columns = unique string path/ticker names
+        # values  = float64 close prices, with NaN where unavailable
+        return dataframe
 ```
 
-Then pass it to `CurationPipeline` alongside the real dataset. The pipeline handles ticker intersection, market clock alignment, and coverage filtering automatically.
+Then add the loader to the curation or benchmark workflow. The curation pipeline
+handles market-clock alignment, coverage filtering, and the common dataset
+contract.
 
 ---
 
-## The Metrics
+## Metrics
 
-| ID | Stylized fact             | Statistic | Aggregation |
-|----|---------------------------|-----------|-------------|
-| M1 | Unconditional Heavy Tails | Tail-weighted Wasserstein-1 on the quantile function (α=0.3, λ=1.0) | Pooled |
-| M2 | Volatility clustering     | Summed ACF gap on \|r\|, lags 60–390, session-confined pairs | Per-path, cross-sectional mean |
-| M3 | Aggregational Gaussianity | Excess-kurtosis decay ratio κ(k)/κ(1) across scales {1, 5, 15, 30} min | Session-confined blocks, pooled |
-| M4 | Regime-conditional tails   | GPD shape parameter ξ gap across 5 self-labeled volatility quintiles | Regime-stratified, pooled |
+| ID | Stylized fact | Statistic | Aggregation |
+|---|---|---|---|
+| M1 | Unconditional heavy tails | Tail-weighted Wasserstein-1 distance on the quantile function | Pooled marginal |
+| M2 | Volatility clustering | Gap between absolute-return ACFs over configured intraday lags | Per path, then cross-sectional mean |
+| M4 | Aggregational Gaussianity | Difference in excess-kurtosis decay across configured aggregation scales | Session-confined pooled blocks |
+| M6 | Regime-conditional tails | Difference in GPD tail-shape estimates across volatility quintiles | Regime-stratified pooled tails |
 
-
-The rationale behind every statistic, hyperparameter and design revision is
-documented with its empirical evidence in `scripts/reasoning.md`.
-
----
-
-## Results
-
-Similarity scores `s ∈ [0, 1]` (95% paired-bootstrap CI in brackets);
-0.5 means real-sample parity. B=100 resamples, 200 tickers per draw, seed 42,
-Sep 2019 – Mar 2020, 600-ticker universe.
-
-*(regenerate with `uv run python -m scripts.run_benchmark`)*
-
-| Metric | Stylized fact | AIL | GBM | MSV |
-|--------|---|---|---|---|
-| M1     | Unconditional heavy tails | 0.478 [0.447, 0.509] | 0.025 [0.023, 0.028] | 0.025 [0.023, 0.028] |
-| M2     | Volatility clustering | 0.203 [0.181, 0.226] | 0.019 [0.016, 0.021] | 0.265 [0.237, 0.291] |
-| M3     | Aggregational Gaussianity | 0.378 [0.346, 0.410] | 0.121 [0.108, 0.136] | 0.170 [0.152, 0.189] |
-| M4     | Regime-conditional tails | 0.485 [0.456, 0.514] | 0.047 [0.043, 0.051] | 0.133 [0.122, 0.145] |
-
-AIL tracks real-sample parity (0.5) closely on M1 and M6, is weaker on M2
-(long-memory volatility clustering) and M4 (aggregational kurtosis decay).
-GBM is rejected by every metric — as expected for a Gaussian, memoryless
-baseline with no intraday structure — confirming all four metrics discriminate
-correctly between a strong and a trivial generator. MSV, a positive control
-purpose-built to exhibit volatility clustering and nothing else, beats AIL on
-M2 (0.265 vs. 0.203) while losing to it everywhere else — the signature of a
-working single-purpose control that validates the benchmark itself, not just
-the generator.
-
-Between this run and the first (AIL/GBM only, `scripts/reasoning.md` §
-Benchmark Results), the bootstrap's RNG was restructured into independent
-per-cell streams (see `bootstrap/engine.py`); every score moved within its
-prior confidence interval, not outside it, confirming the restructure changed
-sampling machinery, not the underlying measurement.
+Metric hyperparameters are defined in `fineval/config.py`. The metric suite used
+by the full benchmark is assembled in `fineval/benchmark/config.py`.
 
 ---
 
@@ -212,34 +325,59 @@ sampling machinery, not the underlying measurement.
 
 ### Data contract
 
-All data enters the framework as a `MarketDataset`: a wide-format price DataFrame with a UTC `DatetimeIndex`, string column names (ticker symbols), and `float64` values (`NaN` where no trade occurred). The `CurationPipeline` enforces this contract and produces evaluation-ready parquet files before any preprocessing or metric computation touches the data.
+All data enters the framework as a `MarketDataset`: a wide price DataFrame with
+a UTC `DatetimeIndex`, unique string columns, and `float64` values. Missing
+observations remain `NaN`. Curation produces evaluation-ready parquet files
+before preprocessing or metric calculation begins.
 
-### Matched-N ticker resampling
+### Matched-N ticker estimator
 
-For every bootstrap resample `b` (default B=100), `MatchedTickerBootstrap` draws
-ticker subsamples of size N=200 with replacement:
+For each inner draw \(b=1,\ldots,B\):
 
-1. Draw ticker index sets `idx_a`, `idx_b` from the real panel.
-2. `g_rr[b] = gap(real[:, idx_a], real[:, idx_b])` — real vs real (noise floor).
-3. Draw `idx_s` from each synthetic panel.
-4. `g_sr[b] = gap(real[:, idx_a], syn[:, idx_s])` — real vs synthetic, reusing `idx_a`.
+1. sample `idx_a` and `idx_b` independently from the real panel;
+2. compute \(g_{rr,b}=d(\text{real}[idx_a],\text{real}[idx_b])\);
+3. sample `idx_s` independently from each synthetic panel;
+4. compute \(g_{sr,b}=d(\text{real}[idx_a],\text{synthetic}[idx_s])\).
 
-Features are extracted per metric on each subsample; the real draw `idx_a` is
-shared between `g_rr` and every generator's `g_sr`, so per-draw sampling noise
-partially cancels out of the score `mean(g_rr) / (mean(g_rr) + mean(g_sr))`.
+The same real reference sample `idx_a` is used in the real-real and
+synthetic-real comparisons. This matched design reduces irrelevant per-draw
+noise while preserving independent real comparison and synthetic samples.
 
-### Paired-bootstrap CI
+Synthetic indices are reused from the real draw only when a generator has an
+explicit one-to-one ticker correspondence. Unconditional synthetic paths are
+sampled independently.
 
-```python
-for b in range(2000):
-    idx  = rng.integers(0, n_resamples, n_resamples)  # same index into both arrays
-    rr_b = g_rr[idx].mean()
-    sr_b = g_sr[idx].mean()
-    boot[b] = rr_b / (rr_b + sr_b)
-lo, hi = np.percentile(boot, [2.5, 97.5])
+### Parallel reproducibility
+
+The engine pre-generates all random indices and assigns results by draw or
+replicate identifier rather than completion order. Consequently, changing
+`--n-jobs`, task chunking, or scheduling does not change the sampled data or the
+reported values.
+
+---
+
+## Results
+
+The README does not duplicate a static benchmark table because those values can
+become stale when metrics, preprocessing, corpora, or uncertainty settings
+change. The current canonical results are stored in:
+
+```text
+results/benchmark_results.csv
+results/aggregate_results.csv
 ```
 
-Sharing the index per iteration preserves the per-i correlation from construction, producing CIs 5–12% narrower than the unpaired form.
+Regenerate them with a documented final configuration, for example:
+
+```bash
+uv run python -m scripts.run_benchmark \
+    --n-resamples 100 \
+    --n-outer-resamples 1000 \
+    --n-mc-repeats 20 \
+    --update-canonical
+```
+
+The command prints the same per-metric and aggregate tables in Markdown format.
 
 ---
 

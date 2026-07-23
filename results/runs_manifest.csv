@@ -1,6 +1,0 @@
-run_number,run_id,started_at,n_resamples,tickers_per_draw,seed,git_commit,status,duration_seconds,results_csv,canonical_updated,error
-1,20260707-110432-604766,2026-07-07T11:04:32,2,50,42,3180ccd,completed,23.3,benchmark_B2_m50_seed42_20260707-110432-604766.csv,False,
-2,20260708-114030-751402,2026-07-08T11:40:30,2,50,42,3180ccd,completed,24.1,benchmark_B2_m50_seed42_20260708-114030-751402.csv,False,
-3,20260708-123832-250232,2026-07-08T12:38:32,2,50,42,3180ccd,completed,23.0,benchmark_B2_m50_seed42_20260708-123832-250232.csv,False,
-4,20260708-124101-107197,2026-07-08T12:41:01,100,200,42,3180ccd,completed,2426.8,benchmark_B100_m200_seed42_20260708-124101-107197.csv,True,
-5,20260708-231902-151438,2026-07-08T23:19:02,2,50,42,cdc50fb,completed,16.9,benchmark_B2_m50_seed42_20260708-231902-151438.csv,False,
