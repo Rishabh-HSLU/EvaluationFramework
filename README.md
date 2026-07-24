@@ -36,17 +36,7 @@ Interpretation:
 The optional aggregate deviation score is
 
 $$
-G_{\text{dev}}
-=
-\exp\left(
-\frac{1}{K}
-\sum_{k=1}^{K}
-\left|
-\log
-\frac{\text{mean}(g_{sr,k})}
-     {\text{mean}(g_{rr,k})}
-\right|
-\right).
+G = \exp\left(\frac{1}{K} \sum_{k=1}^{K} \left| \log \frac{\text{mean}(g_{sr,k})} {\text{mean}(g_{rr,k})} \right| \right).
 $$
 
 - `G_dev = 1` only when every included estimated gap ratio equals one.
