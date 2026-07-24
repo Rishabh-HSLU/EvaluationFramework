@@ -11,14 +11,14 @@ synthetic data  ──►                  ──►               ──►    
                                                                                 └─► seed-stability audit
 ```
 
-For metric \(b\), the similarity score is
+For metric $b$, the similarity score is
 
-\[
+$$
 s_b = \frac{\operatorname{mean}(g_{rr,b})}
            {\operatorname{mean}(g_{rr,b}) + \operatorname{mean}(g_{sr,b})},
-\]
+$$
 
-where \(g_{rr,b}\) is the real-real distance and \(g_{sr,b}\) is the
+where $g_{rr,b}$ is the real-real distance and $g_{sr,b}$ is the
 synthetic-real distance.
 
 Interpretation:
@@ -35,7 +35,7 @@ Interpretation:
 
 The optional aggregate deviation score is
 
-\[
+$$
 G_{\mathrm{dev}}
 =
 \exp\!\left(
@@ -47,7 +47,7 @@ G_{\mathrm{dev}}
      {\operatorname{mean}(g_{rr,k})}
 \right|
 \right).
-\]
+$$
 
 - `G_dev = 1` only when every included estimated gap ratio equals one.
 - `G_dev > 1` indicates aggregate multiplicative departure from the empirical
@@ -348,12 +348,12 @@ before preprocessing or metric calculation begins.
 
 ### Matched-N ticker estimator
 
-For each inner draw \(b=1,\ldots,B\):
+For each inner draw $b=1,\ldots,B$:
 
 1. sample `idx_a` and `idx_b` independently from the real panel;
-2. compute \(g_{rr,b}=d(\text{real}[idx_a],\text{real}[idx_b])\);
+2. compute $g_{rr,b}=d(\text{real}[idx_a],\text{real}[idx_b])$;
 3. sample `idx_s` independently from each synthetic panel;
-4. compute \(g_{sr,b}=d(\text{real}[idx_a],\text{synthetic}[idx_s])\).
+4. compute $g_{sr,b}=d(\text{real}[idx_a],\text{synthetic}[idx_s])$.
 
 The same real reference sample `idx_a` is used in the real-real and
 synthetic-real comparisons. This matched design reduces irrelevant per-draw
