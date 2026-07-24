@@ -36,7 +36,7 @@ Interpretation:
 The optional aggregate deviation score is
 
 $$
-G_{\mathrm{dev}}
+G_{\text{dev}}
 =
 \exp\left(
 \frac{1}{K}
