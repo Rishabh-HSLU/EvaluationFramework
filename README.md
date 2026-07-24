@@ -14,8 +14,8 @@ synthetic data  ──►                  ──►               ──►    
 For metric $b$, the similarity score is
 
 $$
-s_b = \frac{\operatorname{mean}(g_{rr,b})}
-           {\operatorname{mean}(g_{rr,b}) + \operatorname{mean}(g_{sr,b})},
+s_b = \frac{\text{mean}(g_{rr,b})}
+           {\text{mean}(g_{rr,b}) + \text{mean}(g_{sr,b})},
 $$
 
 where $g_{rr,b}$ is the real-real distance and $g_{sr,b}$ is the
@@ -38,13 +38,13 @@ The optional aggregate deviation score is
 $$
 G_{\mathrm{dev}}
 =
-\exp\!\left(
+\exp\left(
 \frac{1}{K}
 \sum_{k=1}^{K}
 \left|
 \log
-\frac{\operatorname{mean}(g_{sr,k})}
-     {\operatorname{mean}(g_{rr,k})}
+\frac{\text{mean}(g_{sr,k})}
+     {\text{mean}(g_{rr,k})}
 \right|
 \right).
 $$
