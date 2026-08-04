@@ -1,0 +1,84 @@
+"""Acceptance tests for the --spec pre-registered spec selection flag."""
+
+from __future__ import annotations
+
+import argparse
+
+import numpy as np
+import pytest
+
+from fineval.benchmark.artifacts import run_tag
+from fineval.benchmark.config import build_metrics
+from fineval.scripts.sensitivity.grid import GRID, PRIMARY_PARAMS
+from scripts.run_benchmark import SPECS, parse_args
+
+
+def test_specs_match_grid_ids() -> None:
+    assert sorted(SPECS) == sorted(spec.spec_id for spec in GRID)
+    assert len(SPECS) == 13
+    for required in ("primary", "tail_alpha=0.75", "regime_weights=flat"):
+        assert required in SPECS
+
+
+def test_default_spec_is_primary_and_matches_config() -> None:
+    args = parse_args([])
+    assert args.spec == "primary"
+    assert dict(SPECS["primary"].params) == dict(PRIMARY_PARAMS)
+
+
+def test_tail_alpha_spec_resolves_oat_params() -> None:
+    args = parse_args(["--spec", "tail_alpha=0.75"])
+    params = dict(SPECS[args.spec].params)
+    assert params["tail_alpha"] == 0.75
+    for key, value in PRIMARY_PARAMS.items():
+        if key != "tail_alpha":
+            assert params[key] == value
+
+
+def test_flat_weights_spec_resolves_raw_weights() -> None:
+    args = parse_args(["--spec", "regime_weights=flat"])
+    params = dict(SPECS[args.spec].params)
+    assert params["regime_weights"] == (1.0,) * 5
+
+
+def test_update_canonical_rejected_for_non_primary_spec() -> None:
+    with pytest.raises(SystemExit):
+        parse_args(
+            [
+                "--spec",
+                "tail_alpha=0.75",
+                "--n-outer-resamples",
+                "40",
+                "--update-canonical",
+            ]
+        )
+
+
+def test_unregistered_spec_rejected() -> None:
+    with pytest.raises(SystemExit):
+        parse_args(["--spec", "tail_alpha=0.9"])
+
+
+def test_build_metrics_receives_spec_params() -> None:
+    metrics = build_metrics(**SPECS["tail_alpha=0.75"].params)
+    assert [metric.name for metric in metrics] == ["M1", "M2", "M3", "M4"]
+    assert metrics[0].tail_alpha == 0.75
+
+    flat_metrics = build_metrics(**SPECS["regime_weights=flat"].params)
+    m4 = flat_metrics[3]
+    # RegimeConditionalTails normalizes raw weights to sum to one.
+    assert np.allclose(m4.regime_weights, np.full(5, 0.2))
+
+
+def test_run_tag_encodes_spec_without_equals() -> None:
+    args = argparse.Namespace(
+        spec="tail_alpha=0.75",
+        n_resamples=100,
+        tickers_per_draw=200,
+        seed=42,
+        n_outer_resamples=200,
+        n_mc_repeats=0,
+    )
+    tag = run_tag(args, "20260802-000000-000000", 8)
+    assert "spec-tail_alpha-0.75" in tag
+    assert "=" not in tag
