@@ -32,8 +32,9 @@ def git_commit() -> str:
 
 def run_tag(args: argparse.Namespace, stamp: str, resolved_jobs: int) -> str:
     """Build a collision-resistant filename tag for one run."""
+    spec = getattr(args, "spec", "primary").replace("=", "-")
     return (
-        f"B{args.n_resamples}_m{args.tickers_per_draw}_seed{args.seed}"
+        f"spec-{spec}_B{args.n_resamples}_m{args.tickers_per_draw}_seed{args.seed}"
         f"_O{args.n_outer_resamples}_MC{args.n_mc_repeats}"
         f"_J{resolved_jobs}_{stamp}"
     )
@@ -44,6 +45,7 @@ def new_run_record(args: argparse.Namespace, stamp: str) -> dict:
     return {
         "run_id": stamp,
         "started_at": datetime.now().isoformat(timespec="seconds"),
+        "spec": getattr(args, "spec", "primary"),
         "n_resamples": args.n_resamples,
         "tickers_per_draw": args.tickers_per_draw,
         "seed": args.seed,

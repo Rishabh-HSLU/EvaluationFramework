@@ -11,6 +11,9 @@ from fineval.benchmark.config import MIN_OUTER_REPLICATES_FOR_CI, RESULTS_DIR
 from fineval.benchmark.reporting import log
 from fineval.benchmark.runner import run_benchmark
 from fineval.config import SEED
+from fineval.scripts.sensitivity.grid import GRID
+
+SPECS = {spec.spec_id: spec for spec in GRID}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,6 +22,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--n-resamples", type=int, default=100, help="inner matched draws B")
     parser.add_argument("--tickers-per-draw", type=int, default=200)
     parser.add_argument("--seed", type=int, default=SEED)
+    parser.add_argument(
+        "--spec",
+        type=str,
+        default="primary",
+        choices=sorted(SPECS),
+        help="pre-registered sensitivity spec whose metric parameters to run",
+    )
     parser.add_argument(
         "--n-jobs",
         type=int,
@@ -89,12 +99,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error(
             f"--update-canonical requires --n-outer-resamples >= {MIN_OUTER_REPLICATES_FOR_CI}"
         )
+    if args.update_canonical and args.spec != "primary":
+        parser.error("--update-canonical is only allowed for --spec primary")
     return args
 
 
 def main(argv: list[str] | None = None) -> None:
     """Run the benchmark and record completion or failure in the manifest."""
     args = parse_args(argv)
+    args.spec_params = dict(SPECS[args.spec].params)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     record = new_run_record(args, stamp)

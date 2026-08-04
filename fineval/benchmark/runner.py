@@ -121,7 +121,13 @@ def run_benchmark(args, stamp: str, record: dict) -> None:
         log(f"Preprocessing completed in {time.monotonic() - started:.1f}s.")
 
         started = progress.stage("Configure metrics and parallel engine")
-        metrics = build_metrics()
+        spec_params = dict(getattr(args, "spec_params", None) or {})
+        metrics = build_metrics(**spec_params)
+        if spec_params:
+            log(
+                "Resolved spec parameters: "
+                + ", ".join(f"{key}={value}" for key, value in sorted(spec_params.items()))
+            )
         engine = MatchedTickerBootstrap(
             metrics=metrics,
             n_resamples=args.n_resamples,
