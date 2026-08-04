@@ -142,7 +142,7 @@ def run_outer_bootstrap(
     if show_progress:
         tqdm.write(
             "Outer-bootstrap worker plan: "
-            f"{outer_workers} process(es) × {inner_workers} inner thread(s), "
+            f"{outer_workers} replicate process(es) × {inner_workers} inner process(es), "
             f"{len(payloads)} chunk(s), {engine.n_resamples} inner draws/replicate."
         )
 
@@ -246,7 +246,7 @@ def run_monte_carlo_stability(
     if show_progress:
         tqdm.write(
             "Monte Carlo worker plan: "
-            f"{repeat_workers} process(es) × {inner_workers} inner thread(s), "
+            f"{repeat_workers} repeat process(es) × {inner_workers} inner process(es), "
             f"{len(payloads)} chunk(s), {engine.n_resamples} inner draws/repeat."
         )
 
