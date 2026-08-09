@@ -20,10 +20,37 @@ def test_specs_match_grid_ids() -> None:
         assert required in SPECS
 
 
-def test_default_spec_is_primary_and_matches_config() -> None:
+def test_default_spec_is_primary() -> None:
     args = parse_args([])
     assert args.spec == "primary"
-    assert dict(SPECS["primary"].params) == dict(PRIMARY_PARAMS)
+    assert args.spec_params == dict(PRIMARY_PARAMS)
+
+
+def test_primary_spec_reproduces_canonical_metrics() -> None:
+    """Guard the drift that ``--spec primary`` would otherwise hide.
+
+    ``PRIMARY_PARAMS`` is a hand-maintained copy of the canonical
+    ``fineval.config`` constants, kept separate so the grid module stays
+    import-free. Routing the canonical run through it means an edit to
+    either side that is not mirrored on the other silently changes the
+    numbers a ``--spec primary`` run produces, under an unchanged label.
+    Compare the constructed metrics rather than the parameter dicts: the
+    two differ by design on ``regime_weights`` (raw here, pre-normalized in
+    ``fineval.config``) and only agree once the metric has normalized them.
+    """
+    canonical = build_metrics()
+    primary = build_metrics(**PRIMARY_PARAMS)
+
+    assert [metric.name for metric in canonical] == [metric.name for metric in primary]
+    for expected, actual in zip(canonical, primary, strict=True):
+        assert type(expected) is type(actual)
+        assert expected.__dict__.keys() == actual.__dict__.keys()
+        for attribute, value in expected.__dict__.items():
+            np.testing.assert_array_equal(
+                np.asarray(actual.__dict__[attribute]),
+                np.asarray(value),
+                err_msg=f"{expected.name}.{attribute} drifted between config and grid",
+            )
 
 
 def test_tail_alpha_spec_resolves_oat_params() -> None:
