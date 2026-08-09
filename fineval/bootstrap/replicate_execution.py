@@ -19,6 +19,14 @@ caps thread scaling well below the worker budget. The cost is that the inner
 pool is rebuilt once per replicate and its initializer re-serializes the
 resampled panels to each inner worker, so the trade is only favourable while
 a replicate's ``n_resamples`` draws outweigh that fixed per-replicate setup.
+
+Both pools pin the ``spawn`` start method. ``fork`` is materially cheaper —
+it inherits the panels for free, where ``spawn`` re-imports and re-pickles
+them into every new worker (0.05s versus 6.2s per inner pool at full corpus
+size, roughly 1.5% of an outer-bootstrap stage). It is pinned anyway because
+forking a process that holds threads risks deadlock in the child, and pinning
+makes behaviour identical regardless of the platform default rather than
+depending on it.
 """
 
 from __future__ import annotations
