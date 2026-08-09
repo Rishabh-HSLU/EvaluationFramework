@@ -23,6 +23,7 @@ a replicate's ``n_resamples`` draws outweigh that fixed per-replicate setup.
 
 from __future__ import annotations
 
+import multiprocessing as mp
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
@@ -203,6 +204,7 @@ def run_replicate_chunks(
 
         with ProcessPoolExecutor(
             max_workers=workers,
+            mp_context=mp.get_context("spawn"),
             initializer=initializer,
             initargs=initargs,
         ) as executor:

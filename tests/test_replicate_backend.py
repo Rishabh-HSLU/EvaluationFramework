@@ -125,6 +125,35 @@ def test_nested_process_pools_reproduce_serial_outer_bootstrap(corpora) -> None:
     pd.testing.assert_frame_equal(serial.metric_summary, nested.metric_summary, check_exact=True)
 
 
+def test_inner_process_pool_uses_spawn(monkeypatch, corpora) -> None:
+    """Process execution must not fork a potentially multithreaded parent."""
+    real, synthetics = corpora
+    contexts = []
+
+    class RecordingExecutor:
+        def __init__(self, *, mp_context, initializer, initargs, **_kwargs):
+            contexts.append(mp_context.get_start_method())
+            initializer(*initargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def submit(self, function, payload):
+            from concurrent.futures import Future
+
+            future = Future()
+            future.set_result(function(payload))
+            return future
+
+    monkeypatch.setattr("fineval.bootstrap.execution.ProcessPoolExecutor", RecordingExecutor)
+    _engine(n_jobs=2).run(real, synthetics, show_progress=False, parallel_backend="processes")
+
+    assert contexts == ["spawn"]
+
+
 def test_nested_process_pools_reproduce_serial_mc_stability(corpora) -> None:
     real, synthetics = corpora
 

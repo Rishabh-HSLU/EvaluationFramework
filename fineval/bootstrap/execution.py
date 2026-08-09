@@ -7,6 +7,7 @@ It intentionally contains no uncertainty-analysis or reporting logic.
 from __future__ import annotations
 
 import math
+import multiprocessing as mp
 import os
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
@@ -215,6 +216,7 @@ def execute_inner_draws(
         executor_kwargs: dict = {"max_workers": workers}
         if backend == "processes":
             executor_kwargs.update(
+                mp_context=mp.get_context("spawn"),
                 initializer=_init_inner_process_worker,
                 initargs=(real, synthetics, metrics),
             )
