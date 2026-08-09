@@ -31,8 +31,15 @@ def git_commit() -> str:
 
 
 def run_tag(args: argparse.Namespace, stamp: str, resolved_jobs: int) -> str:
-    """Build a collision-resistant filename tag for one run."""
-    spec = getattr(args, "spec", "primary").replace("=", "-")
+    """Build a collision-resistant filename tag for one run.
+
+    The spec id leads the tag because it is the only run parameter that
+    changes the metric definitions themselves: two specs sharing B, m and
+    seed produce non-comparable numbers and must not share a filename.
+    ``=`` is rewritten to ``-`` so ids such as ``tail_alpha=0.75`` stay
+    usable as path components.
+    """
+    spec = args.spec.replace("=", "-")
     return (
         f"spec-{spec}_B{args.n_resamples}_m{args.tickers_per_draw}_seed{args.seed}"
         f"_O{args.n_outer_resamples}_MC{args.n_mc_repeats}"
@@ -45,7 +52,7 @@ def new_run_record(args: argparse.Namespace, stamp: str) -> dict:
     return {
         "run_id": stamp,
         "started_at": datetime.now().isoformat(timespec="seconds"),
-        "spec": getattr(args, "spec", "primary"),
+        "spec": args.spec,
         "n_resamples": args.n_resamples,
         "tickers_per_draw": args.tickers_per_draw,
         "seed": args.seed,

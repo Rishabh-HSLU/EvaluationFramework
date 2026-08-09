@@ -95,7 +95,12 @@ def _print_tables(
 
 
 def run_benchmark(args, stamp: str, record: dict) -> None:
-    """Execute one complete benchmark run and update its manifest record."""
+    """Execute one complete benchmark run and update its manifest record.
+
+    ``args`` is a namespace produced by ``scripts.run_benchmark.parse_args``;
+    ``args.spec_params`` is the complete resolved metric parameter set for
+    ``args.spec``, never a delta from the primary specification.
+    """
     planned_draws = args.n_resamples * (1 + args.n_outer_resamples + max(0, args.n_mc_repeats - 1))
     log(
         f"Starting benchmark: B={args.n_resamples}, m={args.tickers_per_draw}, "
@@ -121,13 +126,11 @@ def run_benchmark(args, stamp: str, record: dict) -> None:
         log(f"Preprocessing completed in {time.monotonic() - started:.1f}s.")
 
         started = progress.stage("Configure metrics and parallel engine")
-        spec_params = dict(getattr(args, "spec_params", None) or {})
-        metrics = build_metrics(**spec_params)
-        if spec_params:
-            log(
-                "Resolved spec parameters: "
-                + ", ".join(f"{key}={value}" for key, value in sorted(spec_params.items()))
-            )
+        metrics = build_metrics(**args.spec_params)
+        log(
+            f"Resolved spec {args.spec!r}: "
+            + ", ".join(f"{key}={value}" for key, value in sorted(args.spec_params.items()))
+        )
         engine = MatchedTickerBootstrap(
             metrics=metrics,
             n_resamples=args.n_resamples,
