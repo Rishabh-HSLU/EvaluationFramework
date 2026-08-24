@@ -9,18 +9,6 @@ The two baselines anchor opposite ends of the score range:
   cleanly from real data — it anchors the low end the same way the
   real-vs-real baseline anchors the high end.
 - **MSV** (multi-scale stochastic volatility, in the two-timescale
-  spirit of Fouque, Papanicolaou & Sircar) is the positive control
-  for M2. Log-volatility is the sum of a *slow* factor — long-memory
-  fractional Gaussian noise across sessions, constant within each
-  session, reproducing the day-level volatility persistence that
-  dominates real's within-session |r| ACF — and a *fast* intraday
-  OU/AR(1) factor reproducing the short-lag decay. A model *designed*
-  to satisfy the fact M2 measures should score well on M2, providing
-  a model-based positive control for the metric's top end (a
-  resampled-real control would be tautological; single-factor
-  FIGARCH and LMSV attempts decayed far too steeply — all documented
-  in scripts/reasoning.md).
-- **MSV** (multi-scale stochastic volatility, in the two-timescale
   spirit of Fouque, Papanicolaou & Sircar) is a model-based positive
   control for M2. Log-volatility is the sum of a *slow* factor —
   long-memory fractional Gaussian noise across sessions, constant
