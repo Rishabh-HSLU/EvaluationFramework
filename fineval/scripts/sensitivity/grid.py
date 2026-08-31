@@ -9,9 +9,9 @@ Design commitments encoded here:
 
 - The grid is one-at-a-time around the primary specification. Every sweep
   list contains the primary value; those entries collapse onto the single
-  ``primary`` spec and are not re-run, giving 13 distinct specs:
-  1 primary + 4 tail_alpha + 3 tail_lambda + 2 window + 2 tail_fraction
-  + 1 regime_weights.
+  ``primary`` spec and are not re-run, giving 15 distinct specs:
+  1 primary + 4 tail_alpha + 3 tail_lambda + 2 window + 2 min_frac
+  + 2 tail_fraction + 1 regime_weights.
 - ``min_periods`` is a DERIVED parameter:
   ``min_periods = ceil(window * min_frac)``. Both factors are dials, so the
   derivation holds when either varies. It is written out explicitly per spec
@@ -139,6 +139,12 @@ GRID: tuple[Spec, ...] = (
     # tail_fraction sweep: {0.025, 0.05*, 0.10}
     _spec("tail_fraction", 0.025, "tail_fraction=0.025", tail_fraction=0.025),
     _spec("tail_fraction", 0.10, "tail_fraction=0.100", tail_fraction=0.10),
+    # min_frac sweep: {1/3, 1/2*, 2/3} at window=60; min_periods follows.
+    # Item 2 — the coefficient chosen by two AIL-scored sweeps, previously
+    # pinned at 1/2 in every spec. 1/3 is the superseded optimum (mp=20) and
+    # 2/3 the runner-up the re-sweep rejected on AIL-coverage grounds (mp=40).
+    _spec("min_frac", 1 / 3, "min_frac=0.333", min_frac=1 / 3, min_periods=20),
+    _spec("min_frac", 2 / 3, "min_frac=0.667", min_frac=2 / 3, min_periods=40),
     # regime_weights sweep: {(1,1,1,2,3)*, flat}
     _spec(
         "regime_weights",
