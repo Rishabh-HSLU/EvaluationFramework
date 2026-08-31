@@ -113,7 +113,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         )
     if args.update_canonical and args.spec != "primary":
         parser.error("--update-canonical is only allowed for --spec primary")
-    args.spec_params = dict(SPECS[args.spec].params)
+    args.spec_params = dict(SPECS[args.spec].metric_params)
     return args
 
 
