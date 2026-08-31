@@ -11,6 +11,12 @@ from fineval.benchmark.config import MIN_OUTER_REPLICATES_FOR_CI, RESULTS_DIR
 from fineval.benchmark.reporting import log
 from fineval.benchmark.runner import run_benchmark
 from fineval.config import SEED
+from fineval.scripts.sensitivity.grid import GRID
+
+#: Selectable specifications, keyed by ``spec_id``. Every run resolves to
+#: exactly one of these, so a run's metric parameters are always a member of
+#: the pre-specified grid rather than free-form CLI values.
+SPECS = {spec.spec_id: spec for spec in GRID}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,6 +25,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--n-resamples", type=int, default=100, help="inner matched draws B")
     parser.add_argument("--tickers-per-draw", type=int, default=200)
     parser.add_argument("--seed", type=int, default=SEED)
+    parser.add_argument(
+        "--spec",
+        type=str,
+        default="primary",
+        choices=sorted(SPECS),
+        help=(
+            "pre-specified sensitivity spec whose metric parameters to run; "
+            "primary reproduces the canonical fineval.config parameters"
+        ),
+    )
     parser.add_argument(
         "--n-jobs",
         type=int,
@@ -67,7 +83,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse and validate benchmark CLI arguments."""
+    """Parse and validate benchmark CLI arguments.
+
+    Also resolves ``--spec`` into ``args.spec_params``, the complete
+    eight-key parameter set passed to ``build_metrics``. Resolution happens
+    here rather than in ``main`` so that every consumer of a parsed
+    namespace sees both ``spec`` and ``spec_params``.
+    """
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -89,6 +111,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error(
             f"--update-canonical requires --n-outer-resamples >= {MIN_OUTER_REPLICATES_FOR_CI}"
         )
+    if args.update_canonical and args.spec != "primary":
+        parser.error("--update-canonical is only allowed for --spec primary")
+    args.spec_params = dict(SPECS[args.spec].metric_params)
     return args
 
 

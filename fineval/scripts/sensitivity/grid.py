@@ -81,6 +81,14 @@ DERIVED_PARAMS = MappingProxyType(
     }
 )
 
+#: The primary specification. These values duplicate the canonical
+#: ``fineval.config`` constants rather than importing them, to keep this
+#: module self-contained as a pre-specified artifact (see above).
+#: ``run_benchmark --spec primary`` runs the canonical benchmark through
+#: this table, so an edit here that is not mirrored in ``fineval.config``
+#: changes the canonical numbers under an unchanged label.
+#: ``tests/test_spec_flag.py`` asserts the two sides construct identical
+#: metrics.
 PRIMARY_PARAMS = MappingProxyType(
     {
         "n_grid": 5001,
