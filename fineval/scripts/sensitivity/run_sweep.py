@@ -124,16 +124,27 @@ def assert_grid_integrity() -> None:
             if spec.params != dict(PRIMARY_PARAMS):
                 problems.append(f"{spec.spec_id}: primary params differ from PRIMARY_PARAMS")
             continue
-        if spec.dial not in DIAL_TO_METRIC:
-            problems.append(f"{spec.spec_id}: unknown dial {spec.dial!r}")
+        unknown = [dial for dial in spec.dials if dial not in DIAL_TO_METRIC]
+        if unknown:
+            problems.append(f"{spec.spec_id}: unknown dial(s) {unknown!r}")
             continue
-        if spec.params[spec.dial] == PRIMARY_PARAMS[spec.dial]:
-            problems.append(f"{spec.spec_id}: dial value equals primary; should have collapsed")
-        allowed = {spec.dial, *DERIVED_PARAMS.get(spec.dial, ())}
+        if spec.dial == "corner":
+            if len(spec.dials) < 2:
+                problems.append(f"{spec.spec_id}: corner spec varies {len(spec.dials)} dial(s)")
+        elif spec.dials != (spec.dial,):
+            problems.append(
+                f"{spec.spec_id}: dials {spec.dials!r} disagree with dial {spec.dial!r}"
+            )
+        for dial in spec.dials:
+            if spec.params[dial] == PRIMARY_PARAMS[dial]:
+                problems.append(f"{spec.spec_id}: {dial} equals primary; should have collapsed")
+        allowed = set(spec.dials)
+        for dial in spec.dials:
+            allowed.update(DERIVED_PARAMS.get(dial, ()))
         for key in PARAM_KEYS:
             if key not in allowed and spec.params[key] != PRIMARY_PARAMS[key]:
                 problems.append(
-                    f"{spec.spec_id}: OAT violation — {key} varies alongside {spec.dial}"
+                    f"{spec.spec_id}: off-axis variation — {key} moves but is not a declared dial"
                 )
         expected_mp = math.ceil(spec.params["window"] * spec.params["min_frac"])
         if spec.params["min_periods"] != expected_mp:
@@ -162,8 +173,8 @@ def metrics_for(spec: Spec, fast: bool) -> list:
     metrics = build_metrics(**spec.metric_params)
     if not fast or spec.dial == "none":
         return metrics
-    affected = DIAL_TO_METRIC[spec.dial]
-    return [metric for metric in metrics if metric.name == affected]
+    affected = set(spec.affected_metrics)
+    return [metric for metric in metrics if metric.name in affected]
 
 
 def identity_block(spec: Spec, args: argparse.Namespace, stamp: str) -> dict:
@@ -495,7 +506,7 @@ def dry_run(args: argparse.Namespace) -> None:
     for spec in GRID:
         p = spec.params
         run_metrics = (
-            DIAL_TO_METRIC[spec.dial] if args.fast and spec.dial != "none" else "M1,M2,M3,M4"
+            ",".join(spec.affected_metrics) if args.fast and spec.dial != "none" else "M1,M2,M3,M4"
         )
         weights = ":".join(f"{w:g}" for w in p["regime_weights"])
         print(

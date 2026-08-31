@@ -7,6 +7,11 @@ self-contained as a future pre-registration artifact.
 
 Design commitments encoded here:
 
+- Most specs are one-at-a-time around the primary specification, and OAT
+  measures main effects only. Specs with ``dial == "corner"`` are the
+  deliberate exception: they move two dials at once so the no-interaction
+  assumption can be tested rather than asserted. ``Spec.dials`` is the
+  authoritative list of what a spec varies; ``dial`` is its label.
 - The grid is one-at-a-time around the primary specification. Every sweep
   list contains the primary value; those entries collapse onto the single
   ``primary`` spec and are not re-run, giving 16 distinct specs:
@@ -109,21 +114,43 @@ class Spec:
     dial: str
     dial_value: Any
     params: dict[str, Any] = field(repr=False)
+    dials: tuple[str, ...] = ()
 
     @property
     def metric_params(self) -> dict[str, Any]:
         """The subset of ``params`` that ``build_metrics`` accepts."""
         return {key: self.params[key] for key in METRIC_PARAM_KEYS}
 
+    @property
+    def affected_metrics(self) -> tuple[str, ...]:
+        """Metrics this spec's dials can move, in M1..M4 order."""
+        affected = {DIAL_TO_METRIC[dial] for dial in self.dials}
+        return tuple(sorted(affected))
+
 
 def _spec(dial: str, dial_value: Any, spec_id: str, **overrides: Any) -> Spec:
     params = dict(PRIMARY_PARAMS)
     params.update(overrides)
-    return Spec(spec_id=spec_id, dial=dial, dial_value=dial_value, params=params)
+    return Spec(spec_id=spec_id, dial=dial, dial_value=dial_value, params=params, dials=(dial,))
+
+
+def _corner(dials: tuple[str, ...], spec_id: str, **overrides: Any) -> Spec:
+    """A deliberate off-axis spec that moves more than one dial at once.
+
+    The grid is one-at-a-time, which measures main effects only. A claim
+    that the ranking is insensitive to the parameters is a claim about the
+    joint surface, and OAT cannot see interaction. These specs sit at the
+    corners of the already-swept ranges so the interaction term can be read
+    off directly against the corresponding single-dial specs.
+    """
+    params = dict(PRIMARY_PARAMS)
+    params.update(overrides)
+    dial_value = tuple(params[dial] for dial in dials)
+    return Spec(spec_id=spec_id, dial="corner", dial_value=dial_value, params=params, dials=dials)
 
 
 GRID: tuple[Spec, ...] = (
-    Spec(spec_id="primary", dial="none", dial_value=None, params=dict(PRIMARY_PARAMS)),
+    Spec(spec_id="primary", dial="none", dial_value=None, params=dict(PRIMARY_PARAMS), dials=()),
     # tail_alpha sweep: {0, 0.15, 0.3*, 0.5, 0.75, 0.9}  (* = primary)
     _spec("tail_alpha", 0.0, "tail_alpha=0.00", tail_alpha=0.0),
     _spec("tail_alpha", 0.15, "tail_alpha=0.15", tail_alpha=0.15),
