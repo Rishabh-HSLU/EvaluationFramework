@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from fineval.scripts.sensitivity import run_sweep
+from fineval.scripts.sensitivity.grid import GRID
 
 
 @pytest.mark.parametrize(
@@ -50,7 +51,7 @@ def test_failed_specs_produce_a_failing_exit(monkeypatch, tmp_path) -> None:
         n_jobs=1,
         fast=False,
     )
-    with pytest.raises(RuntimeError, match=r"failed for 13 spec\(s\)"):
+    with pytest.raises(RuntimeError, match=rf"failed for {len(GRID)} spec\(s\)"):
         run_sweep.run_sweep(args)
 
     manifest = pd.read_csv(tmp_path / "sweep_manifest.csv")
