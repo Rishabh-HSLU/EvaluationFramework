@@ -9,8 +9,19 @@ import pytest
 
 from fineval.benchmark.artifacts import run_tag
 from fineval.benchmark.config import build_metrics
-from fineval.scripts.sensitivity.grid import GRID, PRIMARY_PARAMS
+from fineval.scripts.sensitivity.grid import GRID, METRIC_PARAM_KEYS, PRIMARY_PARAMS
 from scripts.run_benchmark import SPECS, parse_args
+
+
+def _metric_params(params) -> dict:
+    """Project a full parameter set onto what ``build_metrics`` accepts.
+
+    Mirrors ``Spec.metric_params``. ``PRIMARY_PARAMS`` is a bare mapping
+    rather than a ``Spec``, so it carries no such property of its own, but
+    it has the same superset problem: ``PARAM_KEYS`` includes the
+    grid-level ``min_frac`` dial and ``build_metrics`` does not accept it.
+    """
+    return {key: params[key] for key in METRIC_PARAM_KEYS}
 
 
 def test_specs_match_grid_ids() -> None:
@@ -23,7 +34,7 @@ def test_specs_match_grid_ids() -> None:
 def test_default_spec_is_primary() -> None:
     args = parse_args([])
     assert args.spec == "primary"
-    assert args.spec_params == dict(PRIMARY_PARAMS)
+    assert args.spec_params == _metric_params(PRIMARY_PARAMS)
 
 
 def test_primary_spec_reproduces_canonical_metrics() -> None:
@@ -39,7 +50,7 @@ def test_primary_spec_reproduces_canonical_metrics() -> None:
     ``fineval.config``) and only agree once the metric has normalized them.
     """
     canonical = build_metrics()
-    primary = build_metrics(**PRIMARY_PARAMS)
+    primary = build_metrics(**_metric_params(PRIMARY_PARAMS))
 
     assert [metric.name for metric in canonical] == [metric.name for metric in primary]
     for expected, actual in zip(canonical, primary, strict=True):
@@ -87,11 +98,11 @@ def test_unregistered_spec_rejected() -> None:
 
 
 def test_build_metrics_receives_spec_params() -> None:
-    metrics = build_metrics(**SPECS["tail_alpha=0.75"].params)
+    metrics = build_metrics(**SPECS["tail_alpha=0.75"].metric_params)
     assert [metric.name for metric in metrics] == ["M1", "M2", "M3", "M4"]
     assert metrics[0].tail_alpha == 0.75
 
-    flat_metrics = build_metrics(**SPECS["regime_weights=flat"].params)
+    flat_metrics = build_metrics(**SPECS["regime_weights=flat"].metric_params)
     m4 = flat_metrics[3]
     # RegimeConditionalTails normalizes raw weights to sum to one.
     assert np.allclose(m4.regime_weights, np.full(5, 0.2))
