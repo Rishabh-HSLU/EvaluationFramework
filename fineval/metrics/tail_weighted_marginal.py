@@ -46,7 +46,24 @@ class TailWeightedMarginal(BaseMetric):
 
     def extract_features(self, returns: pd.DataFrame) -> np.ndarray:
         """
-        Extracts the empirical quantile function for the fully pooled return series.
+        Extracts the empirical quantile function for the pooled standardized returns.
+
+        Every column is divided by its own standard deviation before the panel is
+        pooled. Pooling raw returns across tickers with unequal variances makes the
+        marginal a scale mixture, which is leptokurtic even when each individual
+        series is Gaussian, so the pooled tail would partly reflect cross-sectional
+        volatility dispersion rather than distributional shape. Standardizing per
+        ticker removes that artifact.
+
+        The standard deviation is used rather than a robust width such as the MAD
+        because it gives every column unit variance, which makes the pooled kurtosis
+        the mean of the per-ticker kurtoses. The MAD estimates bulk width only and
+        inflates pooled kurtosis on heavy-tailed panels.
+
+        Scales are computed from the panel as passed in, never from a stored
+        reference, so the metric remains stateless in the sense required by
+        `BaseMetric`. Column subsampling retains every row, so a column's scale does
+        not depend on which draw it appears in.
 
         This method strictly adheres to the framework's non-imputation policy.
         It flattens the wide return matrix and aggressively drops any `NaN` values
@@ -60,8 +77,22 @@ class TailWeightedMarginal(BaseMetric):
         Returns:
             np.ndarray: A 1D array of shape `(n_grid,)` representing the quantile
                 values evaluated over a uniform grid `u \\in (0, 1)`.
+
+        Raises:
+            ValueError: If any column has a zero or non-finite standard deviation.
+                Such a column is named rather than dropped, so that a data problem
+                cannot silently reduce the effective ticker count.
         """
-        flat = returns.to_numpy().ravel()
+        observed = returns.to_numpy(dtype=float)
+        observed = np.where(np.isfinite(observed), observed, np.nan)
+        scales = np.nanstd(observed, axis=0, ddof=1)
+        degenerate = ~np.isfinite(scales) | (scales <= 0.0)
+        if degenerate.any():
+            raise ValueError(
+                "Cannot standardize columns with zero or non-finite standard "
+                f"deviation: {returns.columns[degenerate].tolist()}"
+            )
+        flat = (observed / scales).ravel()
         valid = flat[np.isfinite(flat)]
         if valid.size == 0:
             return np.full(self.n_grid, np.nan)
