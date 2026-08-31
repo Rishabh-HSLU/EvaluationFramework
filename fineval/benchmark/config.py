@@ -27,7 +27,7 @@ from fineval.metrics import (
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-CURATED_DIR = ROOT_DIR / "fineval" / "scripts" / "data" / "curated"
+CURATED_DIR = ROOT_DIR / "data" / "curated"
 RESULTS_DIR = ROOT_DIR / "results"
 
 MIN_OUTER_REPLICATES_FOR_CI = 40
