@@ -114,8 +114,8 @@ def assert_grid_integrity() -> None:
     ids = [spec.spec_id for spec in GRID]
     if len(set(ids)) != len(ids):
         problems.append(f"duplicate spec_id values in {ids}")
-    if len(GRID) != 15:
-        problems.append(f"expected 15 specs, found {len(GRID)}")
+    if len(GRID) != 16:
+        problems.append(f"expected 16 specs, found {len(GRID)}")
     for spec in GRID:
         if set(spec.params) != set(PARAM_KEYS):
             problems.append(f"{spec.spec_id}: params keys {sorted(spec.params)} incomplete")

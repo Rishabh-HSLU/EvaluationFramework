@@ -9,8 +9,8 @@ Design commitments encoded here:
 
 - The grid is one-at-a-time around the primary specification. Every sweep
   list contains the primary value; those entries collapse onto the single
-  ``primary`` spec and are not re-run, giving 15 distinct specs:
-  1 primary + 4 tail_alpha + 3 tail_lambda + 2 window + 2 min_frac
+  ``primary`` spec and are not re-run, giving 16 distinct specs:
+  1 primary + 5 tail_alpha + 3 tail_lambda + 2 window + 2 min_frac
   + 2 tail_fraction + 1 regime_weights.
 - ``min_periods`` is a DERIVED parameter:
   ``min_periods = ceil(window * min_frac)``. Both factors are dials, so the
@@ -124,11 +124,17 @@ def _spec(dial: str, dial_value: Any, spec_id: str, **overrides: Any) -> Spec:
 
 GRID: tuple[Spec, ...] = (
     Spec(spec_id="primary", dial="none", dial_value=None, params=dict(PRIMARY_PARAMS)),
-    # tail_alpha sweep: {0, 0.15, 0.3*, 0.5, 0.75}  (* = primary, not re-run)
+    # tail_alpha sweep: {0, 0.15, 0.3*, 0.5, 0.75, 0.9}  (* = primary)
     _spec("tail_alpha", 0.0, "tail_alpha=0.00", tail_alpha=0.0),
     _spec("tail_alpha", 0.15, "tail_alpha=0.15", tail_alpha=0.15),
     _spec("tail_alpha", 0.5, "tail_alpha=0.50", tail_alpha=0.5),
     _spec("tail_alpha", 0.75, "tail_alpha=0.75", tail_alpha=0.75),
+    # Item 5 — 0.75 was the largest value ever swept, so any claim about the
+    # behaviour of tail_alpha "up to 1" rests on an untested boundary. 0.9
+    # probes it: the weight stays integrable and normalizes to unit mean
+    # (max weight 284 vs 119 at 0.75), so the boundary is reachable in
+    # practice and its effect is measurable rather than asserted.
+    _spec("tail_alpha", 0.9, "tail_alpha=0.90", tail_alpha=0.9),
     # tail_lambda sweep: {0, 0.5, 1.0*, 2.0}
     _spec("tail_lambda", 0.0, "tail_lambda=0.0", tail_lambda=0.0),
     _spec("tail_lambda", 0.5, "tail_lambda=0.5", tail_lambda=0.5),
