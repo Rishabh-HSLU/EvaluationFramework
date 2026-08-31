@@ -14,9 +14,9 @@ Design commitments encoded here:
   authoritative list of what a spec varies; ``dial`` is its label.
 - The grid is one-at-a-time around the primary specification. Every sweep
   list contains the primary value; those entries collapse onto the single
-  ``primary`` spec and are not re-run, giving 16 distinct specs:
+  ``primary`` spec and are not re-run, giving 17 distinct specs:
   1 primary + 5 tail_alpha + 3 tail_lambda + 2 window + 2 min_frac
-  + 2 tail_fraction + 1 regime_weights.
+  + 2 tail_fraction + 1 regime_weights + 1 M1 corner.
 - ``min_periods`` is a DERIVED parameter:
   ``min_periods = ceil(window * min_frac)``. Both factors are dials, so the
   derivation holds when either varies. It is written out explicitly per spec
@@ -178,6 +178,15 @@ GRID: tuple[Spec, ...] = (
     # 2/3 the runner-up the re-sweep rejected on AIL-coverage grounds (mp=40).
     _spec("min_frac", 1 / 3, "min_frac=0.333", min_frac=1 / 3, min_periods=20),
     _spec("min_frac", 2 / 3, "min_frac=0.667", min_frac=2 / 3, min_periods=40),
+    # Item 3 — M1 corner. Both single-dial counterparts already exist
+    # (tail_alpha=0.75, tail_lambda=2.0), so the interaction term reads off
+    # directly: corner - primary, minus the two main effects.
+    _corner(
+        ("tail_alpha", "tail_lambda"),
+        "corner=alpha0.75-lambda2.0",
+        tail_alpha=0.75,
+        tail_lambda=2.0,
+    ),
     # regime_weights sweep: {(1,1,1,2,3)*, flat}
     _spec(
         "regime_weights",
