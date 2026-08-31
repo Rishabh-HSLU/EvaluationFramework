@@ -15,7 +15,7 @@ from scripts.run_benchmark import SPECS, parse_args
 
 def test_specs_match_grid_ids() -> None:
     assert sorted(SPECS) == sorted(spec.spec_id for spec in GRID)
-    assert len(SPECS) == 13
+    assert len(SPECS) == 19
     for required in ("primary", "tail_alpha=0.75", "regime_weights=flat"):
         assert required in SPECS
 
