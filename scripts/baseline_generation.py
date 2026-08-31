@@ -51,19 +51,17 @@ Run from the repository root:
     uv run python -m scripts.baseline_generation
 """
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 from scipy.signal import lfilter
 
+from fineval.benchmark.config import CURATED_DIR
 from fineval.config import SEED
 from fineval.preprocessing.session_clock import (
     overnight_masked_log_returns,
     session_minute_position,
 )
 
-CURATED_DIR = Path(__file__).resolve().parent.parent / "data" / "curated"
 REAL_PATH = CURATED_DIR / "real_prices.parquet"
 GBM_OUTPUT_PATH = CURATED_DIR / "gbm_prices.parquet"
 MSV_OUTPUT_PATH = CURATED_DIR / "msv_prices.parquet"
