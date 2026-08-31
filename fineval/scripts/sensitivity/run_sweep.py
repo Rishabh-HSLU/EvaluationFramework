@@ -344,6 +344,7 @@ def run_sweep(args: argparse.Namespace) -> None:
     aggregate_frames: list[pd.DataFrame] = []
     primary_metric_rows: pd.DataFrame | None = None
     diagnostics_cache: dict[tuple, dict[str, dict[str, float]]] = {}
+    failed_specs: list[str] = []
 
     ordered = [spec for spec in GRID if spec.dial == "none"] + [
         spec for spec in GRID if spec.dial != "none"
@@ -408,6 +409,7 @@ def run_sweep(args: argparse.Namespace) -> None:
             manifest_row["status"] = "completed"
             log(f"Spec {spec.spec_id!r} completed in {time.monotonic() - started:.1f}s.")
         except Exception as exc:
+            failed_specs.append(spec.spec_id)
             manifest_row["error"] = f"{type(exc).__name__}: {exc}"
             log(f"Spec {spec.spec_id!r} FAILED: {manifest_row['error']}")
         finally:
@@ -421,6 +423,9 @@ def run_sweep(args: argparse.Namespace) -> None:
         pd.concat(aggregate_frames, ignore_index=True).to_csv(aggregate_path, index=False)
         log(f"Tidy metric results: {metric_path}")
         log(f"Tidy aggregate results: {aggregate_path}")
+    if failed_specs:
+        failed = ", ".join(repr(spec_id) for spec_id in failed_specs)
+        raise RuntimeError(f"Sensitivity sweep failed for {len(failed_specs)} spec(s): {failed}")
     log("Sweep finished.")
 
 
@@ -493,6 +498,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse and validate sensitivity-sweep arguments."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.n_resamples < 1:
+        parser.error("--n-resamples must be at least 1")
+    if args.tickers_per_draw < 1:
+        parser.error("--tickers-per-draw must be at least 1")
+    if args.n_jobs < -1:
+        parser.error("--n-jobs must be -1, 0, or a positive integer")
+    return args
+
+
 def dry_run(args: argparse.Namespace) -> None:
     log(f"DRY RUN — {len(GRID)} specs validated; nothing loaded, nothing executed.")
     mode = "fast" if args.fast else "full"
@@ -524,7 +542,7 @@ def dry_run(args: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
+    args = parse_args(argv)
     assert_grid_integrity()
     assert_primary_matches_config()
     log("Startup guards passed: grid integrity OK; primary spec matches fineval/config.py.")
