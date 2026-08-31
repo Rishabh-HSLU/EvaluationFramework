@@ -1,12 +1,13 @@
 """M1 — Tail-weighted marginal distribution.
 
-Compares the complete pooled marginal return distributions through a
-tail-weighted L1 distance between empirical quantile functions.
+Compares the pooled marginal return distributions through a tail-weighted
+L1 distance between empirical quantile functions, after every ticker is
+standardized by its own standard deviation.
 
 The metric emphasizes tail discrepancies but retains positive weight
-throughout the distribution. It is therefore sensitive to location, scale,
-bulk shape, and tail behavior and should not be interpreted as an isolated
-measure of tail thickness.
+throughout the distribution. It is therefore sensitive to location, bulk
+shape, and tail behavior, but not to per-ticker scale, and should not be
+interpreted as an isolated measure of tail thickness.
 """
 
 import numpy as np
@@ -18,9 +19,11 @@ from fineval.metrics.base import BaseMetric
 class TailWeightedMarginal(BaseMetric):
     r"""Evaluate marginal-distribution fidelity with tail emphasis.
 
-    The metric compares pooled empirical quantile functions using a smooth,
-    strictly positive weight over the entire quantile grid. Tail observations
-    receive greater weight, but bulk discrepancies remain part of the metric.
+    The metric standardizes every ticker by its own standard deviation, then
+    compares the pooled empirical quantile functions using a smooth, strictly
+    positive weight over the entire quantile grid. Tail observations receive
+    greater weight, but bulk discrepancies remain part of the metric.
+    Per-ticker scale is divided out and is therefore never compared.
     """
 
     def __init__(self, name: str, n_grid: int, tail_alpha: float, tail_lambda: float):

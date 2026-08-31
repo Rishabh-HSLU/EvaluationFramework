@@ -317,7 +317,7 @@ contract.
 
 | ID | Stylized fact | Statistic | Aggregation |
 |----|---|---|---|
-| M1 | Tail-weighted marginal distribution | Tail-weighted L1 distance between pooled empirical quantile functions | Pooled marginal |
+| M1 | Tail-weighted marginal distribution | Tail-weighted L1 distance between pooled empirical quantile functions of per-ticker standardized returns | Pooled marginal |
 | M2 | Volatility clustering | Gap between absolute-return ACFs over configured intraday lags | Per path, then cross-sectional mean |
 | M3 | Aggregational Gaussianity | Difference in excess-kurtosis decay across configured aggregation scales | Session-confined pooled blocks |
 | M4 | Regime-conditional tails | Difference in GPD tail-shape estimates across volatility quintiles | Regime-stratified pooled tails |
