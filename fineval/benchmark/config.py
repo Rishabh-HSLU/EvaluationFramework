@@ -41,14 +41,29 @@ METRIC_LABELS = {
 }
 
 
-def build_metrics() -> list:
-    """Construct all configured benchmark metrics."""
+def build_metrics(
+    *,
+    n_grid: int = M1_N_GRID,
+    tail_alpha: float = M1_TAIL_ALPHA,
+    tail_lambda: float = M1_TAIL_LAMBDA,
+    window: int = ROLLING_VOL_WINDOW,
+    min_periods: int = ROLLING_VOL_MIN_PERIODS,
+    n_regimes: int = N_REGIME_QUINTILES,
+    tail_fraction: float = TAIL_FRACTION,
+    regime_weights=REGIME_WEIGHTS,
+) -> list:
+    """Construct all configured benchmark metrics.
+
+    Keyword arguments default to the canonical ``fineval.config``
+    constants; calling with no arguments builds exactly the metrics
+    used by the benchmark runner.
+    """
     return [
         TailWeightedMarginal(
             name="M1",
-            n_grid=M1_N_GRID,
-            tail_alpha=M1_TAIL_ALPHA,
-            tail_lambda=M1_TAIL_LAMBDA,
+            n_grid=n_grid,
+            tail_alpha=tail_alpha,
+            tail_lambda=tail_lambda,
         ),
         VolatilityClustering(name="M2", lag_min=M2_LAG_MIN, lag_max=M2_LAG_MAX),
         AggregationalGaussianity(
@@ -56,10 +71,10 @@ def build_metrics() -> list:
         ),
         RegimeConditionalTails(
             name="M4",
-            window=ROLLING_VOL_WINDOW,
-            min_periods=ROLLING_VOL_MIN_PERIODS,
-            n_regimes=N_REGIME_QUINTILES,
-            tail_fraction=TAIL_FRACTION,
-            regime_weights=REGIME_WEIGHTS,
+            window=window,
+            min_periods=min_periods,
+            n_regimes=n_regimes,
+            tail_fraction=tail_fraction,
+            regime_weights=regime_weights,
         ),
     ]

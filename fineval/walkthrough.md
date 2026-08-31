@@ -226,14 +226,16 @@ absence is preserved, never fabricated over.
 
 ### The four implemented metrics
 
-**M1 — Unconditional heavy tails** (`unconditional_heavy_tails.py`).
-The marginal distribution of returns. Features: the empirical quantile
-function on a 5001-point grid, pooled across all tickers. Distance: a
-tail-weighted Wasserstein-1 — the mean absolute quantile gap under a
-smooth weight `w(u) = 1 + λ[u^-α + (1-u)^-α]` that keeps the whole
-distribution at baseline weight 1 while progressively up-weighting the
-extremes (α = 0.3, λ = 1.0, both validated by hyperparameter sweeps —
-see `scripts/reasoning.md`).
+**M1 — Tail-weighted marginal distribution** (`tail_weighted_marginal.py`,
+`TailWeightedMarginal`). The marginal distribution of returns. Features:
+the empirical quantile function on a 5001-point grid, pooled across all
+tickers after each is standardized by its own standard deviation.
+Distance: a tail-weighted Wasserstein-1 — the mean absolute quantile gap
+under a smooth weight `w(u) = 1 + λ[u^-α + (1-u)^-α]`, normalized to unit
+mean over the grid, which keeps positive weight across the whole
+distribution while progressively up-weighting the extremes (α = 0.3,
+λ = 1.0, both validated by hyperparameter sweeps — see
+`scripts/reasoning.md`).
 
 **M2 — Volatility clustering** (`volatility_clustering.py`).
 Long-memory temporal dependence. Features: the autocorrelation
