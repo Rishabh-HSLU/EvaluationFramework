@@ -89,6 +89,7 @@ def assert_primary_matches_config() -> None:
         ("min_periods", p["min_periods"], ROLLING_VOL_MIN_PERIODS),
         ("n_regimes", p["n_regimes"], N_REGIME_QUINTILES),
         ("tail_fraction", p["tail_fraction"], TAIL_FRACTION),
+        ("min_frac", p["min_frac"], ROLLING_VOL_MIN_FRAC),
     ]
     mismatches = [
         f"  {name}: grid={grid_value!r} != config={config_value!r}"
@@ -134,11 +135,12 @@ def assert_grid_integrity() -> None:
                 problems.append(
                     f"{spec.spec_id}: OAT violation — {key} varies alongside {spec.dial}"
                 )
-        expected_mp = math.ceil(spec.params["window"] * ROLLING_VOL_MIN_FRAC)
+        expected_mp = math.ceil(spec.params["window"] * spec.params["min_frac"])
         if spec.params["min_periods"] != expected_mp:
             problems.append(
                 f"{spec.spec_id}: min_periods={spec.params['min_periods']} violates "
-                f"the ceil(window * {ROLLING_VOL_MIN_FRAC}) = {expected_mp} rule"
+                f"the ceil(window * min_frac) = ceil({spec.params['window']} * "
+                f"{spec.params['min_frac']}) = {expected_mp} rule"
             )
     if problems:
         raise SystemExit("ABORT: grid integrity check failed:\n  " + "\n  ".join(problems))
@@ -157,7 +159,7 @@ def metrics_for(spec: Spec, fast: bool) -> list:
     M2/M3 rows are copied from the primary run afterwards, which is exact
     because draw indices do not depend on the metric list.
     """
-    metrics = build_metrics(**spec.params)
+    metrics = build_metrics(**spec.metric_params)
     if not fast or spec.dial == "none":
         return metrics
     affected = DIAL_TO_METRIC[spec.dial]
@@ -422,7 +424,7 @@ def spec_diagnostics(
         spec.params[name] for name in ("window", "min_periods", "n_regimes", "tail_fraction")
     )
     if key not in cache:
-        m4_metric = next(m for m in build_metrics(**spec.params) if m.name == "M4")
+        m4_metric = next(m for m in build_metrics(**spec.metric_params) if m.name == "M4")
         per_dataset = {"Real": m4_panel_diagnostics(m4_metric, deseas_real)}
         for generator, panel in synthetics.items():
             per_dataset[generator] = m4_panel_diagnostics(m4_metric, panel)
@@ -485,8 +487,8 @@ def dry_run(args: argparse.Namespace) -> None:
     mode = "fast" if args.fast else "full"
     header = (
         f"{'spec_id':<20} {'dial':<15} {'metrics run':<12} "
-        f"{'alpha':>6} {'lambda':>7} {'n_grid':>7} {'win':>4} {'min_p':>6} "
-        f"{'n_reg':>6} {'tail_f':>7}  weights"
+        f"{'alpha':>6} {'lambda':>7} {'n_grid':>7} {'win':>4} {'m_frac':>7} "
+        f"{'min_p':>6} {'n_reg':>6} {'tail_f':>7}  weights"
     )
     print("\n" + header)
     print("-" * len(header))
@@ -499,8 +501,8 @@ def dry_run(args: argparse.Namespace) -> None:
         print(
             f"{spec.spec_id:<20} {spec.dial:<15} {run_metrics:<12} "
             f"{p['tail_alpha']:>6g} {p['tail_lambda']:>7g} {p['n_grid']:>7d} "
-            f"{p['window']:>4d} {p['min_periods']:>6d} {p['n_regimes']:>6d} "
-            f"{p['tail_fraction']:>7g}  {weights}"
+            f"{p['window']:>4d} {p['min_frac']:>7g} {p['min_periods']:>6d} "
+            f"{p['n_regimes']:>6d} {p['tail_fraction']:>7g}  {weights}"
         )
     print()
     log(
