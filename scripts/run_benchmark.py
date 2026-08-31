@@ -15,7 +15,7 @@ from fineval.scripts.sensitivity.grid import GRID
 
 #: Selectable specifications, keyed by ``spec_id``. Every run resolves to
 #: exactly one of these, so a run's metric parameters are always a member of
-#: the pre-registered grid rather than free-form CLI values.
+#: the pre-specified grid rather than free-form CLI values.
 SPECS = {spec.spec_id: spec for spec in GRID}
 
 
@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="primary",
         choices=sorted(SPECS),
         help=(
-            "pre-registered sensitivity spec whose metric parameters to run; "
+            "pre-specified sensitivity spec whose metric parameters to run; "
             "primary reproduces the canonical fineval.config parameters"
         ),
     )

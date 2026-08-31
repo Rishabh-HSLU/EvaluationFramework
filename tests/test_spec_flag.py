@@ -1,4 +1,4 @@
-"""Acceptance tests for the --spec pre-registered spec selection flag."""
+"""Acceptance tests for the --spec pre-specified spec selection flag."""
 
 from __future__ import annotations
 
