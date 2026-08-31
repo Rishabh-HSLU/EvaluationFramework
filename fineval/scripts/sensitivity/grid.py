@@ -14,9 +14,9 @@ Design commitments encoded here:
   authoritative list of what a spec varies; ``dial`` is its label.
 - The grid is one-at-a-time around the primary specification. Every sweep
   list contains the primary value; those entries collapse onto the single
-  ``primary`` spec and are not re-run, giving 17 distinct specs:
+  ``primary`` spec and are not re-run, giving 19 distinct specs:
   1 primary + 5 tail_alpha + 3 tail_lambda + 2 window + 2 min_frac
-  + 2 tail_fraction + 1 regime_weights + 1 M1 corner.
+  + 2 tail_fraction + 1 regime_weights + 3 corners.
 - ``min_periods`` is a DERIVED parameter:
   ``min_periods = ceil(window * min_frac)``. Both factors are dials, so the
   derivation holds when either varies. It is written out explicitly per spec
@@ -186,6 +186,23 @@ GRID: tuple[Spec, ...] = (
         "corner=alpha0.75-lambda2.0",
         tail_alpha=0.75,
         tail_lambda=2.0,
+    ),
+    # Item 3 — M4 corners. The two volatility-proxy dials interact through
+    # min_periods = ceil(120 * 2/3) = 80, and the two tail dials both reweight
+    # the same regime cells, so these are the two places an M4 interaction is
+    # most likely to be non-negligible. Every single-dial counterpart exists.
+    _corner(
+        ("window", "min_frac"),
+        "corner=win120-frac0.667",
+        window=120,
+        min_frac=2 / 3,
+        min_periods=80,
+    ),
+    _corner(
+        ("tail_fraction", "regime_weights"),
+        "corner=tailf0.10-flat",
+        tail_fraction=0.10,
+        regime_weights=(1.0, 1.0, 1.0, 1.0, 1.0),
     ),
     # regime_weights sweep: {(1,1,1,2,3)*, flat}
     _spec(
