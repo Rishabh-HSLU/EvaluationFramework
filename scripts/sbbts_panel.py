@@ -1,11 +1,12 @@
 """
 Bridge the curated real panel and the SBBTS generator, in both directions.
 
-Direction 1 (``build_training_tensor``) turns the curated real prices into
-the tensor SBBTS trains on. Direction 2 (``assemble_price_panel``) turns
-SBBTS's raw output back into a wide price panel shaped exactly like the
-curated real file, so it can be written to parquet and read back through
-``SBBTSBaselineLoader`` (fineval/data/curate.py).
+Direction 1 (``build_training_examples``) turns the curated real prices into
+the variable-length sequences SBBTS trains on. Direction 2
+(``assemble_price_panel``) turns SBBTS's raw output back into a wide price
+panel shaped exactly like the curated real file, so it can be written to
+parquet and read back through ``SBBTSBaselineLoader``
+(fineval/data/curate.py).
 
 Nothing here is wired into the benchmark. ``load_default_datasets`` and its
 call sites are untouched; this module is standalone.
@@ -16,34 +17,43 @@ Conventions reused, not reinvented
   ``np.nanstd(returns, axis=0, ddof=1)`` over that ticker's own pooled
   returns. This is M1's convention (fineval/metrics/tail_weighted_marginal.py),
   including its refusal to silently drop a degenerate column: a zero or
-  non-finite scale names the offending tickers and raises.
-- **Returns.** ``overnight_masked_log_returns`` from the shared session
-  clock, so the bar at each session's open — a diff against the prior
-  session's close, not a genuine 1-minute return — is masked exactly as
-  everywhere else in the framework.
-- **The masked opening bar becomes a zero increment**, matching
-  ``scripts/baseline_generation.py``, which does the same with
-  ``increments[session_start, :] = 0.0``.
+  non-finite scale names the offending tickers and raises. The pool is
+  whatever returns survive the gap logic below.
 - **Output panel format.** Wide DataFrame, curated market-clock index,
   same column order, float64, real's NaN mask imposed — identical to what
   ``CurationPipeline._save_datasets`` writes.
 
-Session geometry
-----------------
-A regular session is ``TRADING_MINUTES = 390`` bars but only 389 valid
-close-to-close returns; the opening bar is a structural NaN (see
-``fineval/preprocessing/fff.py`` and ``AggregationalGaussianity``). The
-training path therefore carries ``N + 1 = 391`` points: a t=0 anchor at the
-session open, then one point per bar. Because the opening increment is zero
-by the convention above, positions 0 and 1 of every path are both 0.0. That
-redundancy is a property of the data — 390 bars carrying 389 returns — not a
-padding choice made here.
+Session geometry and the gap representation
+-------------------------------------------
+Minute position ``SESSION_BARS`` (390, the 16:00 close) is dropped before
+anything else, unconditionally, whether or not it carries a price in a given
+session. It is missing for roughly half of all (ticker, session) cells for
+structural reasons unrelated to ordinary illiquidity, so it is not treated as
+data. The working range is minutes 1..389, ``WORKING_BARS``.
+
+Within that range a (ticker, session) example keeps **whatever bars actually
+exist**, in order, and drops the rest — no filling, no flagging. The example
+is the cumulative standardized log-return path over the surviving bars,
+anchored at 0 on the first of them, so ``values[0]`` is always 0.0 and a
+return spans however many minutes separate two consecutive survivors.
+
+``gaps`` runs alongside ``values``, one entry per point, holding the minutes
+elapsed since the previous surviving bar. A gap of 1 means consecutive
+minutes; a gap of 3 means two bars were skipped. ``gaps[0]`` is the first
+survivor's own minute position — the distance from the session open, which is
+where the path is anchored — so every gap is at least 1.
+
+Examples vary in length, so the result is a list of ``SessionExample``
+records rather than one stacked tensor. Batching and padding are deliberately
+not designed here; that belongs with the SBBTS training code.
+
+A pair with fewer than ``MIN_SURVIVING_BARS`` surviving bars yields no return
+and is dropped; ``build_training_examples`` reports how many.
 
 The evaluation window holds two early-close sessions of 210 bars (1:00pm ET).
 They are detected by bar count, never by date, and:
 
-- excluded entirely from the per-ticker scale calculation and from the
-  training tensor;
+- excluded entirely from the per-ticker scale pool and from training;
 - reconstructed in direction 2 by generating a normal 390-bar path and
   keeping its first 210 bars — a plain truncation, no resampling.
 
@@ -56,23 +66,49 @@ Run from the repository root:
     uv run python -m scripts.sbbts_panel
 """
 
+from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 import torch
 
 from fineval.benchmark.config import CURATED_DIR
 from fineval.config import TRADING_MINUTES
-from fineval.preprocessing.session_clock import overnight_masked_log_returns
 
 REAL_PATH = CURATED_DIR / "real_prices.parquet"
-TENSOR_OUTPUT_PATH = CURATED_DIR / "sbbts_training_tensor.pt"
+EXAMPLES_OUTPUT_PATH = CURATED_DIR / "sbbts_training_examples.npz"
 SCALES_OUTPUT_PATH = CURATED_DIR / "sbbts_ticker_scales.npz"
 
 SESSION_BARS = TRADING_MINUTES  # 390; bars in a regular NYSE session
+WORKING_BARS = SESSION_BARS - 1  # 389; minute position 390 is never used
 EARLY_CLOSE_BARS = 210  # bars in a 1:00pm ET early close
 N_EARLY_CLOSE_SESSIONS = 2  # early closes in the curated window
-PATH_FEATURES = 1  # d in SBBTS's (M, N + 1, d) contract
-PATH_DTYPE = torch.float32
+MIN_SURVIVING_BARS = 2  # below this a session yields no return at all
+PATH_FEATURES = 1  # d in SBBTS's (M_simu, N, d) output contract
+VALUE_DTYPE = np.float32
+GAP_DTYPE = np.int32
+
+
+@dataclass(frozen=True)
+class SessionExample:
+    """One variable-length training example for a single (ticker, session).
+
+    Attributes:
+        ticker: Column of the curated panel this path came from.
+        session: Session date it came from.
+        values: (K,) float32 cumulative standardized log-return path over the
+            K surviving bars, anchored so ``values[0] == 0.0``.
+        gaps: (K,) int32 minutes since the previous surviving bar. Always at
+            least 1; ``gaps[0]`` is the first survivor's minute position.
+    """
+
+    ticker: str
+    session: pd.Timestamp
+    values: np.ndarray
+    gaps: np.ndarray
+
+    def __len__(self) -> int:
+        return int(self.values.shape[0])
 
 
 def split_sessions(index: pd.DatetimeIndex) -> tuple[pd.DatetimeIndex, pd.DatetimeIndex]:
@@ -124,13 +160,98 @@ def split_sessions(index: pd.DatetimeIndex) -> tuple[pd.DatetimeIndex, pd.Dateti
     return full, early
 
 
+def _forward_fill(values: np.ndarray) -> np.ndarray:
+    """Forward-fill NaNs down axis 0, leaving a leading NaN run untouched."""
+    positions = np.where(np.isfinite(values), np.arange(values.shape[0])[:, None], 0)
+    np.maximum.accumulate(positions, axis=0, out=positions)
+    return np.take_along_axis(values, positions, axis=0)
+
+
+def working_range_blocks(
+    prices: pd.DataFrame,
+    full_sessions: pd.DatetimeIndex,
+) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Per full-length session, the surviving-bar returns, gaps and presence.
+
+    Minute position ``SESSION_BARS`` is dropped first, so every block covers
+    minutes 1..``WORKING_BARS``. Within a block, a return at a surviving bar
+    is the log difference against the *previous surviving bar*, however many
+    minutes back that is; the first survivor of a session has no return and
+    is NaN. Non-surviving rows are NaN throughout.
+
+    Args:
+        prices: Curated wide-format prices (T, N).
+        full_sessions: Full-length session dates, from ``split_sessions``.
+
+    Returns:
+        One ``(returns, gaps, present)`` triple per session, in
+        ``full_sessions`` order, each of shape ``(WORKING_BARS, N)``.
+
+    Raises:
+        ValueError: If the selected rows are not exactly one full-length
+            session per entry of ``full_sessions``.
+    """
+    in_full = prices.index.normalize().isin(full_sessions)
+    selected = prices.loc[in_full]
+
+    expected = len(full_sessions) * SESSION_BARS
+    if selected.shape[0] != expected:
+        raise ValueError(
+            f"Expected {expected} full-session rows ({len(full_sessions)} x "
+            f"{SESSION_BARS}), got {selected.shape[0]}."
+        )
+
+    cube = selected.to_numpy(dtype=float).reshape(len(full_sessions), SESSION_BARS, -1)
+    # Position 390 goes before anything else looks at the data.
+    cube = cube[:, :WORKING_BARS, :]
+
+    bar_index = np.arange(WORKING_BARS)[:, None]
+    blocks = []
+    for block in cube:
+        present = np.isfinite(block)
+
+        filled = _forward_fill(np.log(block))
+        returns = np.full_like(filled, np.nan)
+        returns[1:] = filled[1:] - filled[:-1]
+        # A non-surviving row carries no observation, and the session's first
+        # survivor has no predecessor to difference against.
+        returns[~present] = np.nan
+
+        # Index of the most recent surviving bar at or before each row, -1
+        # before the first one, so the leading gap counts from the open.
+        last_seen = np.where(present, bar_index, -1)
+        np.maximum.accumulate(last_seen, axis=0, out=last_seen)
+        previous = np.empty_like(last_seen)
+        previous[0] = -1
+        previous[1:] = last_seen[:-1]
+        gaps = (bar_index - previous).astype(GAP_DTYPE)
+
+        blocks.append((returns, gaps, present))
+    return blocks
+
+
+def _scales_from_returns(returns: np.ndarray, columns: pd.Index) -> np.ndarray:
+    """M1's per-column standard deviation, with degenerate columns named."""
+    observed = np.where(np.isfinite(returns), returns, np.nan)
+    scales = np.nanstd(observed, axis=0, ddof=1)
+
+    degenerate = ~np.isfinite(scales) | (scales <= 0.0)
+    if degenerate.any():
+        raise ValueError(
+            "Cannot standardize columns with zero or non-finite standard "
+            f"deviation: {columns[degenerate].tolist()}"
+        )
+    return scales
+
+
 def per_ticker_scales(prices: pd.DataFrame, full_sessions: pd.DatetimeIndex) -> np.ndarray:
-    """One volatility scalar per ticker, pooled over its full-length sessions.
+    """One volatility scalar per ticker, pooled over its surviving returns.
 
     Reuses M1's standardization convention exactly: ``np.nanstd`` with
-    ``ddof=1`` down each column of overnight-masked log returns, with a
-    degenerate column named rather than dropped. Early-close sessions are
-    excluded from the pool entirely.
+    ``ddof=1`` down each column, with a degenerate column named rather than
+    dropped. The pool is every return the gap logic produces — one per
+    surviving bar except each session's first — over full-length sessions
+    only, on minutes 1..``WORKING_BARS``.
 
     Args:
         prices: Curated wide-format prices (T, N).
@@ -143,20 +264,9 @@ def per_ticker_scales(prices: pd.DataFrame, full_sessions: pd.DatetimeIndex) -> 
     Raises:
         ValueError: If any ticker's scale is zero or non-finite.
     """
-    returns = overnight_masked_log_returns(prices)
-    in_full = returns.index.normalize().isin(full_sessions)
-
-    observed = returns.loc[in_full].to_numpy(dtype=float)
-    observed = np.where(np.isfinite(observed), observed, np.nan)
-    scales = np.nanstd(observed, axis=0, ddof=1)
-
-    degenerate = ~np.isfinite(scales) | (scales <= 0.0)
-    if degenerate.any():
-        raise ValueError(
-            "Cannot standardize columns with zero or non-finite standard "
-            f"deviation: {prices.columns[degenerate].tolist()}"
-        )
-    return scales
+    blocks = working_range_blocks(prices, full_sessions)
+    pooled = np.concatenate([returns for returns, _, _ in blocks], axis=0)
+    return _scales_from_returns(pooled, prices.columns)
 
 
 def standardize_returns(returns: np.ndarray, scales: np.ndarray) -> np.ndarray:
@@ -177,75 +287,63 @@ def invert_standardization(standardized: np.ndarray, scales: np.ndarray) -> np.n
     return np.asarray(standardized, dtype=float) * np.asarray(scales, dtype=float)
 
 
-def build_training_tensor(
+def build_training_examples(
     prices: pd.DataFrame,
-    drop_incomplete: bool = True,
-) -> tuple[torch.Tensor, dict[str, float], list[tuple[str, pd.Timestamp]]]:
-    """Build the SBBTS training tensor from the curated real panel.
+) -> tuple[list[SessionExample], dict[str, float], int]:
+    """Build SBBTS's variable-length training examples from the real panel.
 
-    One example per (ticker, full-length session): the standardized
-    cumulative log-return path within that session, anchored at zero at the
-    session open. Early-close sessions are excluded.
-
-    Each example has ``SESSION_BARS + 1`` points — the t=0 anchor plus one
-    per bar — giving the (M, N + 1, d) shape SBBTS expects with N = 390 and
-    d = 1. Examples are ordered ticker-major, matching the returned index.
+    One example per (ticker, full-length session) that has at least
+    ``MIN_SURVIVING_BARS`` surviving bars on minutes 1..``WORKING_BARS``.
+    Missing bars are dropped, not filled; the elapsed minutes they represent
+    are carried in the example's ``gaps`` instead. Early-close sessions never
+    enter. Examples are ordered ticker-major.
 
     Args:
         prices: Curated wide-format real prices (T, N).
-        drop_incomplete: When True (default), a (ticker, session) cell with
-            any missing bar is skipped rather than emitted with NaNs. The
-            framework does not impute, and a NaN in a training tensor is
-            worse than a smaller M.
 
     Returns:
-        ``(tensor, scales, index)`` where ``tensor`` is float32 of shape
-        (M, SESSION_BARS + 1, PATH_FEATURES), ``scales`` maps ticker to the
-        scalar used to standardize it, and ``index`` lists the
-        ``(ticker, session)`` pair behind each example, in tensor order.
+        ``(examples, scales, dropped)`` where ``examples`` is the list of
+        ``SessionExample`` records, ``scales`` maps ticker to the scalar used
+        to standardize it, and ``dropped`` counts the (ticker, session) pairs
+        skipped for having fewer than ``MIN_SURVIVING_BARS`` surviving bars.
     """
     full_sessions, _ = split_sessions(prices.index)
-    scale_values = per_ticker_scales(prices, full_sessions)
-    scales = dict(zip(prices.columns, scale_values.tolist(), strict=True))
+    blocks = working_range_blocks(prices, full_sessions)
 
-    returns = overnight_masked_log_returns(prices)
-    session_of_row = returns.index.normalize()
+    pooled = np.concatenate([returns for returns, _, _ in blocks], axis=0)
+    scale_values = _scales_from_returns(pooled, prices.columns)
+    scales = dict(zip(prices.columns, scale_values.tolist(), strict=True))
+    del pooled
 
     tickers = list(prices.columns)
-    n_tickers = len(tickers)
-    n_sessions = len(full_sessions)
+    examples: list[SessionExample] = []
+    dropped = 0
 
-    paths = np.empty((n_sessions, SESSION_BARS + 1, n_tickers), dtype=np.float32)
-    complete = np.zeros((n_sessions, n_tickers), dtype=bool)
+    for column, ticker in enumerate(tickers):
+        scale = scale_values[column]
+        for session, (returns, gaps, present) in zip(full_sessions, blocks, strict=True):
+            surviving = np.flatnonzero(present[:, column])
+            if surviving.size < MIN_SURVIVING_BARS:
+                dropped += 1
+                continue
 
-    for position, session in enumerate(full_sessions):
-        block = returns.loc[session_of_row == session].to_numpy(dtype=float, copy=True)
-        # The session's opening bar is a structural NaN, not a missing print;
-        # it enters the path as a zero increment, as in baseline_generation.py.
-        block[0, :] = 0.0
-        complete[position] = np.isfinite(block).all(axis=0)
+            # The first survivor anchors the path, so its (absent) return is
+            # not consumed; every later survivor contributes one increment.
+            increments = standardize_returns(returns[surviving[1:], column], scale)
+            values = np.empty(surviving.size, dtype=VALUE_DTYPE)
+            values[0] = 0.0
+            values[1:] = np.cumsum(increments)
 
-        standardized = standardize_returns(block, scale_values)
-        paths[position, 0, :] = 0.0
-        paths[position, 1:, :] = np.cumsum(standardized, axis=0)
+            examples.append(
+                SessionExample(
+                    ticker=ticker,
+                    session=session,
+                    values=values,
+                    gaps=gaps[surviving, column].astype(GAP_DTYPE),
+                )
+            )
 
-    if not drop_incomplete:
-        complete[:] = True
-
-    # Ticker-major ordering: all of ticker 0's sessions, then ticker 1's, ...
-    ordered = paths.transpose(2, 0, 1).reshape(n_tickers * n_sessions, SESSION_BARS + 1)
-    keep = complete.T.reshape(-1)
-
-    tensor = torch.from_numpy(np.ascontiguousarray(ordered[keep])).to(PATH_DTYPE)
-    tensor = tensor.reshape(-1, SESSION_BARS + 1, PATH_FEATURES)
-
-    index = [
-        (tickers[t], full_sessions[s])
-        for t in range(n_tickers)
-        for s in range(n_sessions)
-        if complete[s, t]
-    ]
-    return tensor, scales, index
+    return examples, scales, dropped
 
 
 def assemble_price_panel(
@@ -344,35 +442,49 @@ def assemble_price_panel(
 
 def main() -> None:
     print(f"Loading curated real prices: {REAL_PATH}")
-    real_prices = pd.read_parquet(REAL_PATH)
-    print(f"Real shape: {real_prices.shape}")
+    prices = pd.read_parquet(REAL_PATH)
+    print(f"Real shape: {prices.shape}")
 
-    full_sessions, early_sessions = split_sessions(real_prices.index)
+    full_sessions, early_sessions = split_sessions(prices.index)
     print(
         f"Sessions: {len(full_sessions)} full ({SESSION_BARS} bars), "
         f"{len(early_sessions)} early close ({EARLY_CLOSE_BARS} bars): "
         f"{[str(day.date()) for day in early_sessions]}"
     )
 
-    tensor, scales, index = build_training_tensor(real_prices)
-    assert tensor.shape[1:] == (SESSION_BARS + 1, PATH_FEATURES)
-    assert tensor.dtype == PATH_DTYPE
-    assert len(index) == tensor.shape[0]
-    assert len(scales) == real_prices.shape[1]
+    examples, scales, dropped = build_training_examples(prices)
+    assert len(scales) == prices.shape[1]
+    assert all(example.values.shape == example.gaps.shape for example in examples)
+    assert all(np.isfinite(example.values).all() for example in examples)
 
-    possible = real_prices.shape[1] * len(full_sessions)
+    lengths = np.array([len(example) for example in examples])
+    possible = prices.shape[1] * len(full_sessions)
     print(
-        f"Training tensor: {tuple(tensor.shape)} {tensor.dtype}, "
-        f"{tensor.shape[0]:,} of {possible:,} possible (ticker, session) cells "
-        f"({possible - tensor.shape[0]:,} dropped for missing bars)."
+        f"Examples: {len(examples):,} of {possible:,} possible (ticker, session) "
+        f"cells; {dropped:,} dropped for fewer than {MIN_SURVIVING_BARS} "
+        f"surviving bars."
+    )
+    print(
+        f"Surviving bars per example: min={lengths.min()}, "
+        f"median={int(np.median(lengths))}, max={lengths.max()}, "
+        f"mean={lengths.mean():.1f}; total points={int(lengths.sum()):,}."
     )
 
-    torch.save(tensor, TENSOR_OUTPUT_PATH)
-    print(f"Saved: {TENSOR_OUTPUT_PATH} ({tuple(tensor.shape)})")
+    # Ragged sequences are stored flat with offsets, so no pickle is needed.
+    offsets = np.concatenate([[0], np.cumsum(lengths)]).astype(np.int64)
+    np.savez(
+        EXAMPLES_OUTPUT_PATH,
+        values=np.concatenate([example.values for example in examples]),
+        gaps=np.concatenate([example.gaps for example in examples]),
+        offsets=offsets,
+        tickers=np.array([example.ticker for example in examples]),
+        sessions=np.array([example.session.value for example in examples], dtype=np.int64),
+    )
+    print(f"Saved: {EXAMPLES_OUTPUT_PATH} ({len(examples):,} examples)")
 
     np.savez(
         SCALES_OUTPUT_PATH,
-        tickers=np.array(list(scales), dtype=object),
+        tickers=np.array(list(scales)),
         scales=np.array(list(scales.values()), dtype=float),
     )
     print(f"Saved: {SCALES_OUTPUT_PATH} ({len(scales)} per-ticker scales)")
