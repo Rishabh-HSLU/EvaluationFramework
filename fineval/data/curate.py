@@ -442,6 +442,31 @@ class MSVBaselineLoader(CuratedParquetLoader):
         super().__init__(parquet_path=parquet_path, name="MSV", is_synthetic=True)
 
 
+class SBBTSBaselineLoader(CuratedParquetLoader):
+    """
+    Loads the SBBTS synthetic dataset produced by
+    scripts/sbbts_panel.py.
+
+    The SBBTS panel is written directly on the curated market clock, so
+    it is curated by construction and never passes through
+    CurationPipeline. The file is read, contract-validated by
+    BaseLoader, and wrapped in a MarketDataset.
+
+    Attributes:
+
+        parquet_path : str
+            Path to the SBBTS panel parquet file.
+
+    Example::
+
+        loader  = SBBTSBaselineLoader(parquet_path="data/curated/sbbts_prices.parquet")
+        dataset = loader.load()
+    """
+
+    def __init__(self, parquet_path: str):
+        super().__init__(parquet_path=parquet_path, name="SBBTS", is_synthetic=True)
+
+
 class AILSyntheticLoader(BaseLoader):
     """
     Loads AIL synthetic data from a long-format parquet file.
