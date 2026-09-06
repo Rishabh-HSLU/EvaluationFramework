@@ -1,4 +1,6 @@
 data/raw_intraday
+# SBBTS training artifacts; data/curated/ stays reserved for CurationPipeline output
+data/sbbts/
 
 # Python / packaging
 __pycache__/

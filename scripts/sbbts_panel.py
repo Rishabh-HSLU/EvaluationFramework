@@ -72,12 +72,16 @@ import numpy as np
 import pandas as pd
 import torch
 
-from fineval.benchmark.config import CURATED_DIR
+from fineval.benchmark.config import CURATED_DIR, ROOT_DIR
 from fineval.config import TRADING_MINUTES
 
 REAL_PATH = CURATED_DIR / "real_prices.parquet"
-EXAMPLES_OUTPUT_PATH = CURATED_DIR / "sbbts_training_examples.npz"
-SCALES_OUTPUT_PATH = CURATED_DIR / "sbbts_ticker_scales.npz"
+
+#: Training artifacts live outside data/curated/, which stays reserved for
+#: CurationPipeline output. The whole directory is gitignored.
+SBBTS_DIR = ROOT_DIR / "data" / "sbbts"
+EXAMPLES_OUTPUT_PATH = SBBTS_DIR / "sbbts_training_examples.npz"
+SCALES_OUTPUT_PATH = SBBTS_DIR / "sbbts_ticker_scales.npz"
 
 SESSION_BARS = TRADING_MINUTES  # 390; bars in a regular NYSE session
 WORKING_BARS = SESSION_BARS - 1  # 389; minute position 390 is never used
@@ -469,6 +473,8 @@ def main() -> None:
         f"median={int(np.median(lengths))}, max={lengths.max()}, "
         f"mean={lengths.mean():.1f}; total points={int(lengths.sum()):,}."
     )
+
+    SBBTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Ragged sequences are stored flat with offsets, so no pickle is needed.
     offsets = np.concatenate([[0], np.cumsum(lengths)]).astype(np.int64)

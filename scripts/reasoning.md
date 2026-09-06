@@ -1245,3 +1245,21 @@ true across-seed spread both scale as ~1/√B, so doubling B narrows both
 together and likely preserves the same relative under-coverage, just at
 a smaller absolute scale (follows from standard bootstrap scaling, not
 independently tested).
+
+# SBBTS Training Grid: Irregular by Construction (2026-09-06)
+
+SBBTS's Algorithm 1 samples mini-batches on a shared time grid — every
+training example is assumed to sit on the same t_0, ..., t_N. Ours do not.
+Dropping missing bars instead of requiring complete sessions
+(`scripts/sbbts_panel.py`) leaves each (ticker, session) path on its own
+irregular grid, with its own length and its own spacing between consecutive
+observations, so what we train is a generalization of the published
+algorithm rather than a literal implementation of it. This is sound because
+the drift network consumes continuous time, not a fixed step index: nothing
+in its functional form is tied to a particular grid, and each example's loss
+term is evaluated against that example's own recorded gap lengths. Batching
+therefore only has to keep the gaps aligned with their observations
+(`scripts/sbbts_batching.py`), which is what the `gaps` tensor and its
+`valid_mask` are for. Recorded here because it is a departure from the cited
+algorithm and should be disclosed as one, not because it is expected to
+change the estimator's behavior.
