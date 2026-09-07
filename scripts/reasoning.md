@@ -1283,6 +1283,13 @@ them without the script or report:
   representation (values + elapsed-time gaps) can absorb directly, rather
   than something requiring imputation or session exclusion.
 
+See `docs/missingness_report.md` for full diagnostic detail beyond these
+three headline figures -- kept specifically for the ticker-concentration
+findings (216 of 600 tickers have zero complete sessions) and the
+coverage-floor correlation (+0.472 between per-ticker coverage and
+session-completeness rate), both of which bear directly on the 70%
+coverage-floor justification and aren't reflected above.
+
 # SBBTS Training Grid: Irregular by Construction (2026-09-06)
 
 SBBTS's Algorithm 1 samples mini-batches on a shared time grid — every
