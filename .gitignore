@@ -1,6 +1,9 @@
 data/raw_intraday
 # SBBTS training artifacts; data/curated/ stays reserved for CurationPipeline output
 data/sbbts/
+# CurationPipeline's own metadata output (parquet outputs are already
+# covered by the blanket *.parquet rule below).
+data/curated/curation_metadata.json
 
 # Python / packaging
 __pycache__/
@@ -13,6 +16,7 @@ build/
 # Editor / OS
 .idea/
 .DS_Store
+.ipynb_checkpoints/
 
 # Local experiment artifacts — not part of the public framework
 ablation_output/

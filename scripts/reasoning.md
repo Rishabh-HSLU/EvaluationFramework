@@ -1246,6 +1246,43 @@ together and likely preserves the same relative under-coverage, just at
 a smaller absolute scale (follows from standard bootstrap scaling, not
 independently tested).
 
+# Missing-Bar Structure of the Curated Real Panel (2026-09-05)
+
+`scripts/investigate_missingness.py` measured the real panel's missing-bar
+structure directly, standalone -- it reads the curated real parquet and
+writes `scripts/missingness_report.md`, changing nothing. It ran on a
+600-ticker curation (AIL-joined, matching the 82,200 = 600 x 137
+full-session (ticker, session) cells below); the specific ticker set
+differs from whatever curation happens to be current, but the shape of
+the missingness is a property of the real data, not of which curation run
+produced it. The finding motivated `scripts/sbbts_panel.py`'s later
+rewrite from requiring whole sessions to skipping individual missing bars
+(`9c0bc2a`, "Keep the bars that exist instead of requiring whole
+sessions"). Three headline figures, each with the context needed to read
+them without the script or report:
+
+- **93.4% of (ticker, session) cells have at least one missing bar**
+  (76,776 of 82,200; only 6.6% -- 5,424 -- are fully complete). The
+  per-ticker mean incomplete-session rate is the same figure, 93.40%: at
+  the cell level and averaged per-ticker, the panel is overwhelmingly
+  incomplete-by-strict-standard, which is exactly why a whole-session
+  completeness requirement threw away 93.4% of the data before
+  `build_training_examples` replaced it.
+- **The 16:00 close bar (minute position 390) is missing 47.66% of the
+  time**, against 0.05% for its neighbour at 15:59 -- a 911x jump,
+  present in all 137 sessions, plausibly closing-auction timing rather
+  than an outage. This is why `scripts/sbbts_panel.py` drops minute
+  position 390 unconditionally before anything else looks at the data
+  (`SESSION_BARS`/`WORKING_BARS`), rather than treating it as ordinary
+  illiquidity-driven missingness.
+- **76.3% of missing-bar runs are a single isolated minute** (1,672,194 of
+  2,190,311 runs; 54.9% of missing bars by count), with a mean run length
+  of 1.39 minutes and 90% of runs at or under 2 minutes. Missingness is
+  overwhelmingly short gaps, not extended outages -- the empirical basis
+  for treating it as ordinary no-trade sparsity that a skip-gaps
+  representation (values + elapsed-time gaps) can absorb directly, rather
+  than something requiring imputation or session exclusion.
+
 # SBBTS Training Grid: Irregular by Construction (2026-09-06)
 
 SBBTS's Algorithm 1 samples mini-batches on a shared time grid — every
@@ -1263,3 +1300,259 @@ therefore only has to keep the gaps aligned with their observations
 `valid_mask` are for. Recorded here because it is a departure from the cited
 algorithm and should be disclosed as one, not because it is expected to
 change the estimator's behavior.
+
+# SBBTS Drift Network and Training Loop (2026-09-06)
+
+`sbbts/` (model.py, training.py, calibration.py, data.py, config.py)
+implements Algorithm 1 and Appendix B's architecture from Alouadi, Loeper,
+Marsala, Mazhar, Pham, "SBBTS: A Unified Schrodinger-Bass Framework for
+Synthetic Financial Time Series" (arXiv:2604.07159). It was first built
+against a standalone synthetic corpus and a from-scratch bucketing
+pipeline, before `scripts/sbbts_panel.py` and `scripts/sbbts_batching.py`
+existed. Once those landed, the synthetic stand-in was deleted outright --
+not kept alongside the real pipeline as a second path. What follows
+documents what survived that migration unchanged, what needed a small
+adapter, and what had to be re-derived against the real corpus.
+
+## The architecture and training loop generalized; only the data boundary needed an adapter
+
+`sbbts/model.py` (`SBBTSDrift`, `TrajectoryEncoder`, `FeedForwardEmbed`) is
+untouched by the migration. It was already written against generic
+`(y_seq, times, valid_mask)` tensors with no reference to any particular
+batch dataclass, so it consumes `PaddedBatch` output exactly as it consumed
+the deleted synthetic `Batch`.
+
+`sbbts/training.py`'s `compute_loss` needed one small change: it used to
+unpack `batch.y, batch.times, batch.valid_mask` directly; a `PaddedBatch`
+has no `y`/`times` fields; it has `values` (B, L), no trailing feature
+axis, and `gaps` (B, L), a step gap, not a cumulative elapsed time. The
+fix is `sbbts/data.py::to_model_inputs`, a pure tensor adapter:
+
+    y_seq = batch.values.unsqueeze(-1)
+    times = torch.cumsum(batch.gaps.float(), dim=-1)
+
+`gaps[0]` is a `SessionExample`'s distance from the session open (see the
+"SBBTS Training Grid" note above and `scripts/sbbts_panel.py`), not a
+between-points gap, so the cumulative sum's first entry is that
+distance-from-open value rather than 0 -- which is correct: it is the
+first surviving bar's actual elapsed time since the session opened, not
+since itself. Padded `gaps` entries are 1 (never 0, so a forgotten mask
+would not silently look like a valid observation), so the cumulative sum
+keeps climbing through padding; this is harmless because padded positions
+are already excluded from attention (`src_key_padding_mask`) and from the
+loss (`interval_mask` in `compute_loss`), so no downstream computation
+ever reads a padded position's time value. Every other line of
+`compute_loss`, `evaluate`, `train_outer_iteration`, and `train_sbbts` is
+unchanged -- they were already generic over "a batch with values, times,
+valid_mask," and now that batch happens to be `PaddedBatch`.
+
+## Gradient-flow / detach resolution: unchanged, not re-investigated
+
+The prior pass resolved Algorithm 1's ambiguous parts (does the transport
+map computation detach from the graph the loss backpropagates through;
+what does each outer iteration reset) by reading the paper's own reference
+implementation (https://github.com/alexouadi/SBBTS,
+`training/training_sbbts_dsbm.py`) directly. That resolution does not
+depend on which data is used -- it is about how the same tensors flow
+through the same network regardless of their source -- so it was not
+revisited here. For the record, since the file that documented it in
+detail (a since-deleted standalone `sbbts/reasoning.md`) no longer exists:
+
+- `Y^0 = I_d` exactly; `k == 0` skips the network entirely
+  (`compute_loss` branches on `k == 0` and sets `y_i, y_ip1 = x_i, x_ip1`
+  directly, matching the reference code's `if k == 0: y_0_, y_T_ =
+  x_0_.clone(), x_T_.clone()`).
+- No detach: for `k > 0`, `Y_ti = X_ti - s_theta(...)/beta` keeps
+  gradients enabled, and the loss backpropagates jointly through both the
+  endpoint-transform computation and the drift prediction at the sampled
+  bridge point -- a self-referential/bootstrapped regression, not a
+  frozen target network.
+- Both endpoints of interval `i` condition on the same context
+  `Phi_theta(X_{t0:ti})`, matching Algorithm 1 lines 5-6 (both write
+  `t0:ti`, not `t0:ti+1`, for the second endpoint).
+- A margin proportional to each interval's own `Delta_t_i`
+  (`safe_frac`, `sbbts/config.py`) keeps the sampled bridge time away
+  from `t_{i+1}`, where the regression target is undefined; the reference
+  code uses a fixed absolute margin because its experiments hold
+  `Delta_t` constant, which does not hold for our irregular grid.
+- One Adam optimizer instance persists across all `K` outer iterations
+  (`train_sbbts` creates it once, outside the `for k in range(K)` loop).
+
+## Beta
+
+Method (unchanged from the first derivation): `beta = safety_factor /
+min(Delta_t_i)` with `safety_factor = 2.0`, comfortably above the
+`beta * Delta_t_i > 1` floor Theorem 3.2 requires. `min(Delta_t_i)` is
+`sbbts/data.py::corpus_min_delta_t`: the minimum over every
+`SessionExample` of `gaps[1:].min()` -- `gaps[1:]`, not `gaps`, because
+`gaps[0]` is the distance from session open, not a between-training-points
+gap (see `test_min_delta_t_excludes_the_leading_distance_from_open`).
+
+**Superseded -- synthetic corpus (2026-09-06, first pass):** on a
+synthetic panel of comparable shape, `min_dt = 1.0` minute, giving
+`beta = 2.0`. This number was derived before `scripts/sbbts_panel.py` /
+`scripts/sbbts_batching.py` existed and before any real data was curated
+on this machine; kept here for the record, not as a value to train with.
+
+**Current -- real corpus (2026-09-07):** the real 948-ticker corpus was
+fetched from Alpaca on this machine (`scripts/fetch_alpaca.py`, all 948
+tickers, 0 errors) and curated real-only (`scripts/curate_real_only.py`,
+739 tickers at the 70% coverage floor -- more than the 600 the AIL-joined
+curation retained, since there is no second dataset's coverage to
+intersect against). `build_training_examples` produced 101,175 examples
+(68 dropped for fewer than 2 surviving bars). `corpus_min_delta_t` gives
+`min_dt = 1.0` minute (a fully liquid pair of consecutive minutes exists
+somewhere in the corpus, as expected), so:
+
+    beta = 2.0 / 1.0 = 2.0
+    beta * min_dt = 2.0 > 1  (constraint satisfied)
+
+Numerically identical to the synthetic-corpus value above -- both corpora
+happen to have a 1-minute floor -- but this is now the value actually
+derived from real data, not carried over by coincidence.
+
+## Validation split: by session, chronological (unchanged logic, real dataclass)
+
+`session_train_val_split` (`sbbts/data.py`) holds out the most recent
+`val_frac` fraction of session dates, operating on `SessionExample.session`
+now instead of the deleted synthetic `Trajectory.session_date`. The logic
+itself did not change:
+
+- By session, not by example: one `SessionExample` is one
+  (ticker, session) pair; splitting at the example level would put, e.g.,
+  AAPL's 2020-01-02 session in training and MSFT's 2020-01-02 session in
+  validation, letting the model implicitly learn cross-sectional, same-day
+  structure that a genuinely held-out day would not provide. Splitting by
+  date keeps every ticker's example from a given day on one side.
+- Chronological, not shuffled: held-out dates are always the latest
+  ones, so validation sessions never precede training sessions -- a random
+  shuffle would leak lookahead into what "held out" is supposed to mean
+  for a temporal generative model.
+- A corpus with only one distinct session date returns the whole corpus as
+  training data and an empty validation set; only arises in small unit
+  tests, never on the real multi-month corpus.
+
+On the real corpus, `val_frac=0.2` over 137 full-length sessions holds out
+the most recent 27 (2020-02-12 .. 2020-03-20), leaving 110 for training
+(2019-09-03 .. 2020-02-11): 81,222 train examples, 19,953 validation
+examples.
+
+## Batch size: superseded by the real pipeline's own default
+
+**Superseded (2026-09-06, first pass):** with no bucketed batching
+pipeline in the repository yet, buckets were sized directly to the paper's
+`batch_size = 128`, on the reasoning that there was no existing
+`batch_size=64` scheme to reconcile with.
+
+**Current:** `scripts/sbbts_batching.py::DEFAULT_BATCH_SIZE` is 64. That
+module's own commit message reports 8 buckets and 1,288 batches from an
+AIL-joined curation (600 tickers, 82,163 examples); this machine's
+real-only curation (no AIL, see below) retains 739 tickers and 101,175
+examples, giving 8 buckets and **1,585** batches instead (2.6% padding vs.
+a naive pad-to-389 scheme's 10.9%) -- more tickers pass the 70% coverage
+floor without a second dataset's coverage to intersect against. Same
+pipeline, same defaults, different real corpus. Re-bucketing at 128 to
+avoid reconciling with this would mean not using the real pipeline's own
+default output -- the opposite of the point. `sbbts/training.py` now
+accumulates gradients over `grad_accum_steps = 2` micro-batches
+(`sbbts/config.py::SBBTSTrainingConfig`) before each `optimizer.step()`,
+so the effective batch size is `64 * 2 = 128`, matching Table 2, while
+every batch consumed is exactly what `scripts.sbbts_batching.build_batches`
+produces with its own default arguments. `train_outer_iteration`'s wall-clock
+timing measures one full pass over all micro-batches in an epoch
+regardless of the accumulation grouping, so this choice does not need a
+separate wall-clock re-measurement of its own.
+
+## AIL is out of scope; curating real prices does not need it
+
+`scripts/build_curated_datasets.py` always loads AIL as part of the same
+run: `CurationPipeline` structurally used it to compute the ticker
+intersection and the joint coverage floor. AIL's raw source
+(`data/ail_synthetic_data/dataset_US_1-10B_2019-09-2020-03.parquet`) is
+not available on this machine and SBBTS does not use AIL at all, so
+`build_curated_datasets.py` cannot be reused as-is for SBBTS's real-only
+data needs.
+
+`CurationPipeline._validate_inputs` had exactly one hard requirement that
+blocked a synthetic-free run: `if not self.synthetic_datasets: raise
+ValueError(...)`. Every other method already handled an empty
+`synthetic_datasets` list correctly by construction --
+`_intersect_tickers` reduces to real's own ticker set, `_compute_joint_coverage`'s
+`coverage["joint_min"] = coverage.min(axis=1)` reduces to real's own
+coverage column, `_subset_to_intersection`/`_save_datasets`/`_save_metadata`
+all iterate over `synthetic_datasets`/`synth_aligned` and are no-ops on an
+empty one. So the fix was to remove that one guard (with the
+`synthetic_datasets` docstring updated to say an empty list means
+real-only curation), not to write a parallel curation path. `AILSyntheticLoader`
+itself is untouched -- never imported, built, or referenced by the new
+path.
+
+`scripts/curate_real_only.py` is the new entry point: `RealDataLoader` +
+`CurationPipeline(synthetic_datasets=[])`, writing the same
+`data/curated/real_prices.parquet` + `curation_metadata.json` contract
+`build_curated_datasets.py` would, with no synthetic parquet written.
+`tests/test_curation_real_only.py` pins that the empty-list path still
+enforces `coverage_floor`'s range check and writes only the real file.
+
+## Wall-clock at the real pipeline's actual batch structure
+
+**Superseded (2026-09-06, first pass):** ~53s/epoch measured on a
+synthetic corpus of 18,000 examples across 141 batches of size 128 (A16
+GPU, paper-scale config); projected ~306.5h for the full `K=5 x
+n_epoch=1000` schedule scaled to a hypothetical 75,000-example corpus.
+This was always an approximation pending the real pipeline; it is not a
+measurement of the actual batch structure below.
+
+**Current (2026-09-07):** measured against the real 8-bucket, 1,585-batch
+structure above (`train_outer_iteration`, `k=0`, identity map, 5 epochs,
+early stopping disabled for this measurement, A16 GPU):
+
+    per-epoch times (s): [313.23, 312.40, 311.75, 311.40, 311.06]
+    mean epoch time: 311.97s
+
+    projected total for K=5 x n_epoch=1000 (5000 epochs, no early stopping): 433.29 h
+
+Higher than the synthetic-corpus approximation above (433h vs. ~307h),
+consistent with the real corpus (101,175 examples, 35.0M real points)
+being larger than the synthetic stand-in it replaced. This is the number
+the task asked to surface early: **the full, unstopped K=5 x n_epoch=1000
+schedule is not practical on a single A16 as configured** -- ~18 days.
+Early stopping (`patience=15`, Table 2-derived) will cut this substantially
+in practice, since 1000 epochs per outer iteration is a ceiling, not a
+target, but 5 epochs already cost over 26 minutes, so the schedule's
+practicality depends on how many epochs early stopping actually needs, not
+on this raw ceiling. Options for a future pass, not implemented here per
+the training-infrastructure-only scope: truncating session length, mixed
+precision, `torch.compile`, or revisiting `n_epoch`.
+
+## Raw data: fetched from Alpaca on this machine (2026-09-07)
+
+The blocker recorded here through 2026-09-06 (no raw data, no credentials,
+no cached checkpoint anywhere on this machine or the institution's shared
+`/exchange` NFS mount) was resolved by fetching the real corpus the same
+way a reviewer reproducing this work would: `python -m scripts.fetch_alpaca`
+against the user's own Alpaca account, all 948 canonical tickers, 0 errors,
+~50 minutes end to end (rate-limited at 0.4s/request). Credentials were
+passed as environment variables for the single invocation, never written
+to a file or committed. `data/raw_intraday/` (2.9 GB) and
+`data/curated/real_prices.parquet` now exist on this machine but are
+gitignored, as always -- nothing about the git history changed.
+
+## SBBTS reverts to the canonical panel now that AIL curation works (2026-09-07)
+
+The 739-ticker real-only training path (`scripts/curate_real_only.py`, the
+`CurationPipeline` validation relaxation, and the "AIL is out of scope"
+section above) was a workaround for AIL's raw source being unavailable on
+this machine, not a design decision -- SBBTS was always meant to train on
+the same canonical `real_prices.parquet` that GBM and MSV are curated and
+scored against, for consistency across generators. Once a working copy of
+AIL's raw source was obtained and `build_curated_datasets.py` ran to
+completion (600 tickers, matching the historical figure), that workaround
+was reverted: the `CurationPipeline` validation guard is back to requiring
+at least one synthetic dataset, `scripts/curate_real_only.py` and its test
+are deleted, and `scripts/sbbts_panel.py`'s `build_training_examples` reads
+from `data/curated/real_prices.parquet` as it always did -- that path
+never changed; only which curation run had most recently written to it
+did. Regenerated on the canonical 600-ticker panel: 82,163 examples (of
+82,200 possible cells, 37 dropped), matching the original pre-audit
+reference numbers exactly.
