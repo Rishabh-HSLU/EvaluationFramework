@@ -82,7 +82,7 @@ class CurationPipeline:
     synthetic_datasets : list[MarketDataset]
         One or more loaded synthetic datasets to curate alongside the
         real data. Listed to support multi-generator evaluation
-        (AIL, SFAGan, SBBTS, ...).
+        (AIL, SBBTS, ...).
     start_date : str
         Inclusive start of the evaluation window, ISO format (YYYY-MM-DD).
     end_date : str

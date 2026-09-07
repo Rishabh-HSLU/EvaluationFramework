@@ -375,7 +375,7 @@ def assemble_price_panel(
         generated: SBBTS output, shape (M_simu, SESSION_BARS, PATH_FEATURES).
         path_tickers: Ticker each generated path is assigned to, length M_simu.
         path_sessions: Session each generated path belongs to, length M_simu.
-        scales: Per-ticker scalars from ``build_training_tensor``.
+        scales: Per-ticker scalars from ``build_training_examples``.
         real_prices: Curated real prices, supplying the clock, column order,
             per-session anchor prices and NaN mask.
 
