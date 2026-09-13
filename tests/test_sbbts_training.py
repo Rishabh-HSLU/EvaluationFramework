@@ -17,6 +17,7 @@ import torch
 from torch import optim
 
 from sbbts.calibration import derive_beta
+from sbbts.checkpoint import build_checkpoint, restore_training_state
 from sbbts.config import SBBTSTrainingConfig
 from sbbts.model import SBBTSDrift
 from sbbts.training import (
@@ -142,3 +143,76 @@ def test_validation_loss_is_deterministic_with_fixed_noise() -> None:
 
     again = make_validation_noise(batches, seed=7)
     assert all(torch.equal(a, b) for a, b in zip(noise.u_frac, again.u_frac, strict=True))
+
+
+def test_resume_from_checkpoint_matches_uninterrupted_run() -> None:
+    """Two epochs, checkpoint, restore into fresh objects, two more == four straight."""
+    import io
+
+    examples, beta = _corpus_and_beta([20, 25, 18, 30, 22, 28])
+    train_batches = build_batches(examples[:4], batch_size=2, n_buckets=1)
+    val_batches = build_batches(examples[4:], batch_size=2, n_buckets=1)
+    config = SBBTSTrainingConfig(n_epoch=4, patience=100, min_delta=0.0, grad_accum_steps=2)
+    noise = make_validation_noise(val_batches, seed=3)
+
+    def fresh():
+        torch.manual_seed(11)
+        model = _tiny_model()
+        return model, optim.Adam(model.parameters(), lr=config.lr)
+
+    # Uninterrupted reference.
+    model_a, opt_a = fresh()
+    torch.manual_seed(5)
+    logs_a = train_outer_iteration(
+        model_a, opt_a, train_batches, val_batches, beta, 1, config, val_noise=noise
+    )
+
+    # Interrupted after epoch index 1, checkpointed, resumed into new objects.
+    model_b, opt_b = fresh()
+    torch.manual_seed(5)
+    captured = {}
+
+    def on_checkpoint(log, state):
+        if log.epoch == 1:
+            payload = build_checkpoint(
+                model_b, opt_b, outer_iter=1, epoch=1, outer_iters_completed=1, stop_state=state
+            )
+            buffer = io.BytesIO()
+            torch.save(payload, buffer)
+            captured["bytes"] = buffer.getvalue()
+
+    half = SBBTSTrainingConfig(n_epoch=2, patience=100, min_delta=0.0, grad_accum_steps=2)
+    logs_b1 = train_outer_iteration(
+        model_b,
+        opt_b,
+        train_batches,
+        val_batches,
+        beta,
+        1,
+        half,
+        val_noise=noise,
+        on_checkpoint=on_checkpoint,
+    )
+
+    model_c, opt_c = fresh()  # different weights until restored
+    payload = torch.load(io.BytesIO(captured["bytes"]), weights_only=False)
+    state = restore_training_state(payload, model_c, opt_c)
+    logs_b2 = train_outer_iteration(
+        model_c,
+        opt_c,
+        train_batches,
+        val_batches,
+        beta,
+        1,
+        config,
+        val_noise=noise,
+        state=state,
+        start_epoch=payload["epoch"] + 1,
+    )
+
+    logs_b = logs_b1 + logs_b2
+    assert [e.epoch for e in logs_b] == [0, 1, 2, 3]
+    assert [e.train_loss for e in logs_b] == [e.train_loss for e in logs_a]
+    assert [e.val_loss for e in logs_b] == [e.val_loss for e in logs_a]
+    sa, sc = model_a.state_dict(), model_c.state_dict()
+    assert all(torch.equal(sa[name], sc[name]) for name in sa)
