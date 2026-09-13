@@ -22,6 +22,21 @@ class SBBTSModelConfig:
     n_heads: int = 16
     n_layers: int = 1  # past-trajectory encoder depth
 
+    # Encoder-layer internals. Appendix B says only "an encoder-only
+    # architecture from [19] with one layer" and Table 2 lists no dropout, so
+    # the paper is silent on all three of these. The reference implementation
+    # (alexouadi/SBBTS, models/encoder_only.py) builds
+    # nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, batch_first=True)
+    # and inherits every other argument from PyTorch; these are those inherited
+    # values, written down here so they are an explicit choice rather than a
+    # library default that could drift with a torch upgrade. The reference
+    # applies the dropout consistently: model.train() for every training epoch,
+    # model.eval() for validation and generation. The FFN blocks (time, state,
+    # output) have no dropout in the paper, the reference, or here.
+    encoder_dropout: float = 0.1
+    encoder_dim_feedforward: int = 2048
+    encoder_activation: str = "relu"
+
 
 @dataclass(frozen=True)
 class SBBTSTrainingConfig:

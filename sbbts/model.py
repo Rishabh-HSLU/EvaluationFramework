@@ -53,12 +53,30 @@ class TrajectoryEncoder(nn.Module):
     excluded from attention entirely (not merely zeroed).
     """
 
-    def __init__(self, state_dim: int, d_model: int, n_heads: int, n_layers: int = 1) -> None:
+    def __init__(
+        self,
+        state_dim: int,
+        d_model: int,
+        n_heads: int,
+        n_layers: int = 1,
+        dropout: float = 0.1,
+        dim_feedforward: int = 2048,
+        activation: str = "relu",
+    ) -> None:
         super().__init__()
         self.d_model = d_model
         self.input_proj = nn.Linear(state_dim, d_model)
         self.time_pos_embed = FeedForwardEmbed(1, d_model)
-        encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=n_heads, batch_first=True)
+        # Every argument is passed explicitly; see SBBTSModelConfig for why
+        # the encoder-layer internals are pinned rather than inherited.
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=n_heads,
+            dim_feedforward=dim_feedforward,
+            dropout=dropout,
+            activation=activation,
+            batch_first=True,
+        )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
 
     def forward(self, y_seq: Tensor, times: Tensor, valid_mask: Tensor) -> Tensor:
@@ -95,6 +113,9 @@ class SBBTSDrift(nn.Module):
         d_model: int = 128,
         n_heads: int = 16,
         n_layers: int = 1,
+        encoder_dropout: float = 0.1,
+        encoder_dim_feedforward: int = 2048,
+        encoder_activation: str = "relu",
     ) -> None:
         super().__init__()
         self.state_dim = state_dim
@@ -102,7 +123,15 @@ class SBBTSDrift(nn.Module):
 
         self.time_embed = FeedForwardEmbed(1, d_model)
         self.state_embed = FeedForwardEmbed(state_dim, d_model)
-        self.trajectory_encoder = TrajectoryEncoder(state_dim, d_model, n_heads, n_layers)
+        self.trajectory_encoder = TrajectoryEncoder(
+            state_dim,
+            d_model,
+            n_heads,
+            n_layers,
+            dropout=encoder_dropout,
+            dim_feedforward=encoder_dim_feedforward,
+            activation=encoder_activation,
+        )
         self.output_proj = FeedForwardEmbed(3 * d_model, state_dim, hidden_dim=d_model)
 
     def encode_history(self, y_seq: Tensor, times: Tensor, valid_mask: Tensor) -> Tensor:
