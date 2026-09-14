@@ -52,16 +52,16 @@ class SBBTSTrainingConfig:
     val_frac: float = 0.2  # fraction of sessions (by date) held out for validation
     safe_frac: float = 0.01  # fraction of each Delta_t_i kept clear of t_{i+1}
 
-    # Numerical precision of the loss forward/backward: "fp32", or "bf16" for
-    # torch.autocast(bfloat16) around compute_loss (weights, gradients and the
-    # Adam state stay fp32; no loss scaling is needed for bf16). Not a
-    # hyperparameter of Algorithm 1, but part of a run's identity: a resume
-    # refuses a checkpoint written under a different precision unless told
-    # otherwise. bf16 was validated against fp32 on 2026-09-13 (same initial
-    # weights, same RNG seed, same fixed validation draws, 2,048/512-example
-    # subsample, 4 epochs at k=0 then 4 at k=1): max |val-loss divergence|
-    # 1.0e-3 and max |train-loss divergence| 1.2e-3 over the 8 epochs, against
-    # a median epoch-to-epoch validation movement of 5.9e-3 and a
-    # seed-to-seed spread (sd) of 3.7e-3 -- i.e. below the run's own noise
-    # floor. Measured speed-up on the A16: 2.1x per optimizer step.
-    precision: str = "bf16"
+    # Numerical precision of the loss forward/backward. Only "fp32" is
+    # accepted. bf16 autocast was tested and rejected for instability: an
+    # 8-epoch bf16-vs-fp32 validation on a 2,048/512-example subsample (same
+    # init, seed and validation draws) passed at max val-loss divergence
+    # 1.0e-3, but two full runs then collapsed under bf16 at k=0 -- at epoch
+    # 77 (two epochs after a mid-run fp32-to-bf16 switch) and at epoch 12
+    # (from a cold bf16 start) -- while 75 fp32 epochs at the same objective
+    # showed none. The validation observed ~4,000 optimizer steps; the
+    # collapses arrived after ~40,000 and ~6,000, a rare-step tail event the
+    # check could not see. See scripts/reasoning.md, "Precision". The field
+    # remains part of a checkpoint's identity so a resume can never mix
+    # precisions.
+    precision: str = "fp32"

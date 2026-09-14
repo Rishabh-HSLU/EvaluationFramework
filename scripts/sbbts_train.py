@@ -59,7 +59,12 @@ from sbbts.checkpoint import (
 )
 from sbbts.config import SBBTSModelConfig, SBBTSTrainingConfig
 from sbbts.data import session_train_val_split
-from sbbts.diagnostics import DegeneracyGate, TransformDiagnostics, transform_diagnostics
+from sbbts.diagnostics import (
+    CollapseGate,
+    DegeneracyGate,
+    TransformDiagnostics,
+    transform_diagnostics,
+)
 from sbbts.model import SBBTSDrift
 from sbbts.training import (
     EarlyStopState,
@@ -102,8 +107,8 @@ DIAG_COLUMNS = [
 ]
 
 
-class DegeneracyAbort(RuntimeError):
-    """Raised from the epoch callback when the gate trips; halts training cleanly."""
+class GateAbort(RuntimeError):
+    """Raised from the epoch callback when a gate trips; halts training cleanly."""
 
 
 #: The pod is limited to 8 CPUs; torch must not spawn more intra-op threads.
@@ -122,6 +127,8 @@ LOG_COLUMNS = [
     "peak_gpu_alloc_mib",
     "peak_gpu_reserved_mib",
     "resumed",
+    "train_min_this_outer",
+    "collapse_high_streak",
 ]
 
 
@@ -228,14 +235,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=0, help="init + noise seed")
     parser.add_argument("--threads", type=int, default=MAX_THREADS)
     parser.add_argument(
-        "--accept-precision-change",
-        action="store_true",
-        help=(
-            "resume a checkpoint whose training precision differs from the config's "
-            "(a deliberate, logged switch); without it such a resume is refused"
-        ),
-    )
-    parser.add_argument(
         "--subsample",
         type=int,
         default=0,
@@ -274,6 +273,7 @@ def main(argv: list[str] | None = None) -> None:
     log(f"model config: {dataclasses.asdict(model_cfg)}")
     log(f"training config: {dataclasses.asdict(train_cfg)}")
     gate = DegeneracyGate()
+    collapse_rule = CollapseGate()
     log(
         f"endpoint transform: {TRANSFORM_MODE} -- for k >= 1, Y^k is built from the weights that "
         "ended outer iteration k-1, frozen and detached, at t~ = t_{i+1} - safe_frac*dt. "
@@ -288,13 +288,14 @@ def main(argv: list[str] | None = None) -> None:
         f"< {gate.warn_ratio_below}, corr > {gate.warn_corr_above} or ratio > {gate.warn_ratio_above}."
     )
     log(
-        f"precision: {train_cfg.precision} "
-        + (
-            "(torch.autocast bfloat16 around the loss forward/backward and validation; "
-            "weights, gradients and Adam state fp32)"
-            if train_cfg.precision == "bf16"
-            else "(no autocast)"
-        )
+        f"collapse gate (training loss, every epoch): ABORT if the loss stays >= "
+        f"{collapse_rule.rise_above_min} above this outer iteration's running minimum for "
+        f"{collapse_rule.persist_epochs} consecutive epochs (both bf16 collapses: +0.5 within two "
+        "epochs, then flat)."
+    )
+    log(
+        f"precision: {train_cfg.precision} (no autocast; bf16 was tested and rejected -- two k=0 "
+        "collapses -- and its code path is gone)"
     )
 
     examples = load_examples(args.examples)
@@ -343,17 +344,6 @@ def main(argv: list[str] | None = None) -> None:
         saved_train_cfg = dict(payload.get("training_config") or {})
         # Checkpoints written before `precision` existed ran without autocast.
         saved_train_cfg.setdefault("precision", "fp32")
-        precision_change = None
-        if saved_train_cfg["precision"] != train_cfg.precision:
-            if not args.accept_precision_change:
-                sys.exit(
-                    f"Refusing to resume {latest}: it was written at precision "
-                    f"{saved_train_cfg['precision']!r} but the config says "
-                    f"{train_cfg.precision!r}. Pass --accept-precision-change to switch "
-                    "deliberately."
-                )
-            precision_change = (saved_train_cfg["precision"], train_cfg.precision)
-            saved_train_cfg["precision"] = train_cfg.precision  # accepted; compare the rest
         mismatches = {
             name: (saved, current)
             for name, saved, current in (
@@ -370,12 +360,6 @@ def main(argv: list[str] | None = None) -> None:
                 f"Refusing to resume {latest}: it was written under a different setup: {mismatches}"
             )
         state = restore_training_state(payload, model, optimizer)
-        if precision_change is not None:
-            log(
-                f"PRECISION CHANGE accepted at this resume: {precision_change[0]} -> "
-                f"{precision_change[1]}. Every checkpoint written from here on records "
-                f"{precision_change[1]}, so a later resume will be held to it."
-            )
         if payload["epoch"] is None:
             k_start, epoch_start, state = payload["outer_iters_completed"], 0, EarlyStopState()
         else:
@@ -426,7 +410,7 @@ def main(argv: list[str] | None = None) -> None:
             + (f": {message}" if message else "")
         )
         if verdict == "abort":
-            raise DegeneracyAbort(f"[{subject}] k={k} epoch={epoch}: {message}")
+            raise GateAbort(f"[{subject}] k={k} epoch={epoch}: {message}")
 
     # Resume mid-iteration: theta_k comes back from the checkpoint.
     transform = None
@@ -460,12 +444,22 @@ def main(argv: list[str] | None = None) -> None:
         if k >= 1 and epoch_start == 0:
             log("NOTE: validation losses from here on regress onto frozen-transform targets.")
             run_diagnostics(transform, k, None, "frozen_transform_theta_k")
+        collapse = CollapseGate()  # running minimum is per outer iteration
+        if epoch_start > 0:
+            # Rebuild the running minimum from the epochs already logged for this k.
+            with open(args.log_csv) as f:
+                for prior in csv.DictReader(f):
+                    if int(prior["outer_iter"]) == k and int(prior["epoch"]) < epoch_start:
+                        collapse.update(float(prior["train_loss"]))
         torch.cuda.reset_peak_memory_stats()
 
-        def on_checkpoint(entry: EpochLog, st: EarlyStopState, k=k) -> None:
+        def on_checkpoint(
+            entry: EpochLog, st: EarlyStopState, k=k, collapse: CollapseGate = collapse
+        ) -> None:
             nonlocal resumed
             improved = st.best_epoch == entry.epoch
             writer.epoch(k, entry.epoch, st, improved)
+            collapsed, collapse_msg = collapse.update(entry.train_loss)
             row = {
                 "timestamp": datetime.now().isoformat(timespec="seconds"),
                 "outer_iter": k,
@@ -479,6 +473,8 @@ def main(argv: list[str] | None = None) -> None:
                 "peak_gpu_alloc_mib": f"{torch.cuda.max_memory_allocated() / 2**20:.0f}",
                 "peak_gpu_reserved_mib": f"{torch.cuda.max_memory_reserved() / 2**20:.0f}",
                 "resumed": int(resumed),
+                "train_min_this_outer": f"{collapse.running_min:.6f}",
+                "collapse_high_streak": collapse.consecutive_high,
             }
             append_log_row(args.log_csv, row)
             global_epoch[0] += 1
@@ -490,6 +486,8 @@ def main(argv: list[str] | None = None) -> None:
                 f"{entry.wall_time_sec:.1f}s peak {row['peak_gpu_alloc_mib']} MiB"
             )
             torch.cuda.reset_peak_memory_stats()
+            if collapsed:
+                raise GateAbort(f"[collapse] k={k} epoch={entry.epoch}: {collapse_msg}")
             if (entry.epoch + 1) % DIAG_EVERY_EPOCHS == 0:
                 # The live weights are the candidate for theta_{k+1}: gate them.
                 run_diagnostics(model, k, entry.epoch, "live_model_as_next_transform")
@@ -510,8 +508,8 @@ def main(argv: list[str] | None = None) -> None:
                 on_checkpoint=on_checkpoint,
                 transform=transform,
             )
-        except DegeneracyAbort as exc:
-            log(f"ABORTED by the degeneracy gate: {exc}")
+        except GateAbort as exc:
+            log(f"ABORTED by a gate: {exc}")
             log("The last epoch's checkpoint is on disk; the run did not continue.")
             (args.checkpoint_dir / "ABORTED").write_text(f"{datetime.now().isoformat()} {exc}\n")
             sys.exit(2)

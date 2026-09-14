@@ -142,12 +142,19 @@ def make_validation_noise(
 
 
 def autocast_context(precision: str, device: torch.device):
-    """The autocast context for `precision` ("fp32" -> no-op, "bf16" -> bfloat16 autocast)."""
+    """The (no-op) precision context. Only "fp32" is supported.
+
+    A bf16 autocast path existed and was removed: two full runs collapsed
+    under it at k=0 while fp32 did not (see SBBTSTrainingConfig.precision
+    and scripts/reasoning.md, "Precision"). Refusing anything else here
+    means a stale checkpoint or config cannot re-enable it.
+    """
     if precision == "fp32":
         return contextlib.nullcontext()
-    if precision == "bf16":
-        return torch.autocast(device_type=device.type, dtype=torch.bfloat16)
-    raise ValueError(f"Unknown precision {precision!r}; expected 'fp32' or 'bf16'.")
+    raise ValueError(
+        f"precision {precision!r} is not supported; only 'fp32' is. bf16 autocast was tested "
+        "and rejected for instability (two k=0 collapses)."
+    )
 
 
 def freeze_transform(model: SBBTSDrift) -> SBBTSDrift:

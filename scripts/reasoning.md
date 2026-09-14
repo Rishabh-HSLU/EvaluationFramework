@@ -1620,12 +1620,12 @@ generated (off-distribution) inputs -- E[s^2] ~ 1 at the very first bar,
 conditional SB, no Bass map) is not a usable generator either: increment
 std 0.91 but end-of-day std 41 -- its drift trends.
 
-A second observation from the same run, unrelated to the objective: the
-k=0 fp32-to-bf16 switch at epoch 75 was followed two epochs later by a
-collapse (train loss 3.20 -> 3.80, val 5.9 -> 6.7, flat for 13 epochs
-until patience expired; best-restore discarded it). 189 further bf16
-epochs at k >= 1 showed no collapse. Runs now start in bf16 and never
-switch precision mid-run.
+A second observation from the same run, unrelated to the objective:
+two epochs after the k=0 fp32-to-bf16 switch at epoch 75, training
+collapsed (train loss 3.20 -> 3.80, val 5.9 -> 6.7, flat for 13 epochs
+until patience expired; best-restore discarded it). This was at first
+attributed to the precision *switch*; that attribution was wrong -- see
+"Precision: bf16 tested and rejected" below.
 
 ## The change: theta_k frozen and detached
 
@@ -1671,3 +1671,61 @@ halts with a clear message when `DegeneracyGate` trips:
 - WARN (logged, not halted) below 0.7, above 0.5 in correlation, or
   above 1.5 in ratio. The failed run's k=0 checkpoint (0.78 / 0.52) lands
   in the warning band, which is the intended early-warning behaviour.
+
+# Precision: bf16 tested and rejected (2026-09-14)
+
+**Correction.** The paragraph above originally blamed the k=0 epoch-77
+collapse on the mid-run fp32-to-bf16 switch and concluded that starting
+in bf16 would avoid it. The frozen-transform run launched on that basis
+(2026-09-14 08:26, bf16 from epoch 0, no switch) tracked the fp32 run's
+k=0 curve to three decimals through epoch 11 (train 3.288 vs 3.299) and
+then collapsed at epochs 12-13 (3.29 -> 3.46 -> 3.81, flat at 3.78-3.82
+thereafter), early-stopping k=0 at epoch 49 with best val 6.551 against
+fp32's 5.893 at the same objective. The record is therefore:
+
+- two bf16 collapses at k=0: epoch 77 (two epochs after a mid-run
+  switch) and epoch 12 (from a cold bf16 start);
+- zero collapses in 75 fp32 epochs at the same objective (k=0 of the
+  first run), and none in the fp32 epochs of any smoke or resume test;
+- the collapse signature both times: training loss up ~0.5 within two
+  epochs, then flat (3.80 +- 0.01) for the rest of the iteration, never
+  recovering -- consistent with dead units in the 2048-wide ReLU
+  feed-forward block after one destructive update.
+
+**Why the validation did not catch it.** bf16 was adopted after an
+8-epoch bf16-vs-fp32 comparison (same initial weights, seed and fixed
+validation draws; 2,048/512-example subsample; 4 epochs at k=0 and 4 at
+k=1) that passed at a maximum validation-loss divergence of 1.0e-3 and
+training-loss divergence of 1.2e-3 -- below the run's own epoch-to-epoch
+movement (median 5.9e-3) and seed spread (sd 3.7e-3). That check
+measured trajectory drift over roughly 4,000 optimizer steps. The
+collapses arrived after roughly 40,000 steps (epoch 77 at 517 steps per
+epoch) and 6,000 steps (epoch 12): a rare-step tail event, which a
+short paired comparison cannot see regardless of how tightly the two
+trajectories agree while nothing has gone wrong. The mechanism is
+plausible on its face -- the per-interval loss is heavy-tailed near
+t_{i+1}, there is no gradient clipping (neither here nor in the
+reference), and bf16's 8-bit mantissa makes a single extreme batch more
+likely to land a destructive update -- but the evidence for the decision
+is the two-for-two versus zero-for-75 count, not the mechanism.
+
+**Decision.** fp32 throughout, chosen on that evidence; bf16 was tested
+and rejected for instability. `SBBTSTrainingConfig.precision` is
+"fp32", `autocast_context` accepts nothing else (the bf16 path is
+removed, not merely defaulted off, so a stale config or checkpoint cannot
+re-enable it), and the driver refuses to resume a checkpoint whose
+recorded precision differs from the config's, with no override. The cost
+is ~2.3x per epoch (~210 s at k=0, ~260 s at k >= 1 with the frozen
+transform's extra encoder pass on the A16), roughly 1.2 days for the
+full schedule. Alternatives not taken: TF32 (untested for stability) and
+gradient clipping (an algorithm change the reference does not make).
+
+**Collapse gate.** Alongside the degeneracy gate -- which behaved
+correctly through this failure, staying quiet because the transform
+statistics were healthy (ratio 0.97-1.12, corr -0.38..+0.23) -- the
+driver now aborts an outer iteration when the training loss stays 0.15
+or more above that iteration's running minimum for 3 consecutive epochs
+(`sbbts/diagnostics.py: CollapseGate`). Ordinary epoch-to-epoch movement
+of the training loss is +-0.01; both collapses were +0.5 within two
+epochs and then flat, so the rule would have halted them at epoch 79 and
+epoch 15 respectively instead of 90 and 49.

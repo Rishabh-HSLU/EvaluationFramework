@@ -157,3 +157,42 @@ class DegeneracyGate:
         if warnings:
             return "warn", "; ".join(warnings)
         return "ok", ""
+
+
+@dataclass
+class CollapseGate:
+    """Abort rule on the training loss within one outer iteration.
+
+    Both observed collapses (bf16, k=0, epochs 77 and 12) shared one
+    signature: the training loss jumped ~ +0.5 above its running minimum
+    within two epochs and then stayed flat there (3.80 +- 0.01) for the
+    rest of the iteration, never recovering. Anything that rises
+    `rise_above_min` or more above the iteration's running minimum and stays
+    there for `persist_epochs` consecutive epochs is a collapse; ordinary
+    epoch-to-epoch wobble is +-0.01 on the training loss.
+
+    Reset at every outer iteration: the running minimum of k is not
+    comparable to k+1's targets.
+    """
+
+    rise_above_min: float = 0.15
+    persist_epochs: int = 3
+    running_min: float = float("inf")
+    consecutive_high: int = 0
+
+    def update(self, train_loss: float) -> tuple[bool, str]:
+        """Record an epoch's training loss; return (abort, message)."""
+        if train_loss != train_loss:  # NaN
+            return True, "training loss is NaN."
+        if train_loss >= self.running_min + self.rise_above_min:
+            self.consecutive_high += 1
+        else:
+            self.consecutive_high = 0
+        self.running_min = min(self.running_min, train_loss)
+        if self.consecutive_high >= self.persist_epochs:
+            return True, (
+                f"training loss {train_loss:.4f} has stayed >= {self.rise_above_min} above this "
+                f"outer iteration's minimum ({self.running_min:.4f}) for {self.consecutive_high} "
+                "consecutive epochs (collapse signature: bf16 runs 2026-09-13/14)."
+            )
+        return False, ""

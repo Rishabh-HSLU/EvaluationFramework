@@ -306,3 +306,41 @@ def test_transform_diagnostics_identity_when_drift_is_zero() -> None:
     assert abs(d.ratio - 1.0) < 1e-6
     assert d.e_s_start2 == 0.0 and d.e_s_drift_u0_2 == 0.0
     assert d.n_intervals > 0
+
+
+def test_collapse_gate_trips_on_the_observed_signature_only() -> None:
+    from sbbts.diagnostics import CollapseGate
+
+    # Healthy: slow descent with +-0.01 wobble never trips.
+    gate = CollapseGate()
+    for loss in (3.66, 3.45, 3.40, 3.36, 3.35, 3.36, 3.34, 3.35, 3.33):
+        assert gate.update(loss) == (False, "")
+
+    # The bf16 k=0 collapse (2026-09-14): 3.29 -> 3.46 -> 3.81 -> flat. A single
+    # high epoch does not trip; the third consecutive one does.
+    gate = CollapseGate()
+    for loss in (3.31, 3.29, 3.288):
+        assert not gate.update(loss)[0]
+    assert not gate.update(3.462)[0]  # streak 1
+    assert not gate.update(3.810)[0]  # streak 2
+    aborted, message = gate.update(3.817)  # streak 3
+    assert aborted and "3 consecutive" in message
+
+    # A spike that recovers resets the streak.
+    gate = CollapseGate()
+    for loss in (3.30, 3.50, 3.50, 3.31, 3.50, 3.50):
+        aborted, _ = gate.update(loss)
+        assert not aborted
+
+    assert CollapseGate().update(float("nan"))[0]
+
+
+def test_only_fp32_precision_is_accepted() -> None:
+    import contextlib
+
+    from sbbts.training import autocast_context
+
+    assert isinstance(autocast_context("fp32", torch.device("cpu")), contextlib.nullcontext)
+    with pytest.raises(ValueError, match="bf16"):
+        autocast_context("bf16", torch.device("cpu"))
+    assert SBBTSTrainingConfig().precision == "fp32"
