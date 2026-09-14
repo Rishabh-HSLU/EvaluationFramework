@@ -193,6 +193,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=0, help="init + noise seed")
     parser.add_argument("--threads", type=int, default=MAX_THREADS)
     parser.add_argument(
+        "--accept-precision-change",
+        action="store_true",
+        help=(
+            "resume a checkpoint whose training precision differs from the config's "
+            "(a deliberate, logged switch); without it such a resume is refused"
+        ),
+    )
+    parser.add_argument(
         "--subsample",
         type=int,
         default=0,
@@ -230,6 +238,15 @@ def main(argv: list[str] | None = None) -> None:
     )
     log(f"model config: {dataclasses.asdict(model_cfg)}")
     log(f"training config: {dataclasses.asdict(train_cfg)}")
+    log(
+        f"precision: {train_cfg.precision} "
+        + (
+            "(torch.autocast bfloat16 around the loss forward/backward and validation; "
+            "weights, gradients and Adam state fp32)"
+            if train_cfg.precision == "bf16"
+            else "(no autocast)"
+        )
+    )
 
     examples = load_examples(args.examples)
     log(
@@ -274,21 +291,41 @@ def main(argv: list[str] | None = None) -> None:
     resumed = False
     if latest.exists():
         payload = load_checkpoint(latest, device)
+        saved_train_cfg = dict(payload.get("training_config") or {})
+        # Checkpoints written before `precision` existed ran without autocast.
+        saved_train_cfg.setdefault("precision", "fp32")
+        precision_change = None
+        if saved_train_cfg["precision"] != train_cfg.precision:
+            if not args.accept_precision_change:
+                sys.exit(
+                    f"Refusing to resume {latest}: it was written at precision "
+                    f"{saved_train_cfg['precision']!r} but the config says "
+                    f"{train_cfg.precision!r}. Pass --accept-precision-change to switch "
+                    "deliberately."
+                )
+            precision_change = (saved_train_cfg["precision"], train_cfg.precision)
+            saved_train_cfg["precision"] = train_cfg.precision  # accepted; compare the rest
         mismatches = {
-            name: (payload.get(name), current)
-            for name, current in (
-                ("model_config", dataclasses.asdict(model_cfg)),
-                ("training_config", dataclasses.asdict(train_cfg)),
-                ("test_mode", test_mode),
-                ("seed", args.seed),
+            name: (saved, current)
+            for name, saved, current in (
+                ("model_config", payload.get("model_config"), dataclasses.asdict(model_cfg)),
+                ("training_config", saved_train_cfg, dataclasses.asdict(train_cfg)),
+                ("test_mode", payload.get("test_mode"), test_mode),
+                ("seed", payload.get("seed"), args.seed),
             )
-            if payload.get(name) != current
+            if saved != current
         }
         if mismatches:
             sys.exit(
                 f"Refusing to resume {latest}: it was written under a different setup: {mismatches}"
             )
         state = restore_training_state(payload, model, optimizer)
+        if precision_change is not None:
+            log(
+                f"PRECISION CHANGE accepted at this resume: {precision_change[0]} -> "
+                f"{precision_change[1]}. Every checkpoint written from here on records "
+                f"{precision_change[1]}, so a later resume will be held to it."
+            )
         if payload["epoch"] is None:
             k_start, epoch_start, state = payload["outer_iters_completed"], 0, EarlyStopState()
         else:

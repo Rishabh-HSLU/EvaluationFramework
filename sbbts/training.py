@@ -29,6 +29,7 @@ Verified against the paper's reference implementation
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import time
 from collections.abc import Callable, Sequence
@@ -129,6 +130,15 @@ def make_validation_noise(
     return ValidationNoise(u_frac=u_frac, eps=eps)
 
 
+def autocast_context(precision: str, device: torch.device):
+    """The autocast context for `precision` ("fp32" -> no-op, "bf16" -> bfloat16 autocast)."""
+    if precision == "fp32":
+        return contextlib.nullcontext()
+    if precision == "bf16":
+        return torch.autocast(device_type=device.type, dtype=torch.bfloat16)
+    raise ValueError(f"Unknown precision {precision!r}; expected 'fp32' or 'bf16'.")
+
+
 def compute_loss(
     model: SBBTSDrift,
     batch: PaddedBatch,
@@ -200,8 +210,13 @@ def evaluate(
     k: int,
     safe_frac: float,
     noise: ValidationNoise | None = None,
+    precision: str = "fp32",
 ) -> float | None:
-    """Mean validation loss over `batches`; deterministic when `noise` is given."""
+    """Mean validation loss over `batches`; deterministic when `noise` is given.
+
+    Runs under the same precision as training so the monitored value is
+    comparable across epochs of one run.
+    """
     if not batches:
         return None
     model.eval()
@@ -210,7 +225,9 @@ def evaluate(
         for index, batch in enumerate(batches):
             u_frac = noise.u_frac[index] if noise is not None else None
             eps = noise.eps[index] if noise is not None else None
-            total += compute_loss(model, batch, beta, k, safe_frac, u_frac=u_frac, eps=eps).item()
+            with autocast_context(precision, batch.values.device):
+                loss = compute_loss(model, batch, beta, k, safe_frac, u_frac=u_frac, eps=eps)
+            total += loss.item()
     return total / len(batches)
 
 
@@ -235,8 +252,9 @@ def train_outer_iteration(
     fresh here unless a resumed one is passed in, and nothing about a
     previous outer iteration's validation losses is visible. The monitored
     quantity is the validation loss (on `val_noise` if given, so that it is
-    the same draw every epoch), or the training loss when there is no
-    validation set. An epoch counts as an improvement only if it beats the
+    the same draw every epoch; or the training loss when there is no
+    validation set), computed under `config.precision` like the training
+    loss. An epoch counts as an improvement only if it beats the
     best so far by more than `config.min_delta`; after `config.patience`
     consecutive non-improvements the loop stops and the best epoch's
     weights are restored.
@@ -257,7 +275,8 @@ def train_outer_iteration(
         total_train_loss = 0.0
         optimizer.zero_grad()
         for i, batch in enumerate(train_batches):
-            loss = compute_loss(model, batch, beta, k, config.safe_frac)
+            with autocast_context(config.precision, batch.values.device):
+                loss = compute_loss(model, batch, beta, k, config.safe_frac)
             (loss / accum_steps).backward()
             total_train_loss += loss.item()
             if (i + 1) % accum_steps == 0:
@@ -268,7 +287,9 @@ def train_outer_iteration(
             optimizer.zero_grad()
         train_loss = total_train_loss / max(len(train_batches), 1)
 
-        val_loss = evaluate(model, val_batches, beta, k, config.safe_frac, val_noise)
+        val_loss = evaluate(
+            model, val_batches, beta, k, config.safe_frac, val_noise, precision=config.precision
+        )
         wall_time_sec = time.perf_counter() - start
 
         log = EpochLog(k, epoch, train_loss, val_loss, wall_time_sec)

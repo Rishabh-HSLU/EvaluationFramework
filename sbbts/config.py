@@ -51,3 +51,17 @@ class SBBTSTrainingConfig:
     min_delta: float = 1e-3  # minimum validation-loss improvement to reset patience
     val_frac: float = 0.2  # fraction of sessions (by date) held out for validation
     safe_frac: float = 0.01  # fraction of each Delta_t_i kept clear of t_{i+1}
+
+    # Numerical precision of the loss forward/backward: "fp32", or "bf16" for
+    # torch.autocast(bfloat16) around compute_loss (weights, gradients and the
+    # Adam state stay fp32; no loss scaling is needed for bf16). Not a
+    # hyperparameter of Algorithm 1, but part of a run's identity: a resume
+    # refuses a checkpoint written under a different precision unless told
+    # otherwise. bf16 was validated against fp32 on 2026-09-13 (same initial
+    # weights, same RNG seed, same fixed validation draws, 2,048/512-example
+    # subsample, 4 epochs at k=0 then 4 at k=1): max |val-loss divergence|
+    # 1.0e-3 and max |train-loss divergence| 1.2e-3 over the 8 epochs, against
+    # a median epoch-to-epoch validation movement of 5.9e-3 and a
+    # seed-to-seed spread (sd) of 3.7e-3 -- i.e. below the run's own noise
+    # floor. Measured speed-up on the A16: 2.1x per optimizer step.
+    precision: str = "bf16"
