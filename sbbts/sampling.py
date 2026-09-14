@@ -6,7 +6,7 @@ Implements the sampling procedure the paper gives after Algorithm 1
 
     Y_{t0}     = X_{t0} - s(t0, X_{t0}, Phi(X_{t0})) / beta
     on [t_i, t_{i+1}):  dY = s(t, Y, c_i) dt + dW      (N_pi Euler-Maruyama steps)
-    X_{t_{i+1}} = Y_{t_{i+1}} + s(t_{i+1}, Y_{t_{i+1}}, c_i) / beta
+    X_{t_{i+1}} = Y_{t_{i+1}} + s(t~_{i+1}, Y_{t_{i+1}}, c_i) / beta
 
 with c_i the encoder's context for the path up to t_i. The paper writes the
 generation-time context as Phi(Y_{t0:ti}) and the reference code feeds the
@@ -15,11 +15,11 @@ the observed X path; the two coincide in the large-beta regime the method
 assumes). `context_on` selects which path the encoder sees; "y" is the
 reference behaviour.
 
-The endpoint transform is evaluated at t_{i+1} exactly, which is what
-`sbbts.training.compute_loss` trained it at (the reference uses T - safe_t
-because its experiments hold Delta_t fixed); the Euler drift evaluations
-stay inside [t_i, t_i + (1 - 1/N_pi) Delta_t], i.e. within the range the
-regression covered.
+The inverse map is evaluated at t~_{i+1} = t_{i+1} - safe_frac * Delta_t,
+where `sbbts.training.endpoint_transform` evaluates the frozen transform
+during training (the paper's t~ = t_{i+1} - xi); the Euler drift
+evaluations stay inside [t_i, t_i + (1 - 1/N_pi) Delta_t], i.e. within the
+range the regression covered.
 
 Paths are generated on the full regular 1-minute session grid (every bar
 present, Delta_t = 1), anchored at X = 0 on the first bar with elapsed
@@ -106,6 +106,7 @@ def generate_paths(
     generator: torch.Generator | None = None,
     retransform_start: bool = False,
     invert_iters: int = 0,
+    safe_frac: float = 0.01,
 ) -> Tensor:
     """Sample `n_paths` standardized cumulative paths of `n_bars` bars, (n_paths, n_bars, state_dim).
 
@@ -153,9 +154,9 @@ def generate_paths(
             tau = (t_i + m * dt).unsqueeze(-1)
             noise = torch.randn(y.shape, device=device, generator=generator)
             y = y + model.drift(tau, y, context) * dt + sqrt_dt * noise
-        t_next = (t_i + 1.0).unsqueeze(-1)
-        x = y + model.drift(t_next, y, context) / beta  # X_{t_{i+1}}
+        t_tilde = (t_i + 1.0 - safe_frac).unsqueeze(-1)  # t~_{i+1}, Delta_t = 1
+        x = y + model.drift(t_tilde, y, context) / beta  # X_{t_{i+1}}
         for _ in range(invert_iters):
-            x = y + model.drift(t_next, x, context) / beta
+            x = y + model.drift(t_tilde, x, context) / beta
         out[:, i + 1] = x
     return out

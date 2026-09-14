@@ -13,17 +13,20 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 import torch
 from torch import optim
 
 from sbbts.calibration import derive_beta
 from sbbts.checkpoint import build_checkpoint, restore_training_state
 from sbbts.config import SBBTSTrainingConfig
+from sbbts.diagnostics import DegeneracyGate, TransformDiagnostics, transform_diagnostics
 from sbbts.model import SBBTSDrift
 from sbbts.training import (
     EarlyStopState,
     compute_loss,
     evaluate,
+    freeze_transform,
     make_validation_noise,
     train_outer_iteration,
     train_sbbts,
@@ -63,9 +66,10 @@ def test_one_training_step_runs_without_error_and_loss_is_finite() -> None:
     model = _tiny_model()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    for k in (0, 1):  # exercise both the identity-map path and the self-referential path
+    transform = freeze_transform(model)
+    for k in (0, 1):  # exercise both the identity-map path and the frozen-transform path
         optimizer.zero_grad()
-        loss = compute_loss(model, batches[0], beta, k, safe_frac=0.01)
+        loss = compute_loss(model, batches[0], beta, k, safe_frac=0.01, transform=transform)
         assert torch.isfinite(loss)
         loss.backward()
 
@@ -124,7 +128,15 @@ def test_stale_state_from_another_iteration_would_stop_immediately() -> None:
 
     stale = EarlyStopState(best_monitored=-1e9, epochs_without_improve=1)  # from a "previous k"
     logs = train_outer_iteration(
-        model, optimizer, batches, batches, beta, k=1, config=config, state=stale
+        model,
+        optimizer,
+        batches,
+        batches,
+        beta,
+        k=1,
+        config=config,
+        state=stale,
+        transform=freeze_transform(model),
     )
     assert len(logs) == 1  # one non-improvement on a meaningless best -> stop
 
@@ -134,11 +146,17 @@ def test_validation_loss_is_deterministic_with_fixed_noise() -> None:
     batches = build_batches(examples, batch_size=4, n_buckets=1)
     model = _tiny_model()
     noise = make_validation_noise(batches, seed=7)
+    transform = freeze_transform(model)
 
-    fixed = [evaluate(model, batches, beta, k=1, safe_frac=0.01, noise=noise) for _ in range(3)]
+    fixed = [
+        evaluate(model, batches, beta, k=1, safe_frac=0.01, noise=noise, transform=transform)
+        for _ in range(3)
+    ]
     assert fixed[0] == fixed[1] == fixed[2]
 
-    fresh = [evaluate(model, batches, beta, k=1, safe_frac=0.01) for _ in range(3)]
+    fresh = [
+        evaluate(model, batches, beta, k=1, safe_frac=0.01, transform=transform) for _ in range(3)
+    ]
     assert len(set(fresh)) > 1
 
     again = make_validation_noise(batches, seed=7)
@@ -160,11 +178,22 @@ def test_resume_from_checkpoint_matches_uninterrupted_run() -> None:
         model = _tiny_model()
         return model, optim.Adam(model.parameters(), lr=config.lr)
 
+    torch.manual_seed(12)
+    transform = freeze_transform(_tiny_model())  # theta_1, shared by every path
+
     # Uninterrupted reference.
     model_a, opt_a = fresh()
     torch.manual_seed(5)
     logs_a = train_outer_iteration(
-        model_a, opt_a, train_batches, val_batches, beta, 1, config, val_noise=noise
+        model_a,
+        opt_a,
+        train_batches,
+        val_batches,
+        beta,
+        1,
+        config,
+        val_noise=noise,
+        transform=transform,
     )
 
     # Interrupted after epoch index 1, checkpointed, resumed into new objects.
@@ -192,6 +221,7 @@ def test_resume_from_checkpoint_matches_uninterrupted_run() -> None:
         half,
         val_noise=noise,
         on_checkpoint=on_checkpoint,
+        transform=transform,
     )
 
     model_c, opt_c = fresh()  # different weights until restored
@@ -208,6 +238,7 @@ def test_resume_from_checkpoint_matches_uninterrupted_run() -> None:
         val_noise=noise,
         state=state,
         start_epoch=payload["epoch"] + 1,
+        transform=transform,
     )
 
     logs_b = logs_b1 + logs_b2
@@ -216,3 +247,62 @@ def test_resume_from_checkpoint_matches_uninterrupted_run() -> None:
     assert [e.val_loss for e in logs_b] == [e.val_loss for e in logs_a]
     sa, sc = model_a.state_dict(), model_c.state_dict()
     assert all(torch.equal(sa[name], sc[name]) for name in sa)
+
+
+def test_frozen_transform_gets_no_gradient_and_fixes_the_targets() -> None:
+    """theta_k neither receives gradients nor moves, so k>=1 targets are fixed within the iteration."""
+    examples, beta = _corpus_and_beta([20, 25, 18, 30])
+    batches = build_batches(examples, batch_size=4, n_buckets=1)
+    model = _tiny_model()
+    transform = freeze_transform(model)
+    before = {name: p.clone() for name, p in transform.state_dict().items()}
+    assert all(not p.requires_grad for p in transform.parameters())
+
+    optimizer = optim.Adam(model.parameters(), lr=1e-2)
+    config = SBBTSTrainingConfig(n_epoch=3, patience=100, min_delta=0.0, grad_accum_steps=1)
+    train_outer_iteration(model, optimizer, batches, [], beta, 1, config, transform=transform)
+
+    after = transform.state_dict()
+    assert all(torch.equal(before[name], after[name]) for name in before)
+    live = model.state_dict()
+    assert any(not torch.equal(before[name], live[name]) for name in before)  # the live model moved
+
+    # And k >= 1 without a transform is an error, never a silent self-transform.
+    with pytest.raises(ValueError):
+        compute_loss(model, batches[0], beta, 1, safe_frac=0.01)
+
+
+def test_degeneracy_gate_trips_on_the_failed_run_signature_only() -> None:
+    def diag(ratio, corr):
+        return TransformDiagnostics(
+            var_dx=1.0,
+            var_dy=ratio,
+            ratio=ratio,
+            corr_send_bdx=corr,
+            e_s_start2=0.05,
+            e_s_drift_u0_2=0.05,
+            n_intervals=1000,
+        )
+
+    gate = DegeneracyGate()
+    assert gate.verdict(diag(0.44, 0.77))[0] == "abort"  # failed run, k=1
+    assert gate.verdict(diag(0.38, 0.81))[0] == "abort"  # failed run, k=4
+    assert gate.verdict(diag(0.78, 0.52))[0] == "warn"  # failed run's k=0 model: early warning
+    assert gate.verdict(diag(2.5, 0.0))[0] == "abort"  # transform inflating the targets
+    assert gate.verdict(diag(1.0, 0.1))[0] == "ok"
+    assert gate.verdict(diag(0.5, 0.2))[0] == "warn"  # low ratio alone is not the joint signature
+    assert gate.verdict(diag(float("nan"), 0.0))[0] == "abort"
+
+
+def test_transform_diagnostics_identity_when_drift_is_zero() -> None:
+    """A network with zero output is the identity transform: ratio 1, no correlation."""
+    examples, beta = _corpus_and_beta([20, 25, 18, 30])
+    batches = build_batches(examples, batch_size=4, n_buckets=1)
+    model = _tiny_model()
+    with torch.no_grad():
+        model.output_proj.net[-1].weight.zero_()
+        model.output_proj.net[-1].bias.zero_()
+    d = transform_diagnostics(model, batches, beta, safe_frac=0.01)
+    assert abs(d.ratio - 1.0) < 1e-6
+    assert d.e_s_start2 == 0.0 and d.e_s_drift_u0_2 == 0.0
+    assert d.n_intervals > 0

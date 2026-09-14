@@ -1563,3 +1563,111 @@ never changed; only which curation run had most recently written to it
 did. Regenerated on the canonical 600-ticker panel: 82,163 examples (of
 82,200 possible cells, 37 dropped), matching the original pre-audit
 reference numbers exactly.
+
+# Frozen endpoint transform: a deliberate deviation from the reference (2026-09-14)
+
+## What the first full run produced
+
+The first complete training run (2026-09-13/14; K=5, n_epoch=1000,
+batch 128 as 64x2 accumulation, lr 1e-3, patience 15, min_delta 1e-3,
+val_frac 0.2; fp32 for k=0 epochs 0-74, bf16 autocast from k=0 epoch 75
+on; 280 epochs, 10.9 h on the A16) ran every outer iteration to its
+early-stopping point and finished with validation loss 5.89 (k=0), 4.77
+(k=1), 4.76 (k=2), 4.83 (k=3), 4.64 (k=4). Sampling from the final
+checkpoint with the paper's generation procedure (`sbbts/sampling.py`)
+gave standardized 1-minute increments with std 2.38 against 1.00 for
+real, lag-1 autocorrelation -0.35 against +0.004, and end-of-day
+dispersion 17.7 against 17.5 -- i.e. increments 2.4x too wide, strongly
+mean-reverting, with excess kurtosis 10.6 against 62.9 and |increment|
+lag-1 autocorrelation 0.35 against 0.42. Generating under the training
+loss's exact definitions (context on the X path, re-transforming at every
+interval start) removed the lag-1 artifact (-0.005) but not the scale
+(std 2.44) and lost the volatility clustering (0.08).
+
+## Why: the endpoint map absorbed the increments
+
+`compute_loss` followed the reference implementation
+(alexouadi/SBBTS, `training/training_sbbts_dsbm.py`) in NOT detaching
+the endpoint transform: for k >= 1, Y_i = X_i - s_theta(t_i, X_i, c_i)/beta
+and Y_{i+1} = X_{i+1} - s_theta(t_{i+1}, X_{i+1}, c_i)/beta were built
+from the same live parameters the bridge regression was training, and the
+loss backpropagated through both. That objective has a degenerate
+minimiser: the network can lower the bridge loss by using its value at
+the endpoint to shrink the Y-increments it is asked to bridge, rather
+than by learning the bridge drift. Measured on validation data
+(consecutive-minute intervals) for each outer iteration's checkpoint:
+
+    checkpoint   Var(dY)/Var(dX)   corr(s_end, beta*dX)   E[s_start^2]
+    outer_k0          0.78               0.52                 0.07
+    outer_k1          0.44               0.77                 0.07
+    outer_k2          0.36               0.81                 0.08
+    outer_k3          0.41               0.79                 0.02
+    outer_k4          0.38               0.81                 0.04
+
+with Var(dX) = 3.25 on the validation sessions. The endpoint map had
+converged to s_end ~ 0.8 * beta * dX (E[s_end^2] ~ 5), removing ~60 % of
+the increment variance from the targets, while the drift at the interval
+start was ~ 0 and, on real inputs, E[s^2] never exceeded 0.39 anywhere in
+the interval. The validation-loss drop from 5.89 to 4.64 across k was that
+shrinkage, not learning: for unit-variance increments the irreducible
+bridge-noise term of Eq. 4.1 is E[u/(dt - u)]/dt ~ 3.65 (u ~ U[0, 0.99]),
+so a zero-drift predictor scores ~ 3.65 + Var(dY); with Var(dY) falling
+from 2.5 to 1.2 the floor fell with it. At generation, inverting a map
+that removed 80 % of each increment multiplies the diffusion's unit noise
+by ~1/(1 - 0.8), which is the 2.4x observed, and evaluating s on
+generated (off-distribution) inputs -- E[s^2] ~ 1 at the very first bar,
+~15 by bar 20 -- adds the rest. The k=0 model used drift-only (a plain
+conditional SB, no Bass map) is not a usable generator either: increment
+std 0.91 but end-of-day std 41 -- its drift trends.
+
+A second observation from the same run, unrelated to the objective: the
+k=0 fp32-to-bf16 switch at epoch 75 was followed two epochs later by a
+collapse (train loss 3.20 -> 3.80, val 5.9 -> 6.7, flat for 13 epochs
+until patience expired; best-restore discarded it). 189 further bf16
+epochs at k >= 1 showed no collapse. Runs now start in bf16 and never
+switch precision mid-run.
+
+## The change: theta_k frozen and detached
+
+`sbbts/training.py` now computes Y^k from a frozen, detached copy of the
+weights that ended outer iteration k-1 (`freeze_transform`,
+`endpoint_transform`) while theta_{k+1} trains -- Algorithm 1 lines 5-6
+read literally as iterative proportional fitting, with s^k_theta a fixed
+function during the inner `repeat`. The transform then has no gradient
+path and no incentive to absorb the targets; the bridge regression at
+k >= 1 becomes an honest regression onto fixed targets, so its validation
+losses are expected to be HIGHER than the no-detach run's 4.64 and are
+not comparable to it. `compute_loss` raises for k >= 1 without a
+transform rather than silently self-transforming. The frozen map is
+evaluated at t~_{i+1} = t_{i+1} - safe_frac * Delta_t_i, inside the range
+the bridge regression covers, as the paper prescribes for the endpoint
+("the target score is not well defined at t = t_{i+1} ... we evaluate it
+instead at t~_{i+1} = t_{i+1} - xi"); the earlier code evaluated it at
+t_{i+1} exactly, which under the joint objective was trained but under a
+frozen network is extrapolation. `sbbts/sampling.py` inverts at the same
+t~. Per-epoch checkpoints carry theta_k (`transform_state`) so a resume
+mid-iteration regresses onto the same targets, and the driver refuses to
+resume a checkpoint written under the old objective (`transform` field).
+
+## Degeneracy diagnostics as a gate
+
+`sbbts/diagnostics.py` computes, on real validation inputs, the four
+quantities above for any candidate transform -- Var(dY)/Var(dX),
+corr(s_end, beta*dX), E[s_start^2] (the map at the interval start) and
+E[s(t_i, Y_i, c_i)^2] (the drift the sampler applies at u = 0). The
+training driver evaluates them at every outer-iteration boundary (on the
+frozen theta_k, i.e. the actual targets, and on the best-restored weights
+about to become theta_{k+1}) and every 10 epochs within an iteration on
+the live weights, logs them to `data/sbbts/diagnostics_log.csv`, and
+halts with a clear message when `DegeneracyGate` trips:
+
+- ABORT if Var(dY)/Var(dX) < 0.6 AND corr(s_end, beta*dX) > 0.6 -- the
+  failed run's joint signature (0.44 / 0.77 at k=1). Both conditions are
+  required: a low ratio alone can be a legitimately good transport map,
+  and a high correlation alone with the variance intact is not
+  absorption.
+- ABORT if Var(dY)/Var(dX) > 2.0 -- the opposite failure, a frozen
+  network extrapolated into noise that inflates the targets.
+- WARN (logged, not halted) below 0.7, above 0.5 in correlation, or
+  above 1.5 in ratio. The failed run's k=0 checkpoint (0.78 / 0.52) lands
+  in the warning band, which is the intended early-warning behaviour.

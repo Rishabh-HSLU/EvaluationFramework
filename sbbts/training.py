@@ -11,12 +11,23 @@ Verified against the paper's reference implementation
 (https://github.com/alexouadi/SBBTS, training/training_sbbts_dsbm.py):
 
   - Y^0 = identity (k == 0 skips the network entirely: Y_ti = X_ti).
-  - For k > 0, the endpoint transform Y_ti = X_ti - s_theta(...)/beta is
-    NOT detached from the autograd graph: the loss backpropagates jointly
-    through the transport-map construction (steps 5-6 of Algorithm 1) and
-    the drift prediction (step 8), all through the same live parameters.
-    This is a self-referential/bootstrapped regression, not a frozen
-    target network.
+  - For k > 0 the reference does NOT detach the endpoint transform
+    Y_ti = X_ti - s_theta(...)/beta: its loss backpropagates jointly through
+    the transport-map construction (Algorithm 1 lines 5-6) and the drift
+    prediction (line 8), all through the same live parameters. We
+    deliberately deviate here: Y^k is computed from the previous outer
+    iteration's weights theta_k, held fixed and detached (a frozen copy),
+    while theta_{k+1} trains -- Algorithm 1 read literally as iterative
+    proportional fitting. The joint (no-detach) objective was found to be
+    minimised by letting the endpoint map absorb the increments instead of
+    the drift learning them (see scripts/reasoning.md, "Frozen endpoint
+    transform"); the frozen map removes that degree of freedom.
+  - The frozen map's endpoint value is evaluated at
+    t~_{i+1} = t_{i+1} - safe_frac * Delta_t_i, inside the range the bridge
+    regression covers, as the paper prescribes ("the target score is not
+    well defined at t = t_{i+1} ... we evaluate it instead at
+    t~_{i+1} = t_{i+1} - xi"); at t_{i+1} exactly a frozen network is pure
+    extrapolation.
   - Both endpoints of interval i (Y_ti and Y_ti+1) condition on the SAME
     context Phi_theta(X_{t0:ti}) -- i.e. history only up to t_i, matching
     Algorithm 1 lines 5-6 using Phi^k_theta(X^b_{t0:ti}) for both.
@@ -139,6 +150,40 @@ def autocast_context(precision: str, device: torch.device):
     raise ValueError(f"Unknown precision {precision!r}; expected 'fp32' or 'bf16'.")
 
 
+def freeze_transform(model: SBBTSDrift) -> SBBTSDrift:
+    """A detached, eval-mode copy of `model` to serve as theta_k for the next outer iteration."""
+    frozen = copy.deepcopy(model).eval()
+    for parameter in frozen.parameters():
+        parameter.requires_grad_(False)
+    return frozen
+
+
+@torch.no_grad()
+def endpoint_transform(
+    transform: SBBTSDrift,
+    y: torch.Tensor,
+    times: torch.Tensor,
+    valid_mask: torch.Tensor,
+    beta: float,
+    safe_frac: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Y_i and Y_{i+1} of Algorithm 1 lines 5-6 from the frozen theta_k, detached.
+
+    Both endpoints use theta_k's own context Phi_k(X_{t0:ti}); the far
+    endpoint is evaluated at t~_{i+1} = t_{i+1} - safe_frac * Delta_t_i.
+    """
+    transform.eval()
+    context = transform.encode_history(y, times, valid_mask)[:, :-1, :]
+    t_i = times[:, :-1]
+    t_ip1 = times[:, 1:]
+    t_tilde = t_ip1 - safe_frac * (t_ip1 - t_i)
+    x_i = y[:, :-1, :]
+    x_ip1 = y[:, 1:, :]
+    y_i = x_i - transform.drift(t_i.unsqueeze(-1), x_i, context) / beta
+    y_ip1 = x_ip1 - transform.drift(t_tilde.unsqueeze(-1), x_ip1, context) / beta
+    return y_i, y_ip1
+
+
 def compute_loss(
     model: SBBTSDrift,
     batch: PaddedBatch,
@@ -147,6 +192,7 @@ def compute_loss(
     safe_frac: float = 0.01,
     u_frac: torch.Tensor | None = None,
     eps: torch.Tensor | None = None,
+    transform: SBBTSDrift | None = None,
 ) -> torch.Tensor:
     """Eq. 4.1 loss on one batch, for outer iteration k.
 
@@ -157,6 +203,10 @@ def compute_loss(
     `u_frac` (B, L-1) in [0, 1) and `eps` (B, L-1, state_dim) optionally fix
     the bridge-time and Gaussian draws (see `ValidationNoise`); when omitted
     they are sampled fresh, which is what training wants.
+
+    For k >= 1 the endpoints Y_i, Y_{i+1} come from `transform`, the frozen
+    theta_k (see `freeze_transform`); it is required then and ignored at
+    k == 0, where Y^0 is the identity.
     """
     y, times, valid_mask = to_model_inputs(batch)
     if y.shape[1] < 2:
@@ -173,10 +223,11 @@ def compute_loss(
     if k == 0:
         y_i, y_ip1 = x_i, x_ip1
     else:
-        s_i = model.drift(t_i.unsqueeze(-1), x_i, context)
-        s_ip1 = model.drift(t_ip1.unsqueeze(-1), x_ip1, context)
-        y_i = x_i - s_i / beta
-        y_ip1 = x_ip1 - s_ip1 / beta
+        if transform is None:
+            raise ValueError(
+                "k >= 1 requires the frozen transform model theta_k (see freeze_transform)."
+            )
+        y_i, y_ip1 = endpoint_transform(transform, y, times, valid_mask, beta, safe_frac)
 
     delta_t = (t_ip1 - t_i).clamp(min=1e-8)  # (B, L-1)
     span = (delta_t * (1.0 - safe_frac)).clamp(min=1e-8)
@@ -211,11 +262,13 @@ def evaluate(
     safe_frac: float,
     noise: ValidationNoise | None = None,
     precision: str = "fp32",
+    transform: SBBTSDrift | None = None,
 ) -> float | None:
     """Mean validation loss over `batches`; deterministic when `noise` is given.
 
     Runs under the same precision as training so the monitored value is
-    comparable across epochs of one run.
+    comparable across epochs of one run. With the frozen `transform` the
+    k >= 1 validation loss is an honest regression against fixed targets.
     """
     if not batches:
         return None
@@ -226,7 +279,9 @@ def evaluate(
             u_frac = noise.u_frac[index] if noise is not None else None
             eps = noise.eps[index] if noise is not None else None
             with autocast_context(precision, batch.values.device):
-                loss = compute_loss(model, batch, beta, k, safe_frac, u_frac=u_frac, eps=eps)
+                loss = compute_loss(
+                    model, batch, beta, k, safe_frac, u_frac=u_frac, eps=eps, transform=transform
+                )
             total += loss.item()
     return total / len(batches)
 
@@ -245,8 +300,12 @@ def train_outer_iteration(
     state: EarlyStopState | None = None,
     start_epoch: int = 0,
     on_checkpoint: Callable[[EpochLog, EarlyStopState], None] | None = None,
+    transform: SBBTSDrift | None = None,
 ) -> list[EpochLog]:
     """Train to convergence for one outer iteration (Algorithm 1's inner `repeat`).
+
+    `transform` is the frozen theta_k that defines this iteration's targets
+    (required for k >= 1); it never receives gradients and is not modified.
 
     Early stopping is evaluated inside this call only: `state` is created
     fresh here unless a resumed one is passed in, and nothing about a
@@ -276,7 +335,7 @@ def train_outer_iteration(
         optimizer.zero_grad()
         for i, batch in enumerate(train_batches):
             with autocast_context(config.precision, batch.values.device):
-                loss = compute_loss(model, batch, beta, k, config.safe_frac)
+                loss = compute_loss(model, batch, beta, k, config.safe_frac, transform=transform)
             (loss / accum_steps).backward()
             total_train_loss += loss.item()
             if (i + 1) % accum_steps == 0:
@@ -288,7 +347,14 @@ def train_outer_iteration(
         train_loss = total_train_loss / max(len(train_batches), 1)
 
         val_loss = evaluate(
-            model, val_batches, beta, k, config.safe_frac, val_noise, precision=config.precision
+            model,
+            val_batches,
+            beta,
+            k,
+            config.safe_frac,
+            val_noise,
+            precision=config.precision,
+            transform=transform,
         )
         wall_time_sec = time.perf_counter() - start
 
@@ -322,7 +388,9 @@ def train_sbbts(
 
     One Adam optimizer instance persists across all K outer iterations
     (matching the paper's reference implementation), so momentum is not
-    reset when the outer-iteration index advances.
+    reset when the outer-iteration index advances. Unlike the reference,
+    each outer iteration k >= 1 regresses onto targets built from a frozen
+    copy of the weights that ended iteration k-1 (see `freeze_transform`).
 
     Scope note: this entry point exists and is unit-tested for a single
     step and a tiny overfit case, but is deliberately not run to
@@ -331,6 +399,9 @@ def train_sbbts(
     optimizer = optim.Adam(model.parameters(), lr=config.lr)
     all_logs: list[EpochLog] = []
     for k in range(config.K):
+        # theta_k, frozen: the weights that ended outer iteration k-1 define
+        # this iteration's targets and do not move while theta_{k+1} trains.
+        transform = None if k == 0 else freeze_transform(model)
         # Fresh validation draws and a fresh early-stopping state per outer
         # iteration, as in the reference implementation.
         val_noise = make_validation_noise(
@@ -348,6 +419,7 @@ def train_sbbts(
                 on_epoch,
                 val_noise=val_noise,
                 state=EarlyStopState(),
+                transform=transform,
             )
         )
     return all_logs

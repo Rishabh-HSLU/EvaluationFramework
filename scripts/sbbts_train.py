@@ -59,10 +59,12 @@ from sbbts.checkpoint import (
 )
 from sbbts.config import SBBTSModelConfig, SBBTSTrainingConfig
 from sbbts.data import session_train_val_split
+from sbbts.diagnostics import DegeneracyGate, TransformDiagnostics, transform_diagnostics
 from sbbts.model import SBBTSDrift
 from sbbts.training import (
     EarlyStopState,
     EpochLog,
+    freeze_transform,
     make_validation_noise,
     train_outer_iteration,
 )
@@ -71,7 +73,39 @@ from scripts.sbbts_panel import EXAMPLES_OUTPUT_PATH, SBBTS_DIR, SessionExample
 
 DEFAULT_CHECKPOINT_DIR = SBBTS_DIR / "checkpoints"
 DEFAULT_LOG_CSV = SBBTS_DIR / "training_log.csv"
+DEFAULT_DIAG_CSV = SBBTS_DIR / "diagnostics_log.csv"
 KEEP_LAST_EPOCHS = 3
+#: Endpoint-transform diagnostics run every this many epochs within an outer
+#: iteration, plus at every outer-iteration boundary.
+DIAG_EVERY_EPOCHS = 10
+#: Every DIAG_BATCH_STRIDE-th validation batch, so the diagnostic spans all
+#: length buckets at a fraction of a full validation pass.
+DIAG_BATCH_STRIDE = 4
+#: Identity of the training objective; a checkpoint written under a different
+#: one is refused on resume.
+TRANSFORM_MODE = "frozen-detached-ttilde"
+
+DIAG_COLUMNS = [
+    "timestamp",
+    "outer_iter",
+    "epoch",
+    "subject",
+    "var_dx",
+    "var_dy",
+    "ratio",
+    "corr_send_bdx",
+    "e_s_start2",
+    "e_s_drift_u0_2",
+    "n_intervals",
+    "verdict",
+    "message",
+]
+
+
+class DegeneracyAbort(RuntimeError):
+    """Raised from the epoch callback when the gate trips; halts training cleanly."""
+
+
 #: The pod is limited to 8 CPUs; torch must not spawn more intra-op threads.
 MAX_THREADS = 8
 
@@ -174,11 +208,11 @@ class CheckpointWriter:
             stale.unlink()
 
 
-def append_log_row(path: Path, row: dict) -> None:
+def append_log_row(path: Path, row: dict, columns: list[str] = LOG_COLUMNS) -> None:
     new = not path.exists()
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=LOG_COLUMNS)
+        writer = csv.DictWriter(f, fieldnames=columns)
         if new:
             writer.writeheader()
         writer.writerow(row)
@@ -190,6 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--examples", type=Path, default=EXAMPLES_OUTPUT_PATH)
     parser.add_argument("--checkpoint-dir", type=Path, default=DEFAULT_CHECKPOINT_DIR)
     parser.add_argument("--log-csv", type=Path, default=DEFAULT_LOG_CSV)
+    parser.add_argument("--diag-csv", type=Path, default=DEFAULT_DIAG_CSV)
     parser.add_argument("--seed", type=int, default=0, help="init + noise seed")
     parser.add_argument("--threads", type=int, default=MAX_THREADS)
     parser.add_argument(
@@ -238,6 +273,20 @@ def main(argv: list[str] | None = None) -> None:
     )
     log(f"model config: {dataclasses.asdict(model_cfg)}")
     log(f"training config: {dataclasses.asdict(train_cfg)}")
+    gate = DegeneracyGate()
+    log(
+        f"endpoint transform: {TRANSFORM_MODE} -- for k >= 1, Y^k is built from the weights that "
+        "ended outer iteration k-1, frozen and detached, at t~ = t_{i+1} - safe_frac*dt. "
+        "NOTE: k >= 1 validation losses are therefore honest regressions onto fixed targets; "
+        "expect them HIGHER than the no-detach run's 4.64 (which was target shrinkage). "
+        "That is the correct outcome, not a failure."
+    )
+    log(
+        f"degeneracy gate (validation, every {DIAG_EVERY_EPOCHS} epochs and at each outer "
+        f"boundary): ABORT if Var(dY)/Var(dX) < {gate.abort_ratio_below} and corr(s_end, beta*dX) "
+        f"> {gate.abort_corr_above}, or if Var(dY)/Var(dX) > {gate.abort_ratio_above}; WARN if ratio "
+        f"< {gate.warn_ratio_below}, corr > {gate.warn_corr_above} or ratio > {gate.warn_ratio_above}."
+    )
     log(
         f"precision: {train_cfg.precision} "
         + (
@@ -312,6 +361,7 @@ def main(argv: list[str] | None = None) -> None:
                 ("training_config", saved_train_cfg, dataclasses.asdict(train_cfg)),
                 ("test_mode", payload.get("test_mode"), test_mode),
                 ("seed", payload.get("seed"), args.seed),
+                ("transform", payload.get("transform"), TRANSFORM_MODE),
             )
             if saved != current
         }
@@ -347,8 +397,48 @@ def main(argv: list[str] | None = None) -> None:
         "seed": args.seed,
         "examples_path": str(args.examples),
         "test_mode": test_mode,
+        "transform": TRANSFORM_MODE,
+        "transform_state": None,  # theta_k's weights while an outer iteration k >= 1 is running
     }
     writer = CheckpointWriter(args.checkpoint_dir, model, optimizer, extra)
+    diag_batches = val_batches[::DIAG_BATCH_STRIDE]
+
+    def run_diagnostics(subject_model: SBBTSDrift, k: int, epoch: int | None, subject: str) -> None:
+        """Compute, log, and gate the endpoint-transform diagnostics; raise on abort."""
+        d: TransformDiagnostics = transform_diagnostics(
+            subject_model, diag_batches, beta, train_cfg.safe_frac
+        )
+        verdict, message = gate.verdict(d)
+        row = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "outer_iter": k,
+            "epoch": "" if epoch is None else epoch,
+            "subject": subject,
+            **{key: (f"{v:.6f}" if isinstance(v, float) else v) for key, v in d.as_dict().items()},
+            "verdict": verdict,
+            "message": message,
+        }
+        append_log_row(args.diag_csv, row, DIAG_COLUMNS)
+        log(
+            f"diag[{subject}] k={k} epoch={epoch}: Var(dX)={d.var_dx:.3f} Var(dY)={d.var_dy:.3f} "
+            f"ratio={d.ratio:.3f} corr(s_end,b*dX)={d.corr_send_bdx:.3f} "
+            f"E[s_start^2]={d.e_s_start2:.3f} E[s_u0^2]={d.e_s_drift_u0_2:.3f} -> {verdict.upper()}"
+            + (f": {message}" if message else "")
+        )
+        if verdict == "abort":
+            raise DegeneracyAbort(f"[{subject}] k={k} epoch={epoch}: {message}")
+
+    # Resume mid-iteration: theta_k comes back from the checkpoint.
+    transform = None
+    if latest.exists() and k_start >= 1 and epoch_start > 0:
+        saved_transform = payload.get("transform_state")
+        if saved_transform is None:
+            sys.exit(
+                f"Cannot resume k={k_start} mid-iteration: {latest} carries no frozen transform."
+            )
+        transform = freeze_transform(model)
+        transform.load_state_dict(saved_transform)
+        log(f"restored frozen transform theta_{k_start} from the checkpoint")
     global_epoch = [0]
     if args.log_csv.exists():
         with open(args.log_csv) as f:
@@ -357,12 +447,19 @@ def main(argv: list[str] | None = None) -> None:
     for k in range(k_start, train_cfg.K):
         if k != k_start:
             epoch_start, state = 0, EarlyStopState()
+        if k >= 1 and (k != k_start or epoch_start == 0):
+            # The weights that ended iteration k-1 (best epoch restored) become theta_k.
+            transform = freeze_transform(model)
+        extra["transform_state"] = None if transform is None else transform.state_dict()
         val_noise = make_validation_noise(
             val_batches, seed=args.seed + k, state_dim=model.state_dim
         )
         log(
             f"=== outer iteration {k + 1}/{train_cfg.K} (k={k}), starting at epoch {epoch_start} ==="
         )
+        if k >= 1 and epoch_start == 0:
+            log("NOTE: validation losses from here on regress onto frozen-transform targets.")
+            run_diagnostics(transform, k, None, "frozen_transform_theta_k")
         torch.cuda.reset_peak_memory_stats()
 
         def on_checkpoint(entry: EpochLog, st: EarlyStopState, k=k) -> None:
@@ -393,21 +490,33 @@ def main(argv: list[str] | None = None) -> None:
                 f"{entry.wall_time_sec:.1f}s peak {row['peak_gpu_alloc_mib']} MiB"
             )
             torch.cuda.reset_peak_memory_stats()
+            if (entry.epoch + 1) % DIAG_EVERY_EPOCHS == 0:
+                # The live weights are the candidate for theta_{k+1}: gate them.
+                run_diagnostics(model, k, entry.epoch, "live_model_as_next_transform")
 
         started = time.perf_counter()
-        logs = train_outer_iteration(
-            model,
-            optimizer,
-            train_batches,
-            val_batches,
-            beta,
-            k,
-            train_cfg,
-            val_noise=val_noise,
-            state=state,
-            start_epoch=epoch_start,
-            on_checkpoint=on_checkpoint,
-        )
+        try:
+            logs = train_outer_iteration(
+                model,
+                optimizer,
+                train_batches,
+                val_batches,
+                beta,
+                k,
+                train_cfg,
+                val_noise=val_noise,
+                state=state,
+                start_epoch=epoch_start,
+                on_checkpoint=on_checkpoint,
+                transform=transform,
+            )
+        except DegeneracyAbort as exc:
+            log(f"ABORTED by the degeneracy gate: {exc}")
+            log("The last epoch's checkpoint is on disk; the run did not continue.")
+            (args.checkpoint_dir / "ABORTED").write_text(f"{datetime.now().isoformat()} {exc}\n")
+            sys.exit(2)
+        # The best-restored weights are the candidate theta_{k+1}: gate them before moving on.
+        run_diagnostics(model, k, None, "end_of_outer_iteration_best_weights")
         writer.outer_done(k, state)
         log(
             f"=== outer iteration k={k} done: {len(logs)} epochs this session in "

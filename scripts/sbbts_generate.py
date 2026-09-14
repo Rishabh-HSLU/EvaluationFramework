@@ -113,6 +113,7 @@ def main(argv: list[str] | None = None) -> None:
             generator,
             retransform_start=args.retransform_start,
             invert_iters=args.invert_iters,
+            safe_frac=payload["training_config"]["safe_frac"],
         )
         log(
             f"preview: {args.preview} paths x {SESSION_BARS} bars in {time.perf_counter() - started:.1f}s"
@@ -152,6 +153,7 @@ def main(argv: list[str] | None = None) -> None:
                 generator,
                 retransform_start=args.retransform_start,
                 invert_iters=args.invert_iters,
+                safe_frac=payload["training_config"]["safe_frac"],
             ).cpu()
         )
         done = start + n
