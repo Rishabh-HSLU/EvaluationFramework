@@ -37,6 +37,8 @@ paper/**/*.synctex.gz
 paper/**/*.fls
 paper/**/*.fdb_latexmk
 *.parquet
+# Raw standardized SBBTS paths written next to the panel by scripts/sbbts_generate.py
+data/curated/*.paths.pt
 
 # Benchmark result CSVs: only the canonical files and default-parameter
 # (B=100, tickers/draw=200, seed=42) runs are tracked. Other parameter

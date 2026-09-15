@@ -31,7 +31,7 @@ def test_failed_specs_produce_a_failing_exit(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
         run_sweep,
         "load_default_datasets",
-        lambda _log: (pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()),
+        lambda _log: (pd.DataFrame(), [pd.DataFrame(), pd.DataFrame(), pd.DataFrame()]),
     )
     monkeypatch.setattr(
         run_sweep,

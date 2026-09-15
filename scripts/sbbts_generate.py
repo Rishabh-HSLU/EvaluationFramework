@@ -68,24 +68,23 @@ def load_model(checkpoint: Path, device: torch.device) -> tuple[SBBTSDrift, floa
 
 
 def increment_stats(paths: torch.Tensor) -> dict:
-    inc = paths[:, 1:, 0] - paths[:, :-1, 0]
-    flat = inc.flatten().double()
+    """Summary statistics of the standardized increments (numpy; any size)."""
+    inc = (paths[:, 1:, 0] - paths[:, :-1, 0]).cpu().numpy().astype(np.float64)
+    flat = inc.ravel()
+    finite = flat[np.isfinite(flat)]
+    a, b = inc[:, :-1].ravel(), inc[:, 1:].ravel()
     return {
-        "finite_frac": float(torch.isfinite(flat).float().mean()),
-        "inc_mean": float(flat.mean()),
-        "inc_std": float(flat.std()),
-        "inc_abs_p50": float(flat.abs().median()),
-        "inc_abs_p99": float(flat.abs().quantile(0.99)),
-        "inc_kurtosis_excess": float(((flat - flat.mean()) ** 4).mean() / flat.var() ** 2 - 3),
-        "path_end_std": float(paths[:, -1, 0].double().std()),
-        "lag1_autocorr": float(
-            torch.corrcoef(torch.stack([inc[:, :-1].flatten(), inc[:, 1:].flatten()]))[0, 1]
+        "finite_frac": float(finite.size / flat.size),
+        "inc_mean": float(finite.mean()),
+        "inc_std": float(finite.std(ddof=1)),
+        "inc_abs_p50": float(np.median(np.abs(finite))),
+        "inc_abs_p99": float(np.quantile(np.abs(finite), 0.99)),
+        "inc_kurtosis_excess": float(
+            ((finite - finite.mean()) ** 4).mean() / finite.var() ** 2 - 3
         ),
-        "abs_lag1_autocorr": float(
-            torch.corrcoef(torch.stack([inc[:, :-1].abs().flatten(), inc[:, 1:].abs().flatten()]))[
-                0, 1
-            ]
-        ),
+        "path_end_std": float(paths[:, -1, 0].cpu().numpy().astype(np.float64).std(ddof=1)),
+        "lag1_autocorr": float(np.corrcoef(a, b)[0, 1]),
+        "abs_lag1_autocorr": float(np.corrcoef(np.abs(a), np.abs(b))[0, 1]),
     }
 
 
@@ -163,12 +162,15 @@ def main(argv: list[str] | None = None) -> None:
         )
     generated = torch.cat(chunks)
     log(f"generation done in {(time.perf_counter() - started) / 60:.1f} min")
-    log(f"standardized increment stats (all paths): {increment_stats(generated)}")
 
+    # Write first, describe second: the panel is the deliverable.
     panel = assemble_price_panel(generated, path_tickers, path_sessions, scales, real)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     panel.to_parquet(args.output)
     log(f"wrote {args.output} shape={panel.shape}")
+    torch.save(generated, args.output.with_suffix(".paths.pt"))
+    log(f"raw standardized paths saved to {args.output.with_suffix('.paths.pt')}")
+    log(f"standardized increment stats (all paths): {increment_stats(generated)}")
 
 
 if __name__ == "__main__":

@@ -1608,11 +1608,15 @@ with Var(dX) = 3.25 on the validation sessions. The endpoint map had
 converged to s_end ~ 0.8 * beta * dX (E[s_end^2] ~ 5), removing ~60 % of
 the increment variance from the targets, while the drift at the interval
 start was ~ 0 and, on real inputs, E[s^2] never exceeded 0.39 anywhere in
-the interval. The validation-loss drop from 5.89 to 4.64 across k was that
-shrinkage, not learning: for unit-variance increments the irreducible
-bridge-noise term of Eq. 4.1 is E[u/(dt - u)]/dt ~ 3.65 (u ~ U[0, 0.99]),
-so a zero-drift predictor scores ~ 3.65 + Var(dY); with Var(dY) falling
-from 2.5 to 1.2 the floor fell with it. At generation, inverting a map
+the interval. Part of the validation-loss drop from 5.89 to 4.64 across k
+was that shrinkage rather than learning: for unit-variance increments the
+irreducible bridge-noise term of Eq. 4.1 is E[u/(dt - u)]/dt ~ 3.65
+(u ~ U[0, 0.99]), so a zero-drift predictor scores ~ 3.65 + Var(dY), and
+with Var(dY) falling from 2.5 to 1.2 the floor fell with it. (Qualified
+below: a correct transform also lowers Var(dY) on the validation sessions,
+so the drop is only partly an artifact; the distinguishing evidence is the
+transform's behaviour on training-distribution data.) At generation,
+inverting a map
 that removed 80 % of each increment multiplies the diffusion's unit noise
 by ~1/(1 - 0.8), which is the 2.4x observed, and evaluating s on
 generated (off-distribution) inputs -- E[s^2] ~ 1 at the very first bar,
@@ -1729,3 +1733,63 @@ or more above that iteration's running minimum for 3 consecutive epochs
 of the training loss is +-0.01; both collapses were +0.5 within two
 epochs and then flat, so the rule would have halted them at epoch 79 and
 epoch 15 respectively instead of 90 and 49.
+
+## Qualification: what the transform statistics mean depends on the data's variance (2026-09-15)
+
+The frozen-transform fp32 run (2026-09-14 14:13 -> 2026-09-15 18:38; 268
+epochs, 20.6 h; k=0..4 best validation losses 5.837, 5.737, 5.836, 5.639,
+5.725; collapse gate never registered a high epoch) showed the same
+validation-set signature the degeneracy gate was calibrated against --
+Var(dY)/Var(dX) drifting to 0.74-0.77 and corr(s_end, beta*dX) to
+0.55-0.67 -- already at k=0, where the transform is not in the loss and
+no feedback path exists. That is not absorption. For a Brownian bridge
+with unit reference diffusion onto an endpoint whose conditional
+variance is v, the drift the regression learns, evaluated at t~ on the
+endpoint, is s_end ~ (1 - 1/v) * dX: the SB drift correcting the mismatch
+between the unit reference diffusion and the data's variance. The
+validation sessions are the February-March 2020 crash, with Var(dX) =
+3.35 for consecutive-minute standardized increments against 0.38 on the
+training sessions -- a 9x shift. A healthy model is therefore *expected*
+to show corr ~ 0.7 and ratio ~ 0.42 on validation, and the opposite sign
+(ratio > 1, corr < 0) on training-distribution data.
+
+Measured on the same 2,048-example samples, healthy fp32 k=0 model
+(epoch 67) versus the failed no-detach outer_k4:
+
+    model                     data    Var(dX)  ratio   corr    theory ratio
+    healthy fp32 k=0          train    0.38    1.43   -0.18       3.26
+    healthy fp32 k=0          val      3.35    0.75    0.58       0.42
+    failed no-detach k=4      train    0.38    0.71    0.54       3.26
+    failed no-detach k=4      val      3.35    0.34    0.83       0.42
+
+The healthy model follows the theory in both regimes; the degenerate one
+shrinks increments regardless of the data's variance -- on training data,
+where a correct transform inflates the targets, it removes 29 % of their
+variance with corr 0.54. The real degeneracy signature therefore lives on
+training-distribution data, and the validation-set thresholds of
+`DegeneracyGate` (calibrated on the failed run's validation numbers, which
+were in fact close to the healthy theoretical value) are conservative to
+the point of warning on healthy models. They did not abort this run
+(the ratio never crossed 0.6), so the gate was left as it was for the
+run's duration; before the next run it should be re-based on a fixed
+sample of training-distribution sessions -- abort if ratio < 0.8 and corr
+> 0.4 there, which separates 0.71/0.54 (failed) from 1.43/-0.18 (healthy)
+-- with the validation-set statistics and the (1 - 1/v) reference kept
+in the log for information. Two further consequences: the frozen
+transform legitimately lowers k >= 1 validation losses relative to k=0
+(5.84 -> 5.64-5.74 here), so "k >= 1 losses must look worse than the
+no-detach run's" was the right direction but the wrong reasoning; and
+early stopping on this split selects on the crash regime, which is worth
+stating in the methods.
+
+Sampling from the run's final checkpoint (outer_k4.pt) with the paper's
+generation procedure gives standardized increments with std 0.92 (real
+1.00), lag-1 autocorrelation -0.015 (real +0.004), end-of-day dispersion
+18.1 (real 17.5), |increment| lag-1 autocorrelation 0.24 (real 0.42) and
+excess kurtosis 3.9 (real 62.9): the right scale and dynamics, weaker
+volatility clustering and thinner tails than real. The assembled panel
+(`data/curated/sbbts_prices.parquet`, 2026-09-15 18:55) matches real's
+clock, columns and NaN mask exactly; intraday consecutive-minute return
+scale is 0.91x real per ticker (p10-p90 0.87-0.94), and the intraday
+U-shape is reproduced in form but damped at the open (0.0042 vs 0.0059)
+and close (0.0012 vs 0.0020).

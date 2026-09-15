@@ -7,7 +7,12 @@ from collections.abc import Callable, Iterable
 
 import pandas as pd
 
-from fineval.data import CuratedParquetLoader, GBMBaselineLoader, MSVBaselineLoader
+from fineval.data import (
+    CuratedParquetLoader,
+    GBMBaselineLoader,
+    MSVBaselineLoader,
+    SBBTSBaselineLoader,
+)
 from fineval.preprocessing import PreprocessingPipeline
 
 from .config import CURATED_DIR
@@ -20,7 +25,15 @@ def _dataset_shape(dataset) -> str:
 
 
 def load_default_datasets(progress_callback: Callable[[int], None]) -> tuple:
-    """Load the curated Real, AIL, GBM, and MSV datasets."""
+    """Load the curated Real panel and every available synthetic panel.
+
+    Returns ``(real, synthetics)`` where ``synthetics`` is a list of
+    ``MarketDataset`` in the fixed order AIL, GBM, MSV, SBBTS. AIL, GBM and
+    MSV are required; SBBTS is included when ``sbbts_prices.parquet`` exists
+    (it is produced by ``scripts.sbbts_generate`` from a trained checkpoint
+    and is absent until then). Which generators were loaded is logged so a
+    run's generator set is never implicit.
+    """
     loaders = [
         CuratedParquetLoader(
             parquet_path=str(CURATED_DIR / "real_prices.parquet"),
@@ -35,6 +48,11 @@ def load_default_datasets(progress_callback: Callable[[int], None]) -> tuple:
         GBMBaselineLoader(parquet_path=str(CURATED_DIR / "gbm_prices.parquet")),
         MSVBaselineLoader(parquet_path=str(CURATED_DIR / "msv_prices.parquet")),
     ]
+    sbbts_path = CURATED_DIR / "sbbts_prices.parquet"
+    if sbbts_path.exists():
+        loaders.append(SBBTSBaselineLoader(parquet_path=str(sbbts_path)))
+    else:
+        log(f"SBBTS panel not found at {sbbts_path}; running without it.")
 
     datasets = []
     for loader in loaders:
@@ -46,7 +64,9 @@ def load_default_datasets(progress_callback: Callable[[int], None]) -> tuple:
             f"Loaded {dataset.name}: {_dataset_shape(dataset)} "
             f"in {time.monotonic() - started:.1f}s."
         )
-    return tuple(datasets)
+    real, synthetics = datasets[0], datasets[1:]
+    log(f"Generators: {', '.join(d.name for d in synthetics)}.")
+    return real, synthetics
 
 
 def preprocess_pairs(
