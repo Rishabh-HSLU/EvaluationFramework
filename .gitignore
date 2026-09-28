@@ -49,3 +49,14 @@ scripts/results/benchmark_B*_m*_seed*_*.csv
 scripts/results/aggregate_B*_m*_seed*_*.csv
 !scripts/results/benchmark_B100_m200_seed42_*.csv
 !scripts/results/aggregate_B100_m200_seed42_*.csv
+
+# Same policy at the current results/ path (the rules above predate the
+# 2026-07 move out of scripts/). Default-parameter spec-primary runs stay
+# trackable; other parameter combinations and whole sweep directories are
+# ignored. runs_manifest.csv is never ignored: it records every run.
+results/benchmark_spec-*_B*_m*_seed*_*.csv
+results/aggregate_spec-*_B*_m*_seed*_*.csv
+!results/benchmark_spec-primary_B100_m200_seed42_*.csv
+!results/aggregate_spec-primary_B100_m200_seed42_*.csv
+!results/outer_*_replicates_spec-primary_B100_m200_seed42_*.csv
+results/sweep_*/
