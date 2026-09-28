@@ -1,9 +1,7 @@
 # Sensitivity grid — pre-registration freeze
 
 Status: committed on merged `main`; the grid has not been run and nothing is
-tagged yet. Two rationales below are explicitly marked **PLACEHOLDER — Rish's
-own words needed** and must be filled before this file is cited as a
-pre-registration.
+tagged yet.
 
 Source of truth for every value below: `fineval/scripts/sensitivity/grid.py`
 at the merged trial state (tree identical to commit `0855491`). Provenance
@@ -23,9 +21,9 @@ two is a test failure (`tests/test_spec_flag.py`), not a silent change.
 Run kind at the time of drafting: `RUN_KIND = "exploratory"` (grid.py line 39).
 This string is written into the run directory name
 (`results/sweep_<stamp>_exploratory/`), into `grid_spec.json`, and into every
-manifest row. **PLACEHOLDER — Rish's own words needed.** Changing it to a confirmatory
-label is a decision for Rish and the supervisor, not a code cleanup; `grid.py`
-and `RUN_KIND` are deliberately untouched by this commit.
+manifest row. The sweep is labelled exploratory because `tail_alpha`,
+`tail_lambda`, `window` and `min_frac` were set while AIL's output was visible.
+The label is to be confirmed with the supervisor before submission.
 
 ## 2. Primary (canonical) specification
 
@@ -83,7 +81,7 @@ asserted; `Spec.dials` is the authoritative record of what each spec varies.
 
 | parameter | value | stated rationale |
 |---|---|---|
-| `n_grid` | 5001 | Quantile-grid resolution, not a modelling choice; no recorded basis for 5001 specifically (UNDOCUMENTED), and the metric is a weighted mean over the grid, so resolution affects numerical precision rather than the comparison. **PLACEHOLDER — Rish's own words needed** before this is defended in print. |
+| `n_grid` | 5001 | The rationale for J = 5001 was not recorded when it was set. It was fixed during development, is not varied in the sweep, and a post-hoc check (M1 at J = 2001, 5001, 10001; B = 100, m = 200, seed 42, all four generators) gives a maximum absolute score difference of 3.4e-04 between J = 2001 and J = 5001, and 3.3e-03 between J = 10001 and J = 5001. This check does not explain why 5001 was chosen. |
 | `n_regimes` | 5 | Regime count fixes the meaning of `regime_weights`; varying both would confound the weighting question with the partition question. UNDOCUMENTED origin. |
 | `B` (inner draws) | 100 | Controls Monte-Carlo error of the estimator, not the estimand; it is a precision dial reported separately, not a specification choice. |
 | `m` (tickers/draw) | 200 | Same: a sampling-precision dial. Also fixed so the real-real noise floor is comparable across specs. |
