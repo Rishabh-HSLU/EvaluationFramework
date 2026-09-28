@@ -336,8 +336,8 @@ def run_sweep(args: argparse.Namespace) -> None:
     write_grid_snapshot(run_dir, args, stamp)
 
     log("Loading curated datasets (shared across all specs)...")
-    real, ail, gbm, msv = load_default_datasets(lambda _n: None)
-    deseas_real, synthetics = preprocess_pairs(real, (ail, gbm, msv), lambda _n: None)
+    real, synthetic_datasets = load_default_datasets(lambda _n: None)
+    deseas_real, synthetics = preprocess_pairs(real, synthetic_datasets, lambda _n: None)
     log(f"Shared data ready: real={deseas_real.shape}, generators={list(synthetics)}.")
 
     metric_frames: list[pd.DataFrame] = []

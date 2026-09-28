@@ -1245,3 +1245,551 @@ true across-seed spread both scale as ~1/√B, so doubling B narrows both
 together and likely preserves the same relative under-coverage, just at
 a smaller absolute scale (follows from standard bootstrap scaling, not
 independently tested).
+
+# Missing-Bar Structure of the Curated Real Panel (2026-09-05)
+
+`scripts/investigate_missingness.py` measured the real panel's missing-bar
+structure directly, standalone -- it reads the curated real parquet and
+writes `scripts/missingness_report.md`, changing nothing. It ran on a
+600-ticker curation (AIL-joined, matching the 82,200 = 600 x 137
+full-session (ticker, session) cells below); the specific ticker set
+differs from whatever curation happens to be current, but the shape of
+the missingness is a property of the real data, not of which curation run
+produced it. The finding motivated `scripts/sbbts_panel.py`'s later
+rewrite from requiring whole sessions to skipping individual missing bars
+(`9c0bc2a`, "Keep the bars that exist instead of requiring whole
+sessions"). Three headline figures, each with the context needed to read
+them without the script or report:
+
+- **93.4% of (ticker, session) cells have at least one missing bar**
+  (76,776 of 82,200; only 6.6% -- 5,424 -- are fully complete). The
+  per-ticker mean incomplete-session rate is the same figure, 93.40%: at
+  the cell level and averaged per-ticker, the panel is overwhelmingly
+  incomplete-by-strict-standard, which is exactly why a whole-session
+  completeness requirement threw away 93.4% of the data before
+  `build_training_examples` replaced it.
+- **The 16:00 close bar (minute position 390) is missing 47.66% of the
+  time**, against 0.05% for its neighbour at 15:59 -- a 911x jump,
+  present in all 137 sessions, plausibly closing-auction timing rather
+  than an outage. This is why `scripts/sbbts_panel.py` drops minute
+  position 390 unconditionally before anything else looks at the data
+  (`SESSION_BARS`/`WORKING_BARS`), rather than treating it as ordinary
+  illiquidity-driven missingness.
+- **76.3% of missing-bar runs are a single isolated minute** (1,672,194 of
+  2,190,311 runs; 54.9% of missing bars by count), with a mean run length
+  of 1.39 minutes and 90% of runs at or under 2 minutes. Missingness is
+  overwhelmingly short gaps, not extended outages -- the empirical basis
+  for treating it as ordinary no-trade sparsity that a skip-gaps
+  representation (values + elapsed-time gaps) can absorb directly, rather
+  than something requiring imputation or session exclusion.
+
+See `docs/missingness_report.md` for full diagnostic detail beyond these
+three headline figures -- kept specifically for the ticker-concentration
+findings (216 of 600 tickers have zero complete sessions) and the
+coverage-floor correlation (+0.472 between per-ticker coverage and
+session-completeness rate), both of which bear directly on the 70%
+coverage-floor justification and aren't reflected above.
+
+# SBBTS Training Grid: Irregular by Construction (2026-09-06)
+
+SBBTS's Algorithm 1 samples mini-batches on a shared time grid — every
+training example is assumed to sit on the same t_0, ..., t_N. Ours do not.
+Dropping missing bars instead of requiring complete sessions
+(`scripts/sbbts_panel.py`) leaves each (ticker, session) path on its own
+irregular grid, with its own length and its own spacing between consecutive
+observations, so what we train is a generalization of the published
+algorithm rather than a literal implementation of it. This is sound because
+the drift network consumes continuous time, not a fixed step index: nothing
+in its functional form is tied to a particular grid, and each example's loss
+term is evaluated against that example's own recorded gap lengths. Batching
+therefore only has to keep the gaps aligned with their observations
+(`scripts/sbbts_batching.py`), which is what the `gaps` tensor and its
+`valid_mask` are for. Recorded here because it is a departure from the cited
+algorithm and should be disclosed as one, not because it is expected to
+change the estimator's behavior.
+
+# SBBTS Drift Network and Training Loop (2026-09-06)
+
+`sbbts/` (model.py, training.py, calibration.py, data.py, config.py)
+implements Algorithm 1 and Appendix B's architecture from Alouadi, Loeper,
+Marsala, Mazhar, Pham, "SBBTS: A Unified Schrodinger-Bass Framework for
+Synthetic Financial Time Series" (arXiv:2604.07159). It was first built
+against a standalone synthetic corpus and a from-scratch bucketing
+pipeline, before `scripts/sbbts_panel.py` and `scripts/sbbts_batching.py`
+existed. Once those landed, the synthetic stand-in was deleted outright --
+not kept alongside the real pipeline as a second path. What follows
+documents what survived that migration unchanged, what needed a small
+adapter, and what had to be re-derived against the real corpus.
+
+## The architecture and training loop generalized; only the data boundary needed an adapter
+
+`sbbts/model.py` (`SBBTSDrift`, `TrajectoryEncoder`, `FeedForwardEmbed`) is
+untouched by the migration. It was already written against generic
+`(y_seq, times, valid_mask)` tensors with no reference to any particular
+batch dataclass, so it consumes `PaddedBatch` output exactly as it consumed
+the deleted synthetic `Batch`.
+
+`sbbts/training.py`'s `compute_loss` needed one small change: it used to
+unpack `batch.y, batch.times, batch.valid_mask` directly; a `PaddedBatch`
+has no `y`/`times` fields; it has `values` (B, L), no trailing feature
+axis, and `gaps` (B, L), a step gap, not a cumulative elapsed time. The
+fix is `sbbts/data.py::to_model_inputs`, a pure tensor adapter:
+
+    y_seq = batch.values.unsqueeze(-1)
+    times = torch.cumsum(batch.gaps.float(), dim=-1)
+
+`gaps[0]` is a `SessionExample`'s distance from the session open (see the
+"SBBTS Training Grid" note above and `scripts/sbbts_panel.py`), not a
+between-points gap, so the cumulative sum's first entry is that
+distance-from-open value rather than 0 -- which is correct: it is the
+first surviving bar's actual elapsed time since the session opened, not
+since itself. Padded `gaps` entries are 1 (never 0, so a forgotten mask
+would not silently look like a valid observation), so the cumulative sum
+keeps climbing through padding; this is harmless because padded positions
+are already excluded from attention (`src_key_padding_mask`) and from the
+loss (`interval_mask` in `compute_loss`), so no downstream computation
+ever reads a padded position's time value. Every other line of
+`compute_loss`, `evaluate`, `train_outer_iteration`, and `train_sbbts` is
+unchanged -- they were already generic over "a batch with values, times,
+valid_mask," and now that batch happens to be `PaddedBatch`.
+
+## Gradient-flow / detach resolution: unchanged, not re-investigated
+
+The prior pass resolved Algorithm 1's ambiguous parts (does the transport
+map computation detach from the graph the loss backpropagates through;
+what does each outer iteration reset) by reading the paper's own reference
+implementation (https://github.com/alexouadi/SBBTS,
+`training/training_sbbts_dsbm.py`) directly. That resolution does not
+depend on which data is used -- it is about how the same tensors flow
+through the same network regardless of their source -- so it was not
+revisited here. For the record, since the file that documented it in
+detail (a since-deleted standalone `sbbts/reasoning.md`) no longer exists:
+
+- `Y^0 = I_d` exactly; `k == 0` skips the network entirely
+  (`compute_loss` branches on `k == 0` and sets `y_i, y_ip1 = x_i, x_ip1`
+  directly, matching the reference code's `if k == 0: y_0_, y_T_ =
+  x_0_.clone(), x_T_.clone()`).
+- No detach: for `k > 0`, `Y_ti = X_ti - s_theta(...)/beta` keeps
+  gradients enabled, and the loss backpropagates jointly through both the
+  endpoint-transform computation and the drift prediction at the sampled
+  bridge point -- a self-referential/bootstrapped regression, not a
+  frozen target network.
+- Both endpoints of interval `i` condition on the same context
+  `Phi_theta(X_{t0:ti})`, matching Algorithm 1 lines 5-6 (both write
+  `t0:ti`, not `t0:ti+1`, for the second endpoint).
+- A margin proportional to each interval's own `Delta_t_i`
+  (`safe_frac`, `sbbts/config.py`) keeps the sampled bridge time away
+  from `t_{i+1}`, where the regression target is undefined; the reference
+  code uses a fixed absolute margin because its experiments hold
+  `Delta_t` constant, which does not hold for our irregular grid.
+- One Adam optimizer instance persists across all `K` outer iterations
+  (`train_sbbts` creates it once, outside the `for k in range(K)` loop).
+
+## Beta
+
+Method (unchanged from the first derivation): `beta = safety_factor /
+min(Delta_t_i)` with `safety_factor = 2.0`, comfortably above the
+`beta * Delta_t_i > 1` floor Theorem 3.2 requires. `min(Delta_t_i)` is
+`sbbts/data.py::corpus_min_delta_t`: the minimum over every
+`SessionExample` of `gaps[1:].min()` -- `gaps[1:]`, not `gaps`, because
+`gaps[0]` is the distance from session open, not a between-training-points
+gap (see `test_min_delta_t_excludes_the_leading_distance_from_open`).
+
+**Superseded -- synthetic corpus (2026-09-06, first pass):** on a
+synthetic panel of comparable shape, `min_dt = 1.0` minute, giving
+`beta = 2.0`. This number was derived before `scripts/sbbts_panel.py` /
+`scripts/sbbts_batching.py` existed and before any real data was curated
+on this machine; kept here for the record, not as a value to train with.
+
+**Current -- real corpus (2026-09-07):** the real 948-ticker corpus was
+fetched from Alpaca on this machine (`scripts/fetch_alpaca.py`, all 948
+tickers, 0 errors) and curated real-only (`scripts/curate_real_only.py`,
+739 tickers at the 70% coverage floor -- more than the 600 the AIL-joined
+curation retained, since there is no second dataset's coverage to
+intersect against). `build_training_examples` produced 101,175 examples
+(68 dropped for fewer than 2 surviving bars). `corpus_min_delta_t` gives
+`min_dt = 1.0` minute (a fully liquid pair of consecutive minutes exists
+somewhere in the corpus, as expected), so:
+
+    beta = 2.0 / 1.0 = 2.0
+    beta * min_dt = 2.0 > 1  (constraint satisfied)
+
+Numerically identical to the synthetic-corpus value above -- both corpora
+happen to have a 1-minute floor -- but this is now the value actually
+derived from real data, not carried over by coincidence.
+
+## Validation split: by session, chronological (unchanged logic, real dataclass)
+
+`session_train_val_split` (`sbbts/data.py`) holds out the most recent
+`val_frac` fraction of session dates, operating on `SessionExample.session`
+now instead of the deleted synthetic `Trajectory.session_date`. The logic
+itself did not change:
+
+- By session, not by example: one `SessionExample` is one
+  (ticker, session) pair; splitting at the example level would put, e.g.,
+  AAPL's 2020-01-02 session in training and MSFT's 2020-01-02 session in
+  validation, letting the model implicitly learn cross-sectional, same-day
+  structure that a genuinely held-out day would not provide. Splitting by
+  date keeps every ticker's example from a given day on one side.
+- Chronological, not shuffled: held-out dates are always the latest
+  ones, so validation sessions never precede training sessions -- a random
+  shuffle would leak lookahead into what "held out" is supposed to mean
+  for a temporal generative model.
+- A corpus with only one distinct session date returns the whole corpus as
+  training data and an empty validation set; only arises in small unit
+  tests, never on the real multi-month corpus.
+
+On the real corpus, `val_frac=0.2` over 137 full-length sessions holds out
+the most recent 27 (2020-02-12 .. 2020-03-20), leaving 110 for training
+(2019-09-03 .. 2020-02-11): 81,222 train examples, 19,953 validation
+examples.
+
+## Batch size: superseded by the real pipeline's own default
+
+**Superseded (2026-09-06, first pass):** with no bucketed batching
+pipeline in the repository yet, buckets were sized directly to the paper's
+`batch_size = 128`, on the reasoning that there was no existing
+`batch_size=64` scheme to reconcile with.
+
+**Current:** `scripts/sbbts_batching.py::DEFAULT_BATCH_SIZE` is 64. That
+module's own commit message reports 8 buckets and 1,288 batches from an
+AIL-joined curation (600 tickers, 82,163 examples); this machine's
+real-only curation (no AIL, see below) retains 739 tickers and 101,175
+examples, giving 8 buckets and **1,585** batches instead (2.6% padding vs.
+a naive pad-to-389 scheme's 10.9%) -- more tickers pass the 70% coverage
+floor without a second dataset's coverage to intersect against. Same
+pipeline, same defaults, different real corpus. Re-bucketing at 128 to
+avoid reconciling with this would mean not using the real pipeline's own
+default output -- the opposite of the point. `sbbts/training.py` now
+accumulates gradients over `grad_accum_steps = 2` micro-batches
+(`sbbts/config.py::SBBTSTrainingConfig`) before each `optimizer.step()`,
+so the effective batch size is `64 * 2 = 128`, matching Table 2, while
+every batch consumed is exactly what `scripts.sbbts_batching.build_batches`
+produces with its own default arguments. `train_outer_iteration`'s wall-clock
+timing measures one full pass over all micro-batches in an epoch
+regardless of the accumulation grouping, so this choice does not need a
+separate wall-clock re-measurement of its own.
+
+## AIL is out of scope; curating real prices does not need it
+
+`scripts/build_curated_datasets.py` always loads AIL as part of the same
+run: `CurationPipeline` structurally used it to compute the ticker
+intersection and the joint coverage floor. AIL's raw source
+(`data/ail_synthetic_data/dataset_US_1-10B_2019-09-2020-03.parquet`) is
+not available on this machine and SBBTS does not use AIL at all, so
+`build_curated_datasets.py` cannot be reused as-is for SBBTS's real-only
+data needs.
+
+`CurationPipeline._validate_inputs` had exactly one hard requirement that
+blocked a synthetic-free run: `if not self.synthetic_datasets: raise
+ValueError(...)`. Every other method already handled an empty
+`synthetic_datasets` list correctly by construction --
+`_intersect_tickers` reduces to real's own ticker set, `_compute_joint_coverage`'s
+`coverage["joint_min"] = coverage.min(axis=1)` reduces to real's own
+coverage column, `_subset_to_intersection`/`_save_datasets`/`_save_metadata`
+all iterate over `synthetic_datasets`/`synth_aligned` and are no-ops on an
+empty one. So the fix was to remove that one guard (with the
+`synthetic_datasets` docstring updated to say an empty list means
+real-only curation), not to write a parallel curation path. `AILSyntheticLoader`
+itself is untouched -- never imported, built, or referenced by the new
+path.
+
+`scripts/curate_real_only.py` is the new entry point: `RealDataLoader` +
+`CurationPipeline(synthetic_datasets=[])`, writing the same
+`data/curated/real_prices.parquet` + `curation_metadata.json` contract
+`build_curated_datasets.py` would, with no synthetic parquet written.
+`tests/test_curation_real_only.py` pins that the empty-list path still
+enforces `coverage_floor`'s range check and writes only the real file.
+
+## Wall-clock at the real pipeline's actual batch structure
+
+**Superseded (2026-09-06, first pass):** ~53s/epoch measured on a
+synthetic corpus of 18,000 examples across 141 batches of size 128 (A16
+GPU, paper-scale config); projected ~306.5h for the full `K=5 x
+n_epoch=1000` schedule scaled to a hypothetical 75,000-example corpus.
+This was always an approximation pending the real pipeline; it is not a
+measurement of the actual batch structure below.
+
+**Current (2026-09-07):** measured against the real 8-bucket, 1,585-batch
+structure above (`train_outer_iteration`, `k=0`, identity map, 5 epochs,
+early stopping disabled for this measurement, A16 GPU):
+
+    per-epoch times (s): [313.23, 312.40, 311.75, 311.40, 311.06]
+    mean epoch time: 311.97s
+
+    projected total for K=5 x n_epoch=1000 (5000 epochs, no early stopping): 433.29 h
+
+Higher than the synthetic-corpus approximation above (433h vs. ~307h),
+consistent with the real corpus (101,175 examples, 35.0M real points)
+being larger than the synthetic stand-in it replaced. This is the number
+the task asked to surface early: **the full, unstopped K=5 x n_epoch=1000
+schedule is not practical on a single A16 as configured** -- ~18 days.
+Early stopping (`patience=15`, Table 2-derived) will cut this substantially
+in practice, since 1000 epochs per outer iteration is a ceiling, not a
+target, but 5 epochs already cost over 26 minutes, so the schedule's
+practicality depends on how many epochs early stopping actually needs, not
+on this raw ceiling. Options for a future pass, not implemented here per
+the training-infrastructure-only scope: truncating session length, mixed
+precision, `torch.compile`, or revisiting `n_epoch`.
+
+## Raw data: fetched from Alpaca on this machine (2026-09-07)
+
+The blocker recorded here through 2026-09-06 (no raw data, no credentials,
+no cached checkpoint anywhere on this machine or the institution's shared
+`/exchange` NFS mount) was resolved by fetching the real corpus the same
+way a reviewer reproducing this work would: `python -m scripts.fetch_alpaca`
+against the user's own Alpaca account, all 948 canonical tickers, 0 errors,
+~50 minutes end to end (rate-limited at 0.4s/request). Credentials were
+passed as environment variables for the single invocation, never written
+to a file or committed. `data/raw_intraday/` (2.9 GB) and
+`data/curated/real_prices.parquet` now exist on this machine but are
+gitignored, as always -- nothing about the git history changed.
+
+## SBBTS reverts to the canonical panel now that AIL curation works (2026-09-07)
+
+The 739-ticker real-only training path (`scripts/curate_real_only.py`, the
+`CurationPipeline` validation relaxation, and the "AIL is out of scope"
+section above) was a workaround for AIL's raw source being unavailable on
+this machine, not a design decision -- SBBTS was always meant to train on
+the same canonical `real_prices.parquet` that GBM and MSV are curated and
+scored against, for consistency across generators. Once a working copy of
+AIL's raw source was obtained and `build_curated_datasets.py` ran to
+completion (600 tickers, matching the historical figure), that workaround
+was reverted: the `CurationPipeline` validation guard is back to requiring
+at least one synthetic dataset, `scripts/curate_real_only.py` and its test
+are deleted, and `scripts/sbbts_panel.py`'s `build_training_examples` reads
+from `data/curated/real_prices.parquet` as it always did -- that path
+never changed; only which curation run had most recently written to it
+did. Regenerated on the canonical 600-ticker panel: 82,163 examples (of
+82,200 possible cells, 37 dropped), matching the original pre-audit
+reference numbers exactly.
+
+# Frozen endpoint transform: a deliberate deviation from the reference (2026-09-14)
+
+## What the first full run produced
+
+The first complete training run (2026-09-13/14; K=5, n_epoch=1000,
+batch 128 as 64x2 accumulation, lr 1e-3, patience 15, min_delta 1e-3,
+val_frac 0.2; fp32 for k=0 epochs 0-74, bf16 autocast from k=0 epoch 75
+on; 280 epochs, 10.9 h on the A16) ran every outer iteration to its
+early-stopping point and finished with validation loss 5.89 (k=0), 4.77
+(k=1), 4.76 (k=2), 4.83 (k=3), 4.64 (k=4). Sampling from the final
+checkpoint with the paper's generation procedure (`sbbts/sampling.py`)
+gave standardized 1-minute increments with std 2.38 against 1.00 for
+real, lag-1 autocorrelation -0.35 against +0.004, and end-of-day
+dispersion 17.7 against 17.5 -- i.e. increments 2.4x too wide, strongly
+mean-reverting, with excess kurtosis 10.6 against 62.9 and |increment|
+lag-1 autocorrelation 0.35 against 0.42. Generating under the training
+loss's exact definitions (context on the X path, re-transforming at every
+interval start) removed the lag-1 artifact (-0.005) but not the scale
+(std 2.44) and lost the volatility clustering (0.08).
+
+## Why: the endpoint map absorbed the increments
+
+`compute_loss` followed the reference implementation
+(alexouadi/SBBTS, `training/training_sbbts_dsbm.py`) in NOT detaching
+the endpoint transform: for k >= 1, Y_i = X_i - s_theta(t_i, X_i, c_i)/beta
+and Y_{i+1} = X_{i+1} - s_theta(t_{i+1}, X_{i+1}, c_i)/beta were built
+from the same live parameters the bridge regression was training, and the
+loss backpropagated through both. That objective has a degenerate
+minimiser: the network can lower the bridge loss by using its value at
+the endpoint to shrink the Y-increments it is asked to bridge, rather
+than by learning the bridge drift. Measured on validation data
+(consecutive-minute intervals) for each outer iteration's checkpoint:
+
+    checkpoint   Var(dY)/Var(dX)   corr(s_end, beta*dX)   E[s_start^2]
+    outer_k0          0.78               0.52                 0.07
+    outer_k1          0.44               0.77                 0.07
+    outer_k2          0.36               0.81                 0.08
+    outer_k3          0.41               0.79                 0.02
+    outer_k4          0.38               0.81                 0.04
+
+with Var(dX) = 3.25 on the validation sessions. The endpoint map had
+converged to s_end ~ 0.8 * beta * dX (E[s_end^2] ~ 5), removing ~60 % of
+the increment variance from the targets, while the drift at the interval
+start was ~ 0 and, on real inputs, E[s^2] never exceeded 0.39 anywhere in
+the interval. Part of the validation-loss drop from 5.89 to 4.64 across k
+was that shrinkage rather than learning: for unit-variance increments the
+irreducible bridge-noise term of Eq. 4.1 is E[u/(dt - u)]/dt ~ 3.65
+(u ~ U[0, 0.99]), so a zero-drift predictor scores ~ 3.65 + Var(dY), and
+with Var(dY) falling from 2.5 to 1.2 the floor fell with it. (Qualified
+below: a correct transform also lowers Var(dY) on the validation sessions,
+so the drop is only partly an artifact; the distinguishing evidence is the
+transform's behaviour on training-distribution data.) At generation,
+inverting a map
+that removed 80 % of each increment multiplies the diffusion's unit noise
+by ~1/(1 - 0.8), which is the 2.4x observed, and evaluating s on
+generated (off-distribution) inputs -- E[s^2] ~ 1 at the very first bar,
+~15 by bar 20 -- adds the rest. The k=0 model used drift-only (a plain
+conditional SB, no Bass map) is not a usable generator either: increment
+std 0.91 but end-of-day std 41 -- its drift trends.
+
+A second observation from the same run, unrelated to the objective:
+two epochs after the k=0 fp32-to-bf16 switch at epoch 75, training
+collapsed (train loss 3.20 -> 3.80, val 5.9 -> 6.7, flat for 13 epochs
+until patience expired; best-restore discarded it). This was at first
+attributed to the precision *switch*; that attribution was wrong -- see
+"Precision: bf16 tested and rejected" below.
+
+## The change: theta_k frozen and detached
+
+`sbbts/training.py` now computes Y^k from a frozen, detached copy of the
+weights that ended outer iteration k-1 (`freeze_transform`,
+`endpoint_transform`) while theta_{k+1} trains -- Algorithm 1 lines 5-6
+read literally as iterative proportional fitting, with s^k_theta a fixed
+function during the inner `repeat`. The transform then has no gradient
+path and no incentive to absorb the targets; the bridge regression at
+k >= 1 becomes an honest regression onto fixed targets, so its validation
+losses are expected to be HIGHER than the no-detach run's 4.64 and are
+not comparable to it. `compute_loss` raises for k >= 1 without a
+transform rather than silently self-transforming. The frozen map is
+evaluated at t~_{i+1} = t_{i+1} - safe_frac * Delta_t_i, inside the range
+the bridge regression covers, as the paper prescribes for the endpoint
+("the target score is not well defined at t = t_{i+1} ... we evaluate it
+instead at t~_{i+1} = t_{i+1} - xi"); the earlier code evaluated it at
+t_{i+1} exactly, which under the joint objective was trained but under a
+frozen network is extrapolation. `sbbts/sampling.py` inverts at the same
+t~. Per-epoch checkpoints carry theta_k (`transform_state`) so a resume
+mid-iteration regresses onto the same targets, and the driver refuses to
+resume a checkpoint written under the old objective (`transform` field).
+
+## Degeneracy diagnostics as a gate
+
+`sbbts/diagnostics.py` computes, on real validation inputs, the four
+quantities above for any candidate transform -- Var(dY)/Var(dX),
+corr(s_end, beta*dX), E[s_start^2] (the map at the interval start) and
+E[s(t_i, Y_i, c_i)^2] (the drift the sampler applies at u = 0). The
+training driver evaluates them at every outer-iteration boundary (on the
+frozen theta_k, i.e. the actual targets, and on the best-restored weights
+about to become theta_{k+1}) and every 10 epochs within an iteration on
+the live weights, logs them to `data/sbbts/diagnostics_log.csv`, and
+halts with a clear message when `DegeneracyGate` trips:
+
+- ABORT if Var(dY)/Var(dX) < 0.6 AND corr(s_end, beta*dX) > 0.6 -- the
+  failed run's joint signature (0.44 / 0.77 at k=1). Both conditions are
+  required: a low ratio alone can be a legitimately good transport map,
+  and a high correlation alone with the variance intact is not
+  absorption.
+- ABORT if Var(dY)/Var(dX) > 2.0 -- the opposite failure, a frozen
+  network extrapolated into noise that inflates the targets.
+- WARN (logged, not halted) below 0.7, above 0.5 in correlation, or
+  above 1.5 in ratio. The failed run's k=0 checkpoint (0.78 / 0.52) lands
+  in the warning band, which is the intended early-warning behaviour.
+
+# Precision: bf16 tested and rejected (2026-09-14)
+
+**Correction.** The paragraph above originally blamed the k=0 epoch-77
+collapse on the mid-run fp32-to-bf16 switch and concluded that starting
+in bf16 would avoid it. The frozen-transform run launched on that basis
+(2026-09-14 08:26, bf16 from epoch 0, no switch) tracked the fp32 run's
+k=0 curve to three decimals through epoch 11 (train 3.288 vs 3.299) and
+then collapsed at epochs 12-13 (3.29 -> 3.46 -> 3.81, flat at 3.78-3.82
+thereafter), early-stopping k=0 at epoch 49 with best val 6.551 against
+fp32's 5.893 at the same objective. The record is therefore:
+
+- two bf16 collapses at k=0: epoch 77 (two epochs after a mid-run
+  switch) and epoch 12 (from a cold bf16 start);
+- zero collapses in 75 fp32 epochs at the same objective (k=0 of the
+  first run), and none in the fp32 epochs of any smoke or resume test;
+- the collapse signature both times: training loss up ~0.5 within two
+  epochs, then flat (3.80 +- 0.01) for the rest of the iteration, never
+  recovering -- consistent with dead units in the 2048-wide ReLU
+  feed-forward block after one destructive update.
+
+**Why the validation did not catch it.** bf16 was adopted after an
+8-epoch bf16-vs-fp32 comparison (same initial weights, seed and fixed
+validation draws; 2,048/512-example subsample; 4 epochs at k=0 and 4 at
+k=1) that passed at a maximum validation-loss divergence of 1.0e-3 and
+training-loss divergence of 1.2e-3 -- below the run's own epoch-to-epoch
+movement (median 5.9e-3) and seed spread (sd 3.7e-3). That check
+measured trajectory drift over roughly 4,000 optimizer steps. The
+collapses arrived after roughly 40,000 steps (epoch 77 at 517 steps per
+epoch) and 6,000 steps (epoch 12): a rare-step tail event, which a
+short paired comparison cannot see regardless of how tightly the two
+trajectories agree while nothing has gone wrong. The mechanism is
+plausible on its face -- the per-interval loss is heavy-tailed near
+t_{i+1}, there is no gradient clipping (neither here nor in the
+reference), and bf16's 8-bit mantissa makes a single extreme batch more
+likely to land a destructive update -- but the evidence for the decision
+is the two-for-two versus zero-for-75 count, not the mechanism.
+
+**Decision.** fp32 throughout, chosen on that evidence; bf16 was tested
+and rejected for instability. `SBBTSTrainingConfig.precision` is
+"fp32", `autocast_context` accepts nothing else (the bf16 path is
+removed, not merely defaulted off, so a stale config or checkpoint cannot
+re-enable it), and the driver refuses to resume a checkpoint whose
+recorded precision differs from the config's, with no override. The cost
+is ~2.3x per epoch (~210 s at k=0, ~260 s at k >= 1 with the frozen
+transform's extra encoder pass on the A16), roughly 1.2 days for the
+full schedule. Alternatives not taken: TF32 (untested for stability) and
+gradient clipping (an algorithm change the reference does not make).
+
+**Collapse gate.** Alongside the degeneracy gate -- which behaved
+correctly through this failure, staying quiet because the transform
+statistics were healthy (ratio 0.97-1.12, corr -0.38..+0.23) -- the
+driver now aborts an outer iteration when the training loss stays 0.15
+or more above that iteration's running minimum for 3 consecutive epochs
+(`sbbts/diagnostics.py: CollapseGate`). Ordinary epoch-to-epoch movement
+of the training loss is +-0.01; both collapses were +0.5 within two
+epochs and then flat, so the rule would have halted them at epoch 79 and
+epoch 15 respectively instead of 90 and 49.
+
+## Qualification: what the transform statistics mean depends on the data's variance (2026-09-15)
+
+The frozen-transform fp32 run (2026-09-14 14:13 -> 2026-09-15 18:38; 268
+epochs, 20.6 h; k=0..4 best validation losses 5.837, 5.737, 5.836, 5.639,
+5.725; collapse gate never registered a high epoch) showed the same
+validation-set signature the degeneracy gate was calibrated against --
+Var(dY)/Var(dX) drifting to 0.74-0.77 and corr(s_end, beta*dX) to
+0.55-0.67 -- already at k=0, where the transform is not in the loss and
+no feedback path exists. That is not absorption. For a Brownian bridge
+with unit reference diffusion onto an endpoint whose conditional
+variance is v, the drift the regression learns, evaluated at t~ on the
+endpoint, is s_end ~ (1 - 1/v) * dX: the SB drift correcting the mismatch
+between the unit reference diffusion and the data's variance. The
+validation sessions are the February-March 2020 crash, with Var(dX) =
+3.35 for consecutive-minute standardized increments against 0.38 on the
+training sessions -- a 9x shift. A healthy model is therefore *expected*
+to show corr ~ 0.7 and ratio ~ 0.42 on validation, and the opposite sign
+(ratio > 1, corr < 0) on training-distribution data.
+
+Measured on the same 2,048-example samples, healthy fp32 k=0 model
+(epoch 67) versus the failed no-detach outer_k4:
+
+    model                     data    Var(dX)  ratio   corr    theory ratio
+    healthy fp32 k=0          train    0.38    1.43   -0.18       3.26
+    healthy fp32 k=0          val      3.35    0.75    0.58       0.42
+    failed no-detach k=4      train    0.38    0.71    0.54       3.26
+    failed no-detach k=4      val      3.35    0.34    0.83       0.42
+
+The healthy model follows the theory in both regimes; the degenerate one
+shrinks increments regardless of the data's variance -- on training data,
+where a correct transform inflates the targets, it removes 29 % of their
+variance with corr 0.54. The real degeneracy signature therefore lives on
+training-distribution data, and the validation-set thresholds of
+`DegeneracyGate` (calibrated on the failed run's validation numbers, which
+were in fact close to the healthy theoretical value) are conservative to
+the point of warning on healthy models. They did not abort this run
+(the ratio never crossed 0.6), so the gate was left as it was for the
+run's duration; before the next run it should be re-based on a fixed
+sample of training-distribution sessions -- abort if ratio < 0.8 and corr
+> 0.4 there, which separates 0.71/0.54 (failed) from 1.43/-0.18 (healthy)
+-- with the validation-set statistics and the (1 - 1/v) reference kept
+in the log for information. Two further consequences: the frozen
+transform legitimately lowers k >= 1 validation losses relative to k=0
+(5.84 -> 5.64-5.74 here), so "k >= 1 losses must look worse than the
+no-detach run's" was the right direction but the wrong reasoning; and
+early stopping on this split selects on the crash regime, which is worth
+stating in the methods.
+
+Sampling from the run's final checkpoint (outer_k4.pt) with the paper's
+generation procedure gives standardized increments with std 0.92 (real
+1.00), lag-1 autocorrelation -0.015 (real +0.004), end-of-day dispersion
+18.1 (real 17.5), |increment| lag-1 autocorrelation 0.24 (real 0.42) and
+excess kurtosis 3.9 (real 62.9): the right scale and dynamics, weaker
+volatility clustering and thinner tails than real. The assembled panel
+(`data/curated/sbbts_prices.parquet`, 2026-09-15 18:55) matches real's
+clock, columns and NaN mask exactly; intraday consecutive-minute return
+scale is 0.91x real per ticker (p10-p90 0.87-0.94), and the intraday
+U-shape is reproduced in form but damped at the open (0.0042 vs 0.0059)
+and close (0.0012 vs 0.0020).

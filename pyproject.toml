@@ -1,7 +1,7 @@
 [project]
 name = "fineval"
 version = "0.2.0"
-description = "Six-bucket fidelity benchmark for synthetic financial return generators"
+description = "Four-metric fidelity benchmark for synthetic 1-minute financial return generators"
 requires-python = ">=3.12"
 dependencies = [
     "matplotlib>=3.10.9",

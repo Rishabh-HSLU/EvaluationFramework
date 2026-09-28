@@ -111,7 +111,7 @@ def run_benchmark(args, stamp: str, record: dict) -> None:
 
     with BenchmarkProgress(args) as progress:
         started = progress.stage("Load curated datasets", str(CURATED_DIR))
-        real, ail, gbm, msv = load_default_datasets(progress.update)
+        real, synthetic_datasets = load_default_datasets(progress.update)
         log(f"Dataset loading completed in {time.monotonic() - started:.1f}s.")
 
         started = progress.stage(
@@ -120,7 +120,7 @@ def run_benchmark(args, stamp: str, record: dict) -> None:
         )
         deseas_real, synthetics = preprocess_pairs(
             real,
-            (ail, gbm, msv),
+            synthetic_datasets,
             progress.update,
         )
         log(f"Preprocessing completed in {time.monotonic() - started:.1f}s.")

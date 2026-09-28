@@ -1,4 +1,9 @@
 data/raw_intraday
+# SBBTS training artifacts; data/curated/ stays reserved for CurationPipeline output
+data/sbbts/
+# CurationPipeline's own metadata output (parquet outputs are already
+# covered by the blanket *.parquet rule below).
+data/curated/curation_metadata.json
 
 # Python / packaging
 __pycache__/
@@ -11,6 +16,7 @@ build/
 # Editor / OS
 .idea/
 .DS_Store
+.ipynb_checkpoints/
 
 # Local experiment artifacts — not part of the public framework
 ablation_output/
@@ -31,6 +37,8 @@ paper/**/*.synctex.gz
 paper/**/*.fls
 paper/**/*.fdb_latexmk
 *.parquet
+# Raw standardized SBBTS paths written next to the panel by scripts/sbbts_generate.py
+data/curated/*.paths.pt
 
 # Benchmark result CSVs: only the canonical files and default-parameter
 # (B=100, tickers/draw=200, seed=42) runs are tracked. Other parameter
