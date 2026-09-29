@@ -177,11 +177,30 @@ def metrics_for(spec: Spec, fast: bool) -> list:
     return [metric for metric in metrics if metric.name in affected]
 
 
+def format_dial_value(value: object) -> str:
+    """Render one dial value as a label, recursing into nested sequences.
+
+    A corner spec's ``dial_value`` carries one entry per dial it varies, and one
+    of those entries can itself be a sequence: ``corner=tailf0.10-flat`` varies
+    ``tail_fraction`` and ``regime_weights`` together, giving
+    ``(0.1, (1.0, 1.0, 1.0, 1.0, 1.0))``. Formatting every element with ``:g``
+    therefore raises ``TypeError`` on the inner tuple, so the formatting
+    recurses instead of assuming a flat sequence of scalars.
+
+    Labelling only: nothing here feeds a metric, a draw, or a score.
+    """
+    if isinstance(value, (tuple, list)):
+        return ":".join(format_dial_value(item) for item in value)
+    return f"{value:g}"
+
+
 def identity_block(spec: Spec, args: argparse.Namespace, stamp: str) -> dict:
     """Columns identifying one spec run in every tidy output row."""
     weights = ":".join(f"{w:g}" for w in spec.params["regime_weights"])
+    # Scalars pass through unformatted, exactly as before, so existing labels
+    # are byte-identical; only tuples go through the recursive formatter.
     dial_value = (
-        ":".join(f"{v:g}" for v in spec.dial_value)
+        format_dial_value(spec.dial_value)
         if isinstance(spec.dial_value, tuple)
         else spec.dial_value
     )
