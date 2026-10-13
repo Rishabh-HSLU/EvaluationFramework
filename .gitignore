@@ -1,62 +1,47 @@
-data/raw_intraday
-# SBBTS training artifacts; data/curated/ stays reserved for CurationPipeline output
-data/sbbts/
-# CurationPipeline's own metadata output (parquet outputs are already
-# covered by the blanket *.parquet rule below).
-data/curated/curation_metadata.json
+# Local documentation and research notes
+/README.md
+/docs/
+/fineval/walkthrough.md
+/scripts/reasoning.md
+/paper/
+/methodology.html
+/todo.md
 
-# Python / packaging
+# Local datasets, experiment outputs, and notebooks
+/data/
+/results/
+/scripts/results/
+/fineval/scripts/results/
+/fineval/scripts/sensitivity/results/
+/scripts/notebooks/
+/ablation_output/
+/runs/
+*.parquet
+
+# Local migration tools, inventories, and archives
+/backups/
+/migration/
+/scripts/create_migration_backup.py
+
+# Python environments, packaging, and tool caches
+.venv/
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
-build/
-.venv/
+/dist/
+/build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
 
-# Editor / OS
+# Local credentials and editor files
+.env
+.env.*
+!.env.example
 .idea/
+.vscode/
 .DS_Store
 .ipynb_checkpoints/
-
-# Local experiment artifacts — not part of the public framework
-ablation_output/
-runs/
-paper/
-scripts/notebooks/conditional_heavy_tails.ipynb
-scripts/notebooks/redundant.ipynb
-methodology.html
-todo.md
-
-
-# LaTeX build artifacts
-paper/**/*.aux
-paper/**/*.log
-paper/**/*.out
-paper/**/*.toc
-paper/**/*.synctex.gz
-paper/**/*.fls
-paper/**/*.fdb_latexmk
-*.parquet
-# Raw standardized SBBTS paths written next to the panel by scripts/sbbts_generate.py
-data/curated/*.paths.pt
-
-# Benchmark result CSVs: only the canonical files and default-parameter
-# (B=100, tickers/draw=200, seed=42) runs are tracked. Other parameter
-# combinations are cheap to regenerate and would otherwise clutter
-# history with one-off/smoke-test runs; runs_manifest.csv still records
-# that every run happened, regardless of whether its CSV is tracked.
-scripts/results/benchmark_B*_m*_seed*_*.csv
-scripts/results/aggregate_B*_m*_seed*_*.csv
-!scripts/results/benchmark_B100_m200_seed42_*.csv
-!scripts/results/aggregate_B100_m200_seed42_*.csv
-
-# Same policy at the current results/ path (the rules above predate the
-# 2026-07 move out of scripts/). Default-parameter spec-primary runs stay
-# trackable; other parameter combinations and whole sweep directories are
-# ignored. runs_manifest.csv is never ignored: it records every run.
-results/benchmark_spec-*_B*_m*_seed*_*.csv
-results/aggregate_spec-*_B*_m*_seed*_*.csv
-!results/benchmark_spec-primary_B100_m200_seed42_*.csv
-!results/aggregate_spec-primary_B100_m200_seed42_*.csv
-!results/outer_*_replicates_spec-primary_B100_m200_seed42_*.csv
-results/sweep_*/
