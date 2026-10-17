@@ -509,6 +509,19 @@ CSVs; results/run4/ remains the fixed paper reference.
 
 ---
 
+## Diagnostic figures
+
+Generate the M2 absolute-return ACF, M3 kurtosis aggregation curves, and
+M4 tail-shape profiles from the five curated run #4 panels:
+
+```bash
+python -m scripts.reproduce profiles
+```
+
+[Figure outputs and reproduction details](results/figures/run4/README.md)
+include PDF/PNG figures, plotted CSV data and provenance. To redraw from
+saved CSVs without loading the panels, add `-- --plot-only`.
+
 ## Citation
 
 If you use this benchmark, please cite the accompanying paper (forthcoming).

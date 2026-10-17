@@ -1,0 +1,170 @@
+{
+  "scope": "In-sample full-panel empirical fidelity; descriptive features, not matched-bootstrap scores or confidence intervals",
+  "randomness": "No sampling, no random seed, no retraining",
+  "panels": {
+    "data/curated/ail_prices.parquet": "976c3a93b25e47af2742eaa5d3457ffc4aac9062cba0e74c397d6c59f434d751",
+    "data/curated/gbm_prices.parquet": "9f48b5e81640f267ea9db585d2f686ac92e0a4f6c0cabc7c234eadadf8c31a9f",
+    "data/curated/msv_prices.parquet": "4ec0063024442a0680ae598bf7480704b937c50351656dc28c064fa4a9f73f84",
+    "data/curated/real_prices.parquet": "044336d7ad4b552a1eb469018f936b776e8ff1da32656acf0348f0049921bec9",
+    "data/curated/sbbts_prices.parquet": "4a1c29f50746d1957f3a6bd11c90a2299c0f1bb9a8bb878afc271cf7eea4cefa"
+  },
+  "numerical_environment": {
+    "python": "3.13.16 | packaged by conda-forge | (main, Oct  7 2026, 00:29:52) [GCC 15.3.0]",
+    "architecture": "x86_64",
+    "libc": [
+      "glibc",
+      "2.43"
+    ],
+    "packages": {
+      "numpy": "2.4.5",
+      "pandas": "3.0.3",
+      "scipy": "1.17.1",
+      "pyarrow": "24.0.0"
+    },
+    "settings": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4,AVX512_ICL,AVX512_SPR",
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1"
+    }
+  },
+  "matplotlib": "3.10.9",
+  "command": "python -m scripts.reproduce profiles",
+  "reference_metric_parameters": {
+    "SEASONALITY_CV_THRESHOLD": 0.3,
+    "NUM_HARMONICS": 4,
+    "COVERAGE_FLOOR": 0.7,
+    "M1_N_GRID": 5001,
+    "M1_TAIL_ALPHA": 0.3,
+    "M1_TAIL_LAMBDA": 1.0,
+    "M2_LAG_MIN": 60,
+    "M2_LAG_MAX": 388,
+    "M3_SCALES": [
+      1,
+      5,
+      15,
+      30
+    ],
+    "M3_MIN_OBS": 100,
+    "M3_SUPPORT_ANCHOR": "close",
+    "ROLLING_VOL_WINDOW": 60,
+    "ROLLING_VOL_MIN_FRAC": 0.5,
+    "ROLLING_VOL_MIN_PERIODS": 30,
+    "N_REGIME_QUINTILES": 5,
+    "TAIL_FRACTION": 0.05,
+    "REGIME_WEIGHTS": [
+      0.125,
+      0.125,
+      0.125,
+      0.25,
+      0.375
+    ],
+    "M4_MIN_EXCEEDANCES": 500,
+    "REGIME_WEIGHTS_RAW": [
+      1.0,
+      1.0,
+      1.0,
+      2.0,
+      3.0
+    ]
+  },
+  "source_sha256": {
+    "scripts/plot_metric_profiles.py": "ef00e1cc972e6180bcbafd63190a9759ee8b0c633bc0a6d5cf180d357bf6cb68",
+    "scripts/reproduce.py": "bc4aaeb397fb57e567e29520497d34bdbc695f5f26a2ba39dc4638674080e9b1",
+    "fineval/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fineval/benchmark/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fineval/benchmark/artifacts.py": "3a4e392d88ff126d02589dbce4342c3bb88e131aa7b5414c8006e15431f8e031",
+    "fineval/benchmark/config.py": "04e7ec5742f7de83d5b68ded30508d021d270249c356fe6ade4af9dfca71ad56",
+    "fineval/benchmark/datasets.py": "a7cc0ba6da7ae8009632cb724676e51e45750ea71263a20859f89bab042a7ce3",
+    "fineval/benchmark/reporting.py": "8467bde9380a344288b85c8a34c684593f7d01a078d0ab84487eb9a0b12c6b05",
+    "fineval/benchmark/runner.py": "7f79e7f3939b02b8005c09c91ba0980493157c62b2e464f5408b696017a35e24",
+    "fineval/bootstrap/__init__.py": "7a4f7882077c9aa4807fb3dc4ab574b53f48862dff1645f8dd37e5038cbfffdf",
+    "fineval/bootstrap/checkpoints.py": "fb2a4f135e488508cc3a44e27ad6968655cd219f44ded61ed7d53c938c28cdfc",
+    "fineval/bootstrap/engine.py": "c544a19dbcb63db3602bf0534da1efb5d17b286150a563368c28a2c5a7bdc6d4",
+    "fineval/bootstrap/execution.py": "5f5b28b68017dac81ffba6979e6b3c945c6d349da602ac4db9ef98b306327ad1",
+    "fineval/bootstrap/models.py": "d78351939998f7b9e08fde75b0a5e3ab4435f31f2d6ae0c5e05a0369007fddbe",
+    "fineval/bootstrap/replicate_execution.py": "b90ecd62500bb3bb085ecf46755ed4ad7d1d42f873d02b23f0a92b5bf505da70",
+    "fineval/bootstrap/uncertainty.py": "00f4bc7c176b75729169106e7027651e7cb0f32bedd37ff249348a621db1f44c",
+    "fineval/config.py": "d01fd55ecca90067ffd8bf40894b5ab6535a7c483b9caf5ca31a0b6eeccd8a3a",
+    "fineval/data/__init__.py": "9482f1b2cb5b3b0bcdb6e3422a76a8f7f353ba4edbe74f221ca88ba9c997bfa9",
+    "fineval/data/curate.py": "6140de2740ae8ef6e98462272423a00e1a4b78d23882e0831ec8ac8cd513ae41",
+    "fineval/data/loader.py": "fe70a89af133abb197fbb0970a76e0312a765b2fe21e3c17f0a711620b050807",
+    "fineval/metrics/__init__.py": "1bc7d1976665296ba537ae28fc35e77777bd9de447612f9b73663728c5b83bc4",
+    "fineval/metrics/aggregational_gaussianity.py": "9c9f0b3650bdaa4a97eed0b5d90c5c4636f750f557f003ef18781410160b7497",
+    "fineval/metrics/base.py": "6ea1fb80abe72b53301f2e0f82f087baccc7dc07b68fc57e6f05d609584091a1",
+    "fineval/metrics/regime_tails.py": "b29309b7eca7b242fad9c000ecefc6a1cf959647d3fcba3a1265bd745daf7c0d",
+    "fineval/metrics/tail_weighted_marginal.py": "b006b8b5c947fff7dc6f5cb1423f2a2c26eb0638555b7f6fbd1b81694b22d989",
+    "fineval/metrics/volatility_clustering.py": "d2d1c9c797bf7cd0cd7e63ac5cf8dc93ae0d3921583cc880c75ef95282622c76",
+    "fineval/preprocessing/__init__.py": "e17cf109899a293768dad47a1f2a66c2e2d82e01c3adb5e94366720ed539b519",
+    "fineval/preprocessing/fff.py": "375157412a0c5e9252177befbcacba632a95089fd87bd2977fe151c2e3237f5e",
+    "fineval/preprocessing/pipeline.py": "125452a36a6c930dd5bdacbcd6df3ef51396f8f9ff686cd304588acf14b65a07",
+    "fineval/preprocessing/session_clock.py": "9e25f7f74e57ea882ad0afe390890e1640ab008870be84c16c369fc833518444",
+    "fineval/scripts/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fineval/scripts/sensitivity/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fineval/scripts/sensitivity/grid.py": "1372764d2c27f84070c143d227224a8f5f69d07a00be814f6b9086f1149a28fb",
+    "fineval/scripts/sensitivity/persistence.py": "3cc0915f2ae4b8173b2bcb2262ebef0c618615946cb857f7fd833e8d64516079",
+    "fineval/scripts/sensitivity/run_sweep.py": "a14a46a33959ef865b2bd0420bce571a00d2f77bb41ae264cc96383883c2b144",
+    "fineval/scripts/sensitivity/summarize_robustness.py": "47382091615097e1e9a457106f38f448a8b828b573e4157efa813f430102836d"
+  },
+  "panel_metadata": {
+    "Real": {
+      "timestamps": 53850,
+      "tickers": 600,
+      "sessions": 139,
+      "fff_applied": true,
+      "m3_common_support": 360,
+      "m3_eligible_sessions": 137
+    },
+    "AIL": {
+      "timestamps": 53850,
+      "tickers": 600,
+      "sessions": 139,
+      "fff_applied": true,
+      "m3_common_support": 360,
+      "m3_eligible_sessions": 137
+    },
+    "GBM": {
+      "timestamps": 53850,
+      "tickers": 600,
+      "sessions": 139,
+      "fff_applied": false,
+      "m3_common_support": 360,
+      "m3_eligible_sessions": 137
+    },
+    "MSV": {
+      "timestamps": 53850,
+      "tickers": 600,
+      "sessions": 139,
+      "fff_applied": false,
+      "m3_common_support": 360,
+      "m3_eligible_sessions": 137
+    },
+    "SBBTS": {
+      "timestamps": 53850,
+      "tickers": 600,
+      "sessions": 139,
+      "fff_applied": true,
+      "m3_common_support": 360,
+      "m3_eligible_sessions": 137
+    }
+  },
+  "parameters": {
+    "m2_lags": [
+      60,
+      388
+    ],
+    "m3_scales": [
+      1,
+      5,
+      15,
+      30
+    ],
+    "m3_support": 360,
+    "m3_anchor": "close",
+    "m4_window": 60,
+    "m4_min_periods": 30,
+    "m4_regimes": 5,
+    "m4_tail_fraction": 0.05,
+    "m4_min_exceedances": 500
+  }
+}

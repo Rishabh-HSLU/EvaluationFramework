@@ -12,6 +12,7 @@
 !/results/aggregate_results.csv
 !/results/run3/
 !/results/run4/
+!/results/figures/
 /scripts/results/
 /fineval/scripts/results/
 /fineval/scripts/sensitivity/results/*

@@ -17,3 +17,6 @@ outputs are local and are not included in this reference bundle.
 
 Parquet inputs remain outside Git. Their exact identities are recorded in
 [panel_digests.txt](../docs/panel_digests.txt).
+
+[Diagnostic feature figures](figures/run4/README.md) provide the M2–M4
+full-panel profiles, source CSVs and reproduction command.
