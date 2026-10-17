@@ -1,3 +1,7 @@
 # Keep recorded evidence bytes stable across Git clients and operating systems.
 results/** text eol=lf
 docs/panel_digests.txt text eol=lf
+
+# Preserve figure binary bytes and their recorded digests.
+*.pdf -text
+*.png -text
