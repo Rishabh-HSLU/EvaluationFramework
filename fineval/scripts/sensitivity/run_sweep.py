@@ -56,6 +56,15 @@ from fineval.scripts.sensitivity.grid import (
     RUN_KIND,
     Spec,
 )
+from fineval.scripts.sensitivity.persistence import (
+    atomic_json,
+    load_spec,
+    numerical_environment,
+    save_snapshot,
+    save_spec,
+    source_identity,
+    write_tables,
+)
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 ALL_METRICS = ("M1", "M2", "M3", "M4")
@@ -64,6 +73,7 @@ CURATED_FILES = (
     "ail_prices.parquet",
     "gbm_prices.parquet",
     "msv_prices.parquet",
+    "sbbts_prices.parquet",
 )
 
 
@@ -331,8 +341,15 @@ def write_grid_snapshot(run_dir: Path, args: argparse.Namespace, stamp: str) -> 
         "mode": "fast" if args.fast else "full",
         "dataset_sha256": dataset_hashes(),
         "specs": [asdict(spec) for spec in GRID],
+        "source_sha256": source_identity(),
+        "numerical_environment": numerical_environment(),
+        "primary_reference_sha256": (
+            hashlib.sha256(args.primary_reference.read_bytes()).hexdigest()
+            if getattr(args, "primary_reference", None) is not None
+            else None
+        ),
     }
-    (run_dir / "grid_spec.json").write_text(json.dumps(snapshot, indent=2, default=list))
+    save_snapshot(run_dir / "grid_spec.json", snapshot, resume=getattr(args, "resume", False))
     log(f"Wrote grid snapshot: {run_dir / 'grid_spec.json'}")
 
 
@@ -350,14 +367,27 @@ def append_manifest(row: dict) -> None:
 
 def run_sweep(args: argparse.Namespace) -> None:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_dir = RESULTS_DIR / f"sweep_{stamp}_{RUN_KIND}"
-    run_dir.mkdir(parents=True, exist_ok=False)
+    run_dir = getattr(args, "run_dir", None) or RESULTS_DIR / f"sweep_{stamp}_{RUN_KIND}"
+    run_dir = Path(run_dir)
+    if getattr(args, "resume", False):
+        if not (run_dir / "grid_spec.json").is_file():
+            raise ValueError("Resume requires an existing grid snapshot")
+        stamp = json.loads((run_dir / "grid_spec.json").read_text())["created_at"]
+    else:
+        run_dir.mkdir(parents=True, exist_ok=False)
     write_grid_snapshot(run_dir, args, stamp)
 
     log("Loading curated datasets (shared across all specs)...")
     real, synthetic_datasets = load_default_datasets(lambda _n: None)
     deseas_real, synthetics = preprocess_pairs(real, synthetic_datasets, lambda _n: None)
     log(f"Shared data ready: real={deseas_real.shape}, generators={list(synthetics)}.")
+
+    expected_generators = {"AIL", "GBM", "MSV", "SBBTS"}
+    if set(synthetics) != expected_generators:
+        raise ValueError(f"The four-generator grid requires {sorted(expected_generators)}")
+    checkpoint_dir = run_dir / "checkpoints"
+    checkpoint_dir.mkdir(exist_ok=True)
+    completed_specs: list[str] = []
 
     metric_frames: list[pd.DataFrame] = []
     aggregate_frames: list[pd.DataFrame] = []
@@ -383,6 +413,28 @@ def run_sweep(args: argparse.Namespace) -> None:
             "duration_seconds": 0.0,
             "error": "",
         }
+        checkpoint = checkpoint_dir / f"{position:02d}.json"
+        saved = load_spec(checkpoint, spec.spec_id, expected_generators, args.n_resamples)
+        if saved is not None:
+            metric_rows, aggregate_rows, diag = saved
+            if spec.dial == "none":
+                primary_metric_rows = metric_rows.copy()
+            identity = identity_block(spec, args, stamp)
+            metric_frames.append(attach_identity(metric_rows, identity, diag))
+            aggregate_frames.append(attach_identity(aggregate_rows, identity, None))
+            completed_specs.append(spec.spec_id)
+            write_tables(run_dir, metric_frames, aggregate_frames)
+            atomic_json(
+                run_dir / "status.json",
+                {
+                    "status": "running",
+                    "seed": args.seed,
+                    "completed_specs": completed_specs,
+                    "total_specs": len(ordered),
+                },
+            )
+            log(f"[{position}/{len(ordered)}] Restored completed spec {spec.spec_id!r}.")
+            continue
         try:
             log(f"[{position}/{len(ordered)}] Running spec {spec.spec_id!r}...")
             metrics = metrics_for(spec, args.fast)
@@ -396,6 +448,15 @@ def run_sweep(args: argparse.Namespace) -> None:
             metric_rows = engine.run(deseas_real, synthetics, show_progress=False)
 
             if spec.dial == "none":
+                if getattr(args, "primary_reference", None) is not None:
+                    reference = pd.read_csv(args.primary_reference, float_precision="round_trip")
+                    left = metric_rows.set_index(["metric", "generator"]).sort_index()
+                    right = reference.set_index(["metric", "generator"]).sort_index()
+                    if not left.index.equals(right.index) or not np.allclose(
+                        left["score"], right["score"], rtol=1e-10, atol=1e-12
+                    ):
+                        raise ValueError("Primary seed-42 scores differ from run #4")
+                    log("Primary seed-42 scores agree with the run #4 reference.")
                 primary_metric_rows = metric_rows.copy()
                 engine_aggregate = engine.compute_aggregate()
                 check_gdev_reproduction(engine_aggregate, metric_rows)
@@ -422,9 +483,21 @@ def run_sweep(args: argparse.Namespace) -> None:
                 aggregate_rows = engine.compute_aggregate()
 
             diag = spec_diagnostics(spec, deseas_real, synthetics, diagnostics_cache)
+            save_spec(checkpoint, spec.spec_id, metric_rows, aggregate_rows, diag)
             identity = identity_block(spec, args, stamp)
             metric_frames.append(attach_identity(metric_rows, identity, diag))
             aggregate_frames.append(attach_identity(aggregate_rows, identity, None))
+            completed_specs.append(spec.spec_id)
+            write_tables(run_dir, metric_frames, aggregate_frames)
+            atomic_json(
+                run_dir / "status.json",
+                {
+                    "status": "running",
+                    "seed": args.seed,
+                    "completed_specs": completed_specs,
+                    "total_specs": len(ordered),
+                },
+            )
             manifest_row["status"] = "completed"
             log(f"Spec {spec.spec_id!r} completed in {time.monotonic() - started:.1f}s.")
         except Exception as exc:
@@ -445,6 +518,15 @@ def run_sweep(args: argparse.Namespace) -> None:
     if failed_specs:
         failed = ", ".join(repr(spec_id) for spec_id in failed_specs)
         raise RuntimeError(f"Sensitivity sweep failed for {len(failed_specs)} spec(s): {failed}")
+    atomic_json(
+        run_dir / "status.json",
+        {
+            "status": "completed",
+            "seed": args.seed,
+            "completed_specs": completed_specs,
+            "total_specs": len(ordered),
+        },
+    )
     log("Sweep finished.")
 
 
@@ -496,6 +578,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Exploratory FinEval sensitivity sweep (OAT grid)."
     )
+    parser.add_argument(
+        "--run-dir", type=Path, default=None, help="explicit output directory for this seed"
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="reuse completed specs in --run-dir with identical inputs/settings",
+    )
+    parser.add_argument(
+        "--primary-reference",
+        type=Path,
+        default=None,
+        help="seed-42 primary metric CSV to verify before alternative specs",
+    )
     parser.add_argument("--n-resamples", type=int, default=100, help="inner matched draws B")
     parser.add_argument("--tickers-per-draw", type=int, default=200)
     parser.add_argument("--seed", type=int, default=SEED, help="same seed for every spec (paired)")
@@ -521,6 +617,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse and validate sensitivity-sweep arguments."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.resume and args.run_dir is None:
+        parser.error("--resume requires --run-dir")
+    if args.primary_reference is not None and args.seed != 42:
+        parser.error("--primary-reference is for seed 42 only")
     if args.n_resamples < 1:
         parser.error("--n-resamples must be at least 1")
     if args.tickers_per_draw < 1:

@@ -14,6 +14,7 @@ MODULES = {
     "sbbts-train": "scripts.sbbts_train",
     "sbbts-generate": "scripts.sbbts_generate",
     "benchmark": "scripts.run_benchmark",
+    "sensitivity": "fineval.scripts.sensitivity.run_sweep",
 }
 
 

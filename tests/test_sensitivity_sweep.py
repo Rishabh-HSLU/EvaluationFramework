@@ -36,7 +36,10 @@ def test_failed_specs_produce_a_failing_exit(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
         run_sweep,
         "preprocess_pairs",
-        lambda *_args: (pd.DataFrame(), {"synthetic": pd.DataFrame()}),
+        lambda *_args: (
+            pd.DataFrame(),
+            {name: pd.DataFrame() for name in ("AIL", "GBM", "MSV", "SBBTS")},
+        ),
     )
     monkeypatch.setattr(
         run_sweep,
