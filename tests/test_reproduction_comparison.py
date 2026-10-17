@@ -70,3 +70,30 @@ def test_cli_rejects_different_run_settings(tmp_path, capsys):
         writer.writerow(record)
     assert main(["--manifest", str(manifest), "--run-number", "99"]) == 1
     assert "Run setting differs: seed" in capsys.readouterr().out
+
+
+def test_point_only_accepts_o0_m0_and_detects_changed_score(tmp_path, capsys):
+    reference = REFERENCE
+    record = json.loads((reference / "provenance/run_manifest.json").read_text())
+    record.update(run_number=99, n_outer_resamples=0, n_mc_repeats=0)
+    for field, name in [
+        ("results_csv", "metric_summary.csv"),
+        ("aggregate_csv", "aggregate_summary.csv"),
+    ]:
+        record[field] = name
+        shutil.copy2(reference / name, tmp_path / name)
+    manifest = tmp_path / "runs_manifest.csv"
+    with manifest.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(record))
+        writer.writeheader()
+        writer.writerow(record)
+    args = ["--manifest", str(manifest), "--run-number", "99", "--point-only"]
+    assert main(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["comparison_scope"] == "point_estimates_only"
+    assert len(report["comparisons"]) == 2
+    p = tmp_path / "metric_summary.csv"
+    text = p.read_text().replace("0.34359018272044994", "0.44", 1)
+    p.write_text(text)
+    assert main(args) == 1
+    assert not json.loads(capsys.readouterr().out)["passed"]

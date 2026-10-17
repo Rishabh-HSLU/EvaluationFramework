@@ -4,6 +4,8 @@ Start with the [run #4 paper reference](../../results/run4/README.md).
 It contains the comparison tables, replicate records, settings, input hashes
 and [paper-number source index](../../results/run4/paper_number_map.csv).
 
+- [Supervisor panel check](supervisor_panel_check.md): older-curation mismatch
+  explanation and independent point-only verification, pending external rerun.
 - [Numerical environment](numerical_environment.md): CPU-dispatch launcher and
   evidence from the two tested x86_64 machines.
 - [Panel digests](../panel_digests.txt): exact original inputs used by runs #3/#4.

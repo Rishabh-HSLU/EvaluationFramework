@@ -29,7 +29,10 @@ rounded and reference panels were not substituted for generated controls.
 
 This setting was demonstrated on the two tested x86_64 environments; it is not
 a guarantee for every architecture, library build or Parquet writer version.
-It does not establish the cause of a third party's mismatched files.
+That CPU-dispatch evidence does not establish the cause of a third party's
+mismatched files. Separately, on 17 October 2026 the user confirmed that the
+supervisor's Real/GBM/MSV mismatch arose from an older 14 July curation build;
+see [the supervisor panel check](supervisor_panel_check.md).
 Fresh provider downloads can contain revisions, and neural-network retraining
 can differ across devices even with matching seeds.
 

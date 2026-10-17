@@ -195,18 +195,45 @@ def verify_reference(directory: Path) -> dict:
     }
 
 
+def verify_point_reference(directory: Path) -> dict:
+    """Verify the compact reference shipped with a panel-only handoff."""
+    manifest = json.loads((directory / "checksums.json").read_text())["artifacts"]
+    for name in ("metric_summary.csv", "aggregate_summary.csv", "provenance/run_manifest.json"):
+        if hashlib.sha256((directory / name).read_bytes()).hexdigest() != manifest[name]:
+            raise ValueError(f"Reference file digest mismatch: {name}")
+    metrics = keyed(read_csv(directory / "metric_summary.csv"), ("metric", "generator"))
+    aggregates = keyed(read_csv(directory / "aggregate_summary.csv"), ("generator",))
+    generators = {"AIL", "GBM", "MSV", "SBBTS"}
+    if set(metrics) != {(m, g) for m in ("M1", "M2", "M3", "M4") for g in generators}:
+        raise ValueError("Point reference must contain all 16 metric cells")
+    if set(aggregates) != {(g,) for g in generators}:
+        raise ValueError("Point reference must contain all four aggregate cells")
+    return {"reference_files_verified": 3, "reference_scope": "point_estimates_only"}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference-dir", type=Path, default=ROOT / "results/run4")
     parser.add_argument("--manifest", type=Path, default=ROOT / "results/runs_manifest.csv")
     parser.add_argument("--run-number", type=int, help="completed reproduced run to compare")
+    parser.add_argument(
+        "--point-only",
+        action="store_true",
+        help="Compare point scores, gaps and coverage only; omit outer/seed summaries",
+    )
     parser.add_argument("--rtol", type=float, default=1e-10)
     parser.add_argument("--atol", type=float, default=1e-12)
     args = parser.parse_args(argv)
     if args.rtol < 0 or args.atol < 0:
         parser.error("tolerances must be nonnegative")
+    if args.point_only and args.run_number is None:
+        parser.error("--point-only requires --run-number")
     try:
-        report = verify_reference(args.reference_dir)
+        report = (
+            verify_point_reference(args.reference_dir)
+            if args.point_only
+            else verify_reference(args.reference_dir)
+        )
         if args.run_number is not None:
             selected = [
                 row for row in read_csv(args.manifest) if int(row["run_number"]) == args.run_number
@@ -223,12 +250,34 @@ def main(argv: list[str] | None = None) -> int:
                 "n_outer_resamples",
                 "n_mc_repeats",
             ]:
+                if args.point_only and key in {"n_outer_resamples", "n_mc_repeats"}:
+                    continue
                 if str(row[key]) != str(expected[key]):
                     raise ValueError(f"Run setting differs: {key}")
             comparisons = {}
             for field, (name, columns) in FILES.items():
+                if args.point_only and field not in {"results_csv", "aggregate_csv"}:
+                    continue
+                reference_rows = read_csv(args.reference_dir / name)
+                if args.point_only:
+                    selected_columns = (
+                        (
+                            "metric",
+                            "generator",
+                            "score",
+                            "g_rr_mean",
+                            "g_sr_mean",
+                            "n_valid_draws",
+                            "n_total_draws",
+                        )
+                        if field == "results_csv"
+                        else ("generator", "G_dev", "k_used", "k_total", "min_valid_draws")
+                    )
+                    reference_rows = [
+                        {key: item[key] for key in selected_columns} for item in reference_rows
+                    ]
                 comparisons[name] = compare_tables(
-                    read_csv(args.reference_dir / name),
+                    reference_rows,
                     read_csv(args.manifest.parent / row[field]),
                     columns,
                     args.rtol,
@@ -236,6 +285,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             report.update(
                 {
+                    "comparison_scope": "point_estimates_only" if args.point_only else "full_run",
                     "run_number": args.run_number,
                     "rtol": args.rtol,
                     "atol": args.atol,
