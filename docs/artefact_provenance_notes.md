@@ -41,12 +41,16 @@ overwriting this one.
 
 ## `results/` — tracked benchmark artefacts
 
-Only run #3 is tracked: `*_spec-primary_B100_m200_seed42_O40_MC0_J4_20260916-000258-077905.csv`
-(benchmark, aggregate, and both outer-replicate files), produced at commit
-`0855491` on 2026-09-16 over four generators with O = 40 outer bootstrap
-replicates. `results/runs_manifest.csv` is committed exactly as the CLI wrote
-it and begins at run #1 (2026-09-13); the earlier manifest was deleted in
-`f72d97b` and the recovered June rows are held outside the repository.
+The current paper reference is [run #4](../results/run4/README.md), completed
+on 15 October 2026 with O=200 and M=20. It includes summary tables, all outer
+and seed replicates, source/input/environment provenance and a paper-number
+index. It uses the original SBBTS panel.
 
-The curated panels those numbers were computed on are gitignored; their
-SHA-256 digests are recorded in `docs/panel_digests.txt`.
+[Run #3](../results/run3/README.md) is historical O=40/MC=0 evidence produced
+on 16 September. Its four original filenames are preserved inside results/run3/
+rather than the root results/ directory. The historical manifest retains the
+original CLI output names. These intervals must not replace the run #4 intervals.
+
+results/runs_manifest.csv records the run history. Earlier exploratory outputs
+are not all included. The curated Parquet panels remain outside Git; their
+exact SHA-256 identities are in [panel_digests.txt](panel_digests.txt).

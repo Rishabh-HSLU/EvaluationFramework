@@ -10,7 +10,7 @@
 !/results/runs_manifest.csv
 !/results/benchmark_results.csv
 !/results/aggregate_results.csv
-!/results/*_spec-primary_B100_m200_seed42_O40_MC0_J4_20260916-000258-077905.csv
+!/results/run3/
 !/results/run4/
 /scripts/results/
 /fineval/scripts/results/
@@ -49,3 +49,9 @@ htmlcov/
 .vscode/
 .DS_Store
 .ipynb_checkpoints/
+
+# Local delivery archives and manuscript build products
+/deliverables/
+/Benchmarking_Synthetic_Financial_Time_Series(1).zip
+/docs/migration.md
+/manuscript/build/

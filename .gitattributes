@@ -1,0 +1,3 @@
+# Keep recorded evidence bytes stable across Git clients and operating systems.
+results/** text eol=lf
+docs/panel_digests.txt text eol=lf

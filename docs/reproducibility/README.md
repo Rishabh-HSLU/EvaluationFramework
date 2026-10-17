@@ -14,7 +14,7 @@ and [paper-number source index](../../results/run4/paper_number_map.csv).
   development evidence, not proof that every outstanding issue is resolved.
 - [Missingness report](../missingness_report.md): historical clock/support audit.
 
-The run #3 records, seed-sensitivity notebook and research notes were restored
+The [run #3 records](../../results/run3/README.md), seed-sensitivity notebook and research notes were restored
 from before d85c2d4 to preserve the experiment history. They remain historical;
 run #4 is the current numerical reference. Large market and synthetic Parquet
 panels are supplied separately, not committed.
