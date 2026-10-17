@@ -404,6 +404,10 @@ def build_review(workspace: Path) -> None:
     out = workspace / "deliverables/manuscript"
     shutil.copy2(manuscript / "main.pdf", out / "revised_manuscript_red_review.pdf")
     shutil.copy2(manuscript / "main.pdf", out / "sensitivity_manuscript_red_review.pdf")
+    shutil.copy2(
+        manuscript / "main.pdf",
+        out / "Benchmarking_Synthetic_Financial_Time_Series_Current_Progress.pdf",
+    )
     with zipfile.ZipFile(
         out / "revised_manuscript.zip", "w", compression=zipfile.ZIP_DEFLATED
     ) as archive:
@@ -418,6 +422,7 @@ def build_review(workspace: Path) -> None:
             "README.md",
             "sections/*.tex",
             "figures/*.png",
+            "figures/*.pdf",
         ]:
             for path in manuscript.glob(pattern):
                 archive.write(path, path.relative_to(manuscript))

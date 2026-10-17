@@ -166,5 +166,7 @@
     "m4_regimes": 5,
     "m4_tail_fraction": 0.05,
     "m4_min_exceedances": 500
-  }
+  },
+  "rendering_source_sha256": "95ba0f36fdfae1c81854c9c9aa5d87cd57686d092057ed1b98b067770ffa68b4",
+  "rendering_matplotlib_version": "3.10.9"
 }

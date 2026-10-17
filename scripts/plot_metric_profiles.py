@@ -112,7 +112,7 @@ def render(directory):
     plt.rcParams.update(
         {
             "font.family": "DejaVu Sans",
-            "font.size": 10,
+            "font.size": 11,
             "axes.spines.top": False,
             "axes.spines.right": False,
             "pdf.fonttype": 42,
@@ -124,7 +124,7 @@ def render(directory):
     kurt = pd.read_csv(directory / "m3_kurtosis.csv", float_precision="round_trip")
     tails = pd.read_csv(directory / "m4_regime_xi.csv", float_precision="round_trip")
     figures = []
-    fig, axes = plt.subplots(1, 2, figsize=(10, 3.8), layout="constrained")
+    fig, axes = plt.subplots(2, 1, figsize=(6, 6.2), layout="constrained")
     for ax, lower in zip(axes, (1, 60), strict=True):
         for label, (color, style) in STYLES.items():
             subset = acf.loc[(acf.panel == label) & (acf.lag_minutes >= lower)]
@@ -146,9 +146,9 @@ def render(directory):
     axes[0].axvline(60, color="0.5", linestyle=":", linewidth=0.8)
     axes[0].set_title("(a) Full lag profile")
     axes[1].set_title("(b) M2 comparison window")
-    axes[0].legend(frameon=False, fontsize=9)
+    axes[0].legend(frameon=False, fontsize=10)
     figures.append(("m2_absolute_return_acf", fig))
-    fig, axes = plt.subplots(1, 2, figsize=(10, 3.8), layout="constrained")
+    fig, axes = plt.subplots(2, 1, figsize=(6, 6.2), layout="constrained")
     for ax, column in zip(axes, ("pearson_kurtosis", "normalized_kurtosis"), strict=True):
         for label, (color, style) in STYLES.items():
             subset = kurt.loc[kurt.panel == label]
@@ -166,9 +166,9 @@ def render(directory):
     axes[0].set(ylabel="Pearson kurtosis", title="(a) Kurtosis across horizons")
     axes[0].axhline(3, color="0.6", linewidth=0.8, linestyle="--", label="Gaussian kurtosis = 3")
     axes[1].set(ylabel=r"$K(h)/K(1)$", title="(b) Normalized curve used by M3")
-    axes[0].legend(frameon=False, fontsize=8)
+    axes[0].legend(frameon=False, fontsize=10)
     figures.append(("m3_kurtosis_aggregation", fig))
-    fig, ax = plt.subplots(figsize=(6.8, 4), layout="constrained")
+    fig, ax = plt.subplots(figsize=(6, 3.8), layout="constrained")
     for label, (color, style) in STYLES.items():
         subset = tails.loc[tails.panel == label]
         ax.plot(
@@ -188,7 +188,7 @@ def render(directory):
         xticklabels=["Q1\nCalmest", "Q2", "Q3", "Q4", "Q5\nMost turbulent"],
     )
     ax.grid(alpha=0.18)
-    ax.legend(frameon=False, ncol=3, fontsize=9)
+    ax.legend(frameon=False, ncol=3, fontsize=10)
     figures.append(("m4_xi_by_regime", fig))
     for name, fig in figures:
         fig.savefig(directory / (name + ".pdf"), metadata={"CreationDate": None, "ModDate": None})
@@ -300,6 +300,12 @@ def main(argv=None):
             },
         )
     render(directory)
+    provenance_path = directory / "provenance.json"
+    if provenance_path.exists():
+        provenance = json.loads(provenance_path.read_text())
+        provenance["rendering_source_sha256"] = file_digest(Path(__file__))
+        provenance["rendering_matplotlib_version"] = matplotlib.__version__
+        atomic_json(provenance_path, provenance)
     atomic_json(
         directory / "checksums.json",
         {

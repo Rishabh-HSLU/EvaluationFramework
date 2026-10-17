@@ -1,14 +1,14 @@
 {
   "files": {
-    "m2_absolute_return_acf.pdf": "b8b94044b625329c34ec6cc956ec9e53e2e7b91aa47a3564b259fbfd13b1769c",
-    "m2_absolute_return_acf.png": "cecc4e4a8d230d0bda04f43c955c4bee8eaea9736b201baf911b4b684567f50a",
+    "m2_absolute_return_acf.pdf": "f956c7b0a4967313092cc473e1382c04f8131b6daf9d34587738b4f9220ceb19",
+    "m2_absolute_return_acf.png": "e553a93a3aeb91641be35e9ded1af2ecd435dd2a38bb961c021c4dbb4e6ae5e3",
     "m2_acf.csv": "5e3bfeac99d772e477a575532e6de751d81c6d9406ff461ddf6d16441ef0c768",
     "m3_kurtosis.csv": "2952d51b03cfe984748bd3f846fc873b8523ac182be45d73a396fff0583b647b",
-    "m3_kurtosis_aggregation.pdf": "a77b721e354501469f93d79d3b240419b16a802e5797b10c66b8ab0642943c56",
-    "m3_kurtosis_aggregation.png": "3fdb327b3c5d97c14d5ab0bf93dedb4f46f8e701c3440a502d33bd0cdb9255fc",
+    "m3_kurtosis_aggregation.pdf": "7751d05e684dcbe4f7db59f11703b58157980d999a78b33da0e20257750a94fc",
+    "m3_kurtosis_aggregation.png": "3acd39e403dde8b8e31ae75d25f1be0d6591ecccda912082220202ec24d8e4e3",
     "m4_regime_xi.csv": "2cfae4bcd28e407379291707e7823624778b85d79eac917beeb162f02c7cf051",
-    "m4_xi_by_regime.pdf": "f1a05a4bf7b6b011ca3f43123527a1b4738362b3a8cbe458aeef4b407d7f1829",
-    "m4_xi_by_regime.png": "bd50b08fc710dc480c7d5aedf49f8aca6de002454b266727b8d521b653e21477",
+    "m4_xi_by_regime.pdf": "0b77db64a445eaa7ce7f176ad523687f2554c4953bacfbd9977ef17fe8437dd8",
+    "m4_xi_by_regime.png": "2ddf13dcd70d2d21236ea434b39b5600495c967a98f0c1bab10fb146b471070f",
     "panel_records/AIL_m2.csv": "e9b8546b2014555529734d565940610a5c4c4242e5b79723c898acc13e2ffd9a",
     "panel_records/AIL_m3.csv": "0c7fdf024a364d6e44ae1e4eaf8c1bf7e6280f0cb01f6e63166e797fd9281d5c",
     "panel_records/AIL_m4.csv": "b574282141383a50074b4bbdf44d73b20c1eb6c0dceb519c72286e9be525e0af",
@@ -29,6 +29,6 @@
     "panel_records/SBBTS_m3.csv": "d3ba1d0b91dea06160f121eaae68cea13dd30fa4b0d56af68e1339a73d76ed87",
     "panel_records/SBBTS_m4.csv": "d552c66a24edc25f99d2357970235fd5187321184635312ca5635c172932d775",
     "panel_records/SBBTS_metadata.json": "d486af654a61a48874cc13120ccd2ffde6723c1fce73c215b7c1b5c4d3132a70",
-    "provenance.json": "8998ee587744750a22c429b7cc4d70614d4e497cfdf313dac90900e533c35bf6"
+    "provenance.json": "d7598b2b6171db6543c4e5356874b54bcaf919c28ca3de267300e91e9e2e2f31"
   }
 }
