@@ -1,0 +1,331 @@
+{
+  "validated_at_utc": "2026-10-16T04:29:29.528966+00:00",
+  "run_number": 4,
+  "status": "passed",
+  "checks": [
+    {
+      "check": "Supervisor completed successfully",
+      "passed": true
+    },
+    {
+      "check": "Configuration n_resamples=100",
+      "passed": true
+    },
+    {
+      "check": "Configuration tickers_per_draw=200",
+      "passed": true
+    },
+    {
+      "check": "Configuration seed=42",
+      "passed": true
+    },
+    {
+      "check": "Configuration n_outer_resamples=200",
+      "passed": true
+    },
+    {
+      "check": "Configuration n_mc_repeats=20",
+      "passed": true
+    },
+    {
+      "check": "Primary specification completed and canonical updated",
+      "passed": true
+    },
+    {
+      "check": "Point table has exactly sixteen metric-generator cells",
+      "passed": true
+    },
+    {
+      "check": "results_csv: all numeric values finite",
+      "passed": true
+    },
+    {
+      "check": "results_csv: all four generators",
+      "passed": true
+    },
+    {
+      "check": "results_csv: all 100 matched draws valid",
+      "passed": true
+    },
+    {
+      "check": "results_csv: positive real and synthetic gaps",
+      "passed": true
+    },
+    {
+      "check": "results_csv: score equals ratio of saved gap means",
+      "passed": true
+    },
+    {
+      "check": "aggregate_csv: all numeric values finite",
+      "passed": true
+    },
+    {
+      "check": "aggregate_csv: all four generators",
+      "passed": true
+    },
+    {
+      "check": "aggregate_csv: all four metrics used in aggregate",
+      "passed": true
+    },
+    {
+      "check": "outer_metric_replicates_csv: all numeric values finite",
+      "passed": true
+    },
+    {
+      "check": "outer_metric_replicates_csv: all four generators",
+      "passed": true
+    },
+    {
+      "check": "outer_metric_replicates_csv: all 100 matched draws valid",
+      "passed": true
+    },
+    {
+      "check": "outer_metric_replicates_csv: positive real and synthetic gaps",
+      "passed": true
+    },
+    {
+      "check": "outer_metric_replicates_csv: score equals ratio of saved gap means",
+      "passed": true
+    },
+    {
+      "check": "outer_aggregate_replicates_csv: all numeric values finite",
+      "passed": true
+    },
+    {
+      "check": "outer_aggregate_replicates_csv: all four generators",
+      "passed": true
+    },
+    {
+      "check": "outer_aggregate_replicates_csv: all four metrics used in aggregate",
+      "passed": true
+    },
+    {
+      "check": "mc_metric_replicates_csv: all numeric values finite",
+      "passed": true
+    },
+    {
+      "check": "mc_metric_replicates_csv: all four generators",
+      "passed": true
+    },
+    {
+      "check": "mc_metric_replicates_csv: all 100 matched draws valid",
+      "passed": true
+    },
+    {
+      "check": "mc_metric_replicates_csv: positive real and synthetic gaps",
+      "passed": true
+    },
+    {
+      "check": "mc_metric_replicates_csv: score equals ratio of saved gap means",
+      "passed": true
+    },
+    {
+      "check": "mc_aggregate_replicates_csv: all numeric values finite",
+      "passed": true
+    },
+    {
+      "check": "mc_aggregate_replicates_csv: all four generators",
+      "passed": true
+    },
+    {
+      "check": "mc_aggregate_replicates_csv: all four metrics used in aggregate",
+      "passed": true
+    },
+    {
+      "check": "outer: complete IDs and row count",
+      "passed": true
+    },
+    {
+      "check": "outer: unique metric cells",
+      "passed": true
+    },
+    {
+      "check": "outer: complete metric cells per replicate",
+      "passed": true
+    },
+    {
+      "check": "outer: unique aggregate cells",
+      "passed": true
+    },
+    {
+      "check": "outer: aggregates independently recomputed from metric gaps",
+      "passed": true
+    },
+    {
+      "check": "outer score: independently recomputed summaries",
+      "passed": true
+    },
+    {
+      "check": "outer G_dev: independently recomputed summaries",
+      "passed": true
+    },
+    {
+      "check": "mc: complete IDs and row count",
+      "passed": true
+    },
+    {
+      "check": "mc: unique metric cells",
+      "passed": true
+    },
+    {
+      "check": "mc: complete metric cells per replicate",
+      "passed": true
+    },
+    {
+      "check": "mc: unique aggregate cells",
+      "passed": true
+    },
+    {
+      "check": "mc: aggregates independently recomputed from metric gaps",
+      "passed": true
+    },
+    {
+      "check": "mc score: independently recomputed summaries",
+      "passed": true
+    },
+    {
+      "check": "mc G_dev: independently recomputed summaries",
+      "passed": true
+    },
+    {
+      "check": "Twenty unique seeds with the planned deterministic sequence",
+      "passed": true
+    },
+    {
+      "check": "Twenty unique seeds with the planned deterministic sequence",
+      "passed": true
+    },
+    {
+      "check": "Seed zero reuses the primary point estimates",
+      "passed": true
+    },
+    {
+      "check": "Outer bootstrap uses inner seed 42",
+      "passed": true
+    },
+    {
+      "check": "Point aggregate independently recomputed",
+      "passed": true
+    },
+    {
+      "check": "Canonical benchmark_results.csv identical to tagged result",
+      "passed": true
+    },
+    {
+      "check": "Canonical aggregate_results.csv identical to tagged result",
+      "passed": true
+    },
+    {
+      "check": "All point scores unchanged from run #3",
+      "passed": true
+    },
+    {
+      "check": "Panel digest unchanged: data/curated/ail_prices.parquet",
+      "passed": true
+    },
+    {
+      "check": "Panel digest unchanged: data/curated/gbm_prices.parquet",
+      "passed": true
+    },
+    {
+      "check": "Panel digest unchanged: data/curated/msv_prices.parquet",
+      "passed": true
+    },
+    {
+      "check": "Panel digest unchanged: data/curated/real_prices.parquet",
+      "passed": true
+    },
+    {
+      "check": "Panel digest unchanged: data/curated/sbbts_prices.parquet",
+      "passed": true
+    }
+  ],
+  "n_checks": 59,
+  "panel_sha256": {
+    "data/curated/ail_prices.parquet": {
+      "sha256": "976c3a93b25e47af2742eaa5d3457ffc4aac9062cba0e74c397d6c59f434d751",
+      "bytes": 49469058
+    },
+    "data/curated/gbm_prices.parquet": {
+      "sha256": "9f48b5e81640f267ea9db585d2f686ac92e0a4f6c0cabc7c234eadadf8c31a9f",
+      "bytes": 293790780
+    },
+    "data/curated/msv_prices.parquet": {
+      "sha256": "4ec0063024442a0680ae598bf7480704b937c50351656dc28c064fa4a9f73f84",
+      "bytes": 293790820
+    },
+    "data/curated/real_prices.parquet": {
+      "sha256": "044336d7ad4b552a1eb469018f936b776e8ff1da32656acf0348f0049921bec9",
+      "bytes": 66708833
+    },
+    "data/curated/sbbts_prices.parquet": {
+      "sha256": "4a1c29f50746d1957f3a6bd11c90a2299c0f1bb9a8bb878afc271cf7eea4cefa",
+      "bytes": 294028497
+    }
+  },
+  "mc_seeds": [
+    42,
+    2065237867,
+    2231796866,
+    1429858195,
+    896328912,
+    1738843015,
+    2192106378,
+    2877079947,
+    3848887661,
+    1663249790,
+    3789739628,
+    157512624,
+    306561593,
+    370406940,
+    1199700146,
+    2864133104,
+    743317498,
+    3071446703,
+    4234822024,
+    3832008670
+  ],
+  "point_outside_interval": [],
+  "AIL_intervals_containing_half": [
+    "M4"
+  ],
+  "rankings_across_mc_seeds": {
+    "M1": {
+      "highest_point_generator": "AIL",
+      "highest_across_seeds": {
+        "AIL": 20
+      }
+    },
+    "M2": {
+      "highest_point_generator": "MSV",
+      "highest_across_seeds": {
+        "MSV": 20
+      }
+    },
+    "M3": {
+      "highest_point_generator": "AIL",
+      "highest_across_seeds": {
+        "AIL": 20
+      }
+    },
+    "M4": {
+      "highest_point_generator": "AIL",
+      "highest_across_seeds": {
+        "AIL": 20
+      }
+    }
+  },
+  "aggregate_rankings_across_mc_seeds": {
+    "AIL,MSV,SBBTS,GBM": 20
+  },
+  "roundtrip_validation_tolerance": {
+    "relative": 2e-12,
+    "absolute": 2e-14
+  },
+  "limits": [
+    "Saved mean gaps/replicate tables are validated; individual draw gap arrays were not persisted, so raw features cannot be independently reconstructed without recomputation.",
+    "Run #4 uses the original SBBTS panel; the newly trained Lightning panel is not substituted.",
+    "Source snapshot captured eight minutes after run start; operational checkpoint support was added while the uninterrupted run was active. Post-run source state is preserved separately.",
+    "Full independent-machine O=200/M=20 run #5 was stopped by user; no claim of completed full reproduction."
+  ]
+}

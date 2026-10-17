@@ -1,0 +1,43 @@
+[16:38:12] Starting benchmark: B=100, m=200, seed=42, outer=200, MC repeats=20, requested workers=4. Planned matched draws: 22,000.
+[16:38:12] [1/8] Load curated datasets — /home/jovyan/EvaluationFramework/data/curated
+[16:38:13] Loaded Real: 53,850 timestamps × 600 paths in 0.6s.
+[16:38:13] Loaded AIL: 53,850 timestamps × 600 paths in 0.4s.
+[16:38:14] Loaded GBM: 53,850 timestamps × 600 paths in 0.7s.
+[16:38:15] Loaded MSV: 53,850 timestamps × 600 paths in 0.6s.
+[16:38:15] Loaded SBBTS: 53,850 timestamps × 600 paths in 0.7s.
+[16:38:15] Generators: AIL, GBM, MSV, SBBTS.
+[16:38:15] Dataset loading completed in 3.0s.
+[16:38:15] [2/8] Preprocess real-synthetic pairs — log returns, overnight mask and conditional FFF
+[16:38:15] Preprocessing Real vs AIL...
+[16:38:18] Preprocessed AIL: real=(53850, 600), synthetic=(53850, 600) in 2.6s.
+[16:38:18] Preprocessing Real vs GBM...
+[16:38:20] Preprocessed GBM: real=(53850, 600), synthetic=(53850, 600) in 1.8s.
+[16:38:20] Preprocessing Real vs MSV...
+[16:38:22] Preprocessed MSV: real=(53850, 600), synthetic=(53850, 600) in 1.9s.
+[16:38:22] Preprocessing Real vs SBBTS...
+[16:38:24] Preprocessed SBBTS: real=(53850, 600), synthetic=(53850, 600) in 2.7s.
+[16:38:24] Preprocessing completed in 9.0s.
+[16:38:24] [3/8] Configure metrics and parallel engine
+[16:38:24] Resolved spec 'primary': min_periods=30, n_grid=5001, n_regimes=5, regime_weights=(1.0, 1.0, 1.0, 2.0, 3.0), tail_alpha=0.3, tail_fraction=0.05, tail_lambda=1.0, window=60
+[16:38:24] Configured metrics: M1, M2, M3, M4. Worker budget=4; inner chunks=automatic; replicate chunks=1.
+[16:38:24] Engine setup completed in 0.0s.
+[16:38:24] [4/8] Matched ticker point estimate — 100 draws using up to 4 workers
+[16:53:50] Point estimation completed in 925.2s; 16 metric-generator cells computed.
+[16:53:50] [5/8] Outer ticker-corpus bootstrap — 200 complete corpus replicates
+[16:53:47] Outer bootstrap completed in 172796.9s; valid metric replicate counts range from 200 to 200.
+[16:53:47] Every point estimate lies within its outer percentile limits.
+[16:53:47] [6/8] Monte Carlo numerical stability — 20 seeds; repeat zero reuses the point estimate
+[22:08:50] Monte Carlo stability completed in 18903.7s; metric seed SD range=0.001045-0.01693.
+[22:08:50] [7/8] Save results — /home/jovyan/EvaluationFramework/results
+[22:08:50] Saved outer replicate details: outer_metric_replicates_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv, outer_aggregate_replicates_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv.
+[22:08:50] Saved Monte Carlo replicate details: mc_metric_replicates_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv, mc_aggregate_replicates_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv.
+[22:08:50] Canonical benchmark_results.csv and aggregate_results.csv refreshed.
+[22:08:50] Saved results in 0.0s: benchmark_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv, aggregate_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv.
+[22:08:50] [8/8] Print benchmark tables and run summary
+[22:08:50] Per-metric table: point estimate [lower, upper], using 95% outer-bootstrap percentile CI; O=200.
+[22:08:50] Aggregate table: G = exp(mean_k log(mean(g_sr)/mean(g_rr))). G=1 is real-real noise-floor parity.
+[22:08:50] Per-metric Monte Carlo stability: independent inner seeds on fixed corpora; this is not a confidence interval.
+[22:08:50] Aggregate Monte Carlo stability for G_dev on the fixed observed corpora.
+[22:08:50] Tidy benchmark results: /home/jovyan/EvaluationFramework/results/benchmark_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv
+[22:08:50] Aggregate results: /home/jovyan/EvaluationFramework/results/aggregate_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv
+[22:08:50] Run #4 (completed) recorded in /home/jovyan/EvaluationFramework/results/runs_manifest.csv after 192637.8s.

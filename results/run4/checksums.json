@@ -1,0 +1,27 @@
+{
+  "run": 4,
+  "source_commit": "e8bc552d18a6d86e4dffeda21e0dd1fe0cf10d9e",
+  "status": "completed",
+  "artifacts": {
+    "aggregate_summary.csv": "d9ff89d5b6814f8df1f0cfdc9733e9e54689bfb9e8b709335dd5967fa4bfaa27",
+    "mc_aggregate_replicates.csv": "e4ecdf4c0b87a40beab8c5838f3dd9e42fff3d3eff93d4cb1085fb8d07930dc6",
+    "mc_metric_replicates.csv": "8773e4b783ffc92f70ed17aa773e17976ed7f43cd25020740279bcb3b96bf4a3",
+    "metric_summary.csv": "b9899c95f0af0f49b7469047282e06fb3b25a8298ceace0801c1dd528bdfc42f",
+    "outer_aggregate_replicates.csv": "955463b4220674e5579680f988566e6a688eb5b70bb2a69c4fcb9ee5b92d35b6",
+    "outer_metric_replicates.csv": "5d9fee735950376f6312e9fe76012520f7dfaab98642f9e0f216bb13eb7070fb",
+    "paper_claims.json": "551334e3a1bb6b27bacdbe99f5ed32838a62347df030787838c786cd4a67e43b",
+    "paper_number_map.csv": "5ecbeef5a5061f8775d8e550d337ea85cb81c886acc3703b85056320e92f1bfc",
+    "provenance/configuration.json": "43364df3f43d15e749b5fef1b431d2cdef486097707f9789f80666278428517d",
+    "provenance/curation_metadata.json": "0ea3298aacdb7ffc25a5ee6c11467e97f8e0466a8d5dad477c838fbf0933129e",
+    "provenance/dataset_facts.json": "4403e25ce6b32009769862ea76df912dcbda4ef5d42b3a6163041b6774b14386",
+    "provenance/environment.json": "8e010da0133ef370084a744fe9c4ffdd9126a9da9eb79a87c34132229782de86",
+    "provenance/log_identity.json": "87d4d54680d395b37f1cba87832488268b7ab6563241820986ad90848608f9b9",
+    "provenance/original_artifacts.json": "cd1f2d32d4d6f2d53a6e3626f8d87e52d7a9c2cae8fec0594662f64ea20f382a",
+    "provenance/original_validation_report.json": "b66a08f8dca639a0aabbb627f3023ecd12e845fd865dddd0fffc64045ce50793",
+    "provenance/panel_digests.json": "abaea072117f129e776da931ecc1480a6968d0b673ba5b29a828fc11b240efc9",
+    "provenance/run_events.log": "864c39bf174f3b716939ffcef46ac6b8a7eb392e1249e8a59cef3c486feafc25",
+    "provenance/run_lifecycle.json": "c04594ec023a7e546352ab191ca9ebc3495a9263d533161cc373ecd198512371",
+    "provenance/run_manifest.json": "92be64460bfdf8239e1cdf5df833edfbd71e2d5768c4483eb2ddde33d2ab9ee5",
+    "provenance/source_fingerprints.json": "3a217d49901844cbd29af21653f24ca92b831c33fcf19747dac7f0a8f5ea2122"
+  }
+}

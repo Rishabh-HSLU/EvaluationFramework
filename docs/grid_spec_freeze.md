@@ -1,7 +1,12 @@
 # Sensitivity grid — pre-registration freeze
 
-Status: committed on merged `main`; the grid has not been run and nothing is
-tagged yet.
+Status update, 17 October 2026: the settings below remain frozen. Local
+historical results contain ten complete 19-specification/four-generator fast
+sweeps from 29–30 September (seeds 42 and 1–9). Their numerical code and
+seed-42 primary scores match run #4, but their input snapshots omit the SBBTS
+digest. They require a provenance audit before reporting; a fresh sweep has
+not been launched. The earlier statement that the grid had never run was
+stale. The historical freeze description below is retained as design evidence.
 
 Source of truth for every value below: `fineval/scripts/sensitivity/grid.py`
 at the merged trial state (tree identical to commit `0855491`). Provenance

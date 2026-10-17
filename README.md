@@ -53,34 +53,78 @@ $$
 ```bash
 git clone https://github.com/Rishabh-HSLU/EvaluationFramework.git
 cd EvaluationFramework
-uv sync
+uv sync --frozen --extra data --extra dev
+uv run --frozen pytest
 ```
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) before
+running these commands. Run the remaining commands from the repository root.
+The `data` extra installs the Alpaca client; the `dev` extra installs the test
+dependencies. Keep `uv.lock` unchanged when reproducing a run. The current
+cross-machine check uses Python 3.13.16; record the Python version and platform
+alongside the Git commit and lockfile used for your run.
+
+The commands below use `scripts.reproduce` to apply consistent NumPy CPU
+settings before computation. This restored identical GBM and MSV panels on
+the two tested x86_64 machines. Options after `--` go to the selected script.
 
 ### 1. Download the raw market data
 
-The canonical experiment uses 948 tickers of 1-minute Alpaca bars from
-September 2019 to March 2020.
+The canonical experiment downloads the 948-ticker overlap with the supplied
+AIL dataset, using Alpaca's SIP feed, 1-minute bars, and split adjustment. The
+requested period is September 3, 2019 to March 20, 2020. Your Alpaca account
+must have access to these historical SIP bars.
+
+Use hidden prompts to keep credentials out of the source code and command
+history:
 
 ```bash
-pip install "alpaca-py>=0.13"
+uv run --frozen python - <<'PYTHON'
+from getpass import getpass
+from scripts.fetch_alpaca import download_corpus
 
-python -m scripts.fetch_alpaca \
-    --api-key <YOUR_KEY> \
-    --secret <YOUR_SECRET> \
-    --out-dir data/raw_intraday
+download_corpus(
+    api_key=getpass("Alpaca API key: "),
+    secret_key=getpass("Alpaca secret key: "),
+    out_dir="data/raw_intraday",
+)
+PYTHON
 ```
 
-The downloader writes a checkpoint log to `download_log.csv`, so interrupted
-runs can resume.
+Each ticker is saved as `data/raw_intraday/<TICKER>.csv`. The downloader writes
+`data/raw_intraday/download_log.csv`, so running the same command again resumes
+by skipping successful tickers. It catches individual download errors; a
+process that finishes is not by itself proof of a complete download. Before
+curation, check that the log has all 948 canonical tickers, each with status
+`ok` and a positive bar count, and that their CSV files exist.
 
-### 2. Curate the datasets
+A fresh provider download can differ from an earlier snapshot because of
+market-data revisions. Preserve the raw inputs and compare their provenance
+and curated outputs before claiming an exact reproduction.
+
+### 2. Supply the AIL input and curate the datasets
+
+Obtain the original AIL input parquet from the study authors and place it at:
+
+```text
+data/ail_synthetic_data/dataset_US_1-10B_2019-09-2020-03.parquet
+```
+
+This external input is not included in Git. It is the input to AIL curation,
+not the smaller curated AIL panel. Reproducing AIL model training is a separate
+workflow; the benchmark workflow starts from this supplied input. No public
+download link is currently provided in this repository.
 
 Loaders normalize each raw source into the common wide-format contract. The
 curation pipeline aligns all datasets to the NYSE 1-minute market clock and
-writes evaluation-ready parquet files.
+writes `data/curated/real_prices.parquet`, `ail_prices.parquet`, and
+`curation_metadata.json`. The study snapshot retains 600 real tickers from
+the 948-ticker overlap; check the actual retained universe after downloading
+and curating fresh data. Both raw input paths are resolved from the repository
+root by `scripts.build_curated_datasets`.
 
 ```bash
-uv run python -m scripts.build_curated_datasets
+uv run --frozen python -m scripts.reproduce curate
 ```
 
 ### 3. Generate the controls
@@ -91,21 +135,58 @@ clustering. Both are generated on the real market clock with the real missing
 value mask imposed.
 
 ```bash
-uv run python -m scripts.baseline_generation
+uv run --frozen python -m scripts.reproduce controls
 ```
 
-### 4. Run the benchmark
+The script writes `data/curated/gbm_prices.parquet` and `msv_prices.parquet`.
+The configured seeds are 42 for GBM and 43 for MSV.
+
+### 4. Train and generate SBBTS
+
+The default benchmark also loads SBBTS. Generate its panel before evaluating:
+
+```bash
+uv run --frozen python -m scripts.reproduce sbbts-panel
+uv run --frozen python -m scripts.reproduce sbbts-train -- --seed 0
+uv run --frozen python -m scripts.reproduce sbbts-generate -- \
+    --checkpoint data/sbbts/checkpoints/outer_k4.pt \
+    --seed 0 \
+    --batch-paths 2048 \
+    --n-euler 50 \
+    --context-on y \
+    --invert-iters 0
+```
+
+Panel preparation reads the curated real prices and writes training examples
+and ticker scales to `data/sbbts/`. Training writes checkpoints and logs there;
+generation writes `data/curated/sbbts_prices.parquet`. Training automatically
+resumes from `data/sbbts/checkpoints/latest.pt` when present. For a fresh
+retraining check, start without checkpoints from another run.
+
+These commands make the current script defaults explicit, including selection
+of the fifth outer iteration (`outer_k4.pt`). They do not establish that the
+historical panel used every current generation default. Retain the checkpoint
+identity, training configuration, generation arguments, and resulting panel
+digest for each new run. The choice between the fourth and fifth outer
+iterations remains under review for the submission.
+
+The training script requires a CUDA GPU and exits when CUDA is unavailable;
+generation can use CUDA or CPU. Record the device and PyTorch/CUDA versions: matching seeds alone does not
+guarantee identical retraining outputs across hardware. Retraining is a
+separate, substantial computation from evaluating existing panels.
+
+### 5. Run the benchmark
 
 Point estimate only:
 
 ```bash
-uv run python -m scripts.run_benchmark
+uv run --frozen python -m scripts.reproduce benchmark
 ```
 
 Fast development run:
 
 ```bash
-uv run python -m scripts.run_benchmark \
+uv run --frozen python -m scripts.reproduce benchmark -- \
     --n-resamples 20 \
     --n-jobs 4
 ```
@@ -114,13 +195,20 @@ Final run with corpus-level outer bootstrap intervals and an independent-seed
 numerical-stability audit:
 
 ```bash
-uv run python -m scripts.run_benchmark \
+uv run --frozen python -m scripts.reproduce benchmark -- \
     --n-resamples 100 \
-    --n-outer-resamples 1000 \
+    --tickers-per-draw 200 \
+    --seed 42 \
+    --n-outer-resamples 200 \
     --n-mc-repeats 20 \
-    --n-jobs 0 \
+    --n-jobs 4 \
+    --replicate-chunk-size 1 \
     --update-canonical
 ```
+
+This submission configuration uses 100 inner draws, 200 tickers per draw,
+seed 42, 200 outer replicates (`O`), and 20 independent inner-seed repeats
+(`M`). It evaluates existing panels; it does not retrain generators.
 
 Worker settings:
 
@@ -160,7 +248,8 @@ With `--n-outer-resamples O`, each outer replicate:
 The reported interval is the 2.5th to 97.5th percentile of the resulting outer
 scores.
 The CLI requires at least 40 outer replicates before canonical results can be
-updated; approximately 1,000 are recommended for final reporting.
+updated. The submission configuration above uses 200; the general framework
+recommendation remains approximately 1,000 when computational resources permit.
 
 The current outer bootstrap starts from the already preprocessed real and
 synthetic panels. Its interval therefore measures ticker-corpus resampling
@@ -188,16 +277,16 @@ These values quantify numerical stability and are not confidence intervals.
 Every run writes parameter- and timestamp-stamped files to `results/`:
 
 ```text
-benchmark_B...csv
-aggregate_B...csv
-outer_metric_replicates_B...csv       # when outer bootstrap is enabled
-outer_aggregate_replicates_B...csv
-mc_metric_replicates_B...csv          # when MC stability is enabled
-mc_aggregate_replicates_B...csv
+benchmark_spec-...csv
+aggregate_spec-...csv
+outer_metric_replicates_spec-...csv       # when outer bootstrap is enabled
+outer_aggregate_replicates_spec-...csv
+mc_metric_replicates_spec-...csv          # when MC stability is enabled
+mc_aggregate_replicates_spec-...csv
 runs_manifest.csv
 ```
 
-`runs_manifest.csv` records completed, failed, and interrupted runs, including
+`runs_manifest.csv` records completed runs and caught failures, including
 parameters, git commit, duration, output files, and status.
 
 Canonical files are refreshed only when `--update-canonical` is explicitly
@@ -210,10 +299,34 @@ results/aggregate_results.csv
 
 ---
 
+## Checking reproduction on a new machine
+
+Clone the same Git commit, install from `uv.lock`, and follow the steps above
+without copying curated panels or benchmark results into the working clone.
+Supply only the external AIL input for this workflow. Keep historical panels
+and results in a separate reference directory for comparison.
+
+Record the commit, Python and dependency versions, raw-input hashes, curation
+metadata, training/generation settings, and SHA-256 digests of all five panels
+(`real`, `ail`, `gbm`, `msv`, `sbbts`). Compare panel values, index, columns, and
+missing-value masks as well as file digests: a serialization difference and a
+data difference need separate explanations. Compare benchmark CSV values by
+metric, generator, and replicate identifier using the same run settings.
+
+The [run #4 reference bundle](results/run4/README.md) and
+[panel digest manifest](docs/panel_digests.txt) are tracked in Git.
+The original curated Parquet panels are supplied separately; no public panel
+download is included yet. The independent-machine check reproduced the
+real/AIL/GBM/MSV panels, but the full Lightning benchmark was stopped.
+Do not interpret that partial check as a completed independent reproduction
+of the final table.
+
+---
+
 ## Development setup
 
 ```bash
-uv sync --dev
+uv sync --frozen --extra dev
 uv run pre-commit install
 uv run pre-commit run --all-files
 ```
@@ -244,8 +357,8 @@ EvaluationFramework/
 │   │   ├── base.py                  # feature, distance and normalization contract
 │   │   ├── tail_weighted_marginal.py      # M1
 │   │   ├── volatility_clustering.py       # M2
-│   │   ├── aggregational_gaussianity.py   # M4
-│   │   └── regime_tails.py                # M6
+│   │   ├── aggregational_gaussianity.py   # M3
+│   │   └── regime_tails.py                # M4
 │   ├── bootstrap/
 │   │   ├── engine.py                # public MatchedTickerBootstrap API
 │   │   ├── execution.py             # deterministic parallel inner draws
@@ -264,8 +377,9 @@ EvaluationFramework/
 │   ├── baseline_generation.py
 │   └── run_benchmark.py
 ├── docs/
-│   ├── walkthrough.md               # narrative framework tour
-│   └── reasoning.md                 # design decisions and empirical evidence
+│   ├── reproducibility/             # reviewer reference and numerical environment
+│   ├── panel_digests.txt            # exact curated input identities
+│   └── grid_spec_freeze.md          # sensitivity settings and provenance
 ├── tests/
 ├── data/
 ├── results/
@@ -319,7 +433,7 @@ contract.
 |----|---|---|---|
 | M1 | Tail-weighted marginal distribution | Tail-weighted L1 distance between pooled empirical quantile functions of per-ticker standardized returns | Pooled marginal |
 | M2 | Volatility clustering | Gap between absolute-return ACFs over configured intraday lags | Per path, then cross-sectional mean |
-| M3 | Aggregational Gaussianity | Difference in excess-kurtosis decay across configured aggregation scales | Session-confined pooled blocks |
+| M3 | Aggregational Gaussianity | Difference in normalized Pearson-kurtosis decay across configured aggregation scales | Session-confined pooled blocks |
 | M4 | Regime-conditional tails | Difference in GPD tail-shape estimates across volatility quintiles | Regime-stratified pooled tails |
 
 Metric hyperparameters are defined in `fineval/config.py`. The metric suite used
@@ -349,9 +463,8 @@ The same real reference sample `idx_a` is used in the real-real and
 synthetic-real comparisons. This matched design reduces irrelevant per-draw
 noise while preserving independent real comparison and synthetic samples.
 
-Synthetic indices are reused from the real draw only when a generator has an
-explicit one-to-one ticker correspondence. Unconditional synthetic paths are
-sampled independently.
+The implemented estimator samples each synthetic panel independently, including
+when ticker labels happen to match.
 
 ### Parallel reproducibility
 
@@ -362,28 +475,37 @@ reported values.
 
 ---
 
-## Results
+## Paper results and reproduction comparison
 
-The README does not duplicate a static benchmark table because those values can
-become stale when metrics, preprocessing, corpora, or uncertainty settings
-change. The current canonical results are stored in:
+**[Run #4 is the current paper reference](results/run4/README.md):**
+B=100, 200 tickers per draw, seed 42, O=200 and M=20, with all four generators
+and the original SBBTS panel.
 
-```text
-results/benchmark_results.csv
-results/aggregate_results.csv
-```
+The bundle contains the final tables, every outer/seed replicate, the exact
+configuration, input hashes and environment/source provenance.
+The [paper-number index](results/run4/paper_number_map.csv) links 201
+reported data/configuration/table values to their source cells and precision.
+The [reproducibility index](docs/reproducibility/README.md) distinguishes this
+current reference from historical run #3 and development records.
 
-Regenerate them with a documented final configuration, for example:
+Verify the saved reference without rerunning the benchmark:
 
-```bash
-uv run python -m scripts.run_benchmark \
-    --n-resamples 100 \
-    --n-outer-resamples 1000 \
-    --n-mc-repeats 20 \
-    --update-canonical
-```
+~~~bash
+uv run --frozen python scripts/check_reproduction.py
+~~~
 
-The command prints the same per-metric and aggregate tables in Markdown format.
+After running the evaluation with the same inputs and settings, compare your
+new run using the number printed at completion (5 is an example):
+
+~~~bash
+uv run --frozen python scripts/check_reproduction.py --run-number 5
+~~~
+
+This compares all six result files by metric, generator and replicate ID.
+It reports numerical differences with explicit tolerances and exits nonzero
+on a mismatch. See the [run #4 instructions](results/run4/README.md) for exact
+panel replay and comparison details. New runs can update the root canonical
+CSVs; results/run4/ remains the fixed paper reference.
 
 ---
 

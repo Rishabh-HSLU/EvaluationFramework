@@ -1,0 +1,56 @@
+{
+  "protocol": {
+    "B": 100,
+    "tickers_per_draw": 200,
+    "root_seed": 42,
+    "O": 200,
+    "M": 20,
+    "workers": 4
+  },
+  "metric_parameters": {
+    "SEASONALITY_CV_THRESHOLD": 0.3,
+    "NUM_HARMONICS": 4,
+    "COVERAGE_FLOOR": 0.7,
+    "M1_N_GRID": 5001,
+    "M1_TAIL_ALPHA": 0.3,
+    "M1_TAIL_LAMBDA": 1.0,
+    "M2_LAG_MIN": 60,
+    "M2_LAG_MAX": 388,
+    "M3_SCALES": [
+      1,
+      5,
+      15,
+      30
+    ],
+    "M3_MIN_OBS": 100,
+    "M3_SUPPORT_ANCHOR": "close",
+    "ROLLING_VOL_WINDOW": 60,
+    "ROLLING_VOL_MIN_FRAC": 0.5,
+    "ROLLING_VOL_MIN_PERIODS": 30,
+    "N_REGIME_QUINTILES": 5,
+    "TAIL_FRACTION": 0.05,
+    "REGIME_WEIGHTS": [
+      0.125,
+      0.125,
+      0.125,
+      0.25,
+      0.375
+    ],
+    "M4_MIN_EXCEEDANCES": 500,
+    "REGIME_WEIGHTS_RAW": [
+      1.0,
+      1.0,
+      1.0,
+      2.0,
+      3.0
+    ]
+  },
+  "source_commit": "e8bc552d18a6d86e4dffeda21e0dd1fe0cf10d9e",
+  "generator_set": [
+    "AIL",
+    "GBM",
+    "MSV",
+    "SBBTS"
+  ],
+  "scope": "Fixed-panel historical fidelity; original SBBTS panel; no generator refitting inside bootstrap."
+}

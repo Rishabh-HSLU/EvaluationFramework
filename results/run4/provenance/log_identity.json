@@ -1,0 +1,5 @@
+{
+  "original_log_sha256": "564c645411f545b396d780aee4dfd664d4ff8a40b4aa1d2e6c516bb1f70de3e8",
+  "committed_event_log": "run_events.log",
+  "transformation": "Timestamped event messages extracted; progress-bar control sequences and repeated display rows omitted. Original log is retained in the local run archive."
+}

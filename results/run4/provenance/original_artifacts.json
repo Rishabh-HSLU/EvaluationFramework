@@ -1,0 +1,26 @@
+{
+  "metric_summary.csv": {
+    "original_path": "results/benchmark_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv",
+    "sha256": "b9899c95f0af0f49b7469047282e06fb3b25a8298ceace0801c1dd528bdfc42f"
+  },
+  "aggregate_summary.csv": {
+    "original_path": "results/aggregate_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv",
+    "sha256": "d9ff89d5b6814f8df1f0cfdc9733e9e54689bfb9e8b709335dd5967fa4bfaa27"
+  },
+  "outer_metric_replicates.csv": {
+    "original_path": "results/outer_metric_replicates_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv",
+    "sha256": "5d9fee735950376f6312e9fe76012520f7dfaab98642f9e0f216bb13eb7070fb"
+  },
+  "outer_aggregate_replicates.csv": {
+    "original_path": "results/outer_aggregate_replicates_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv",
+    "sha256": "955463b4220674e5579680f988566e6a688eb5b70bb2a69c4fcb9ee5b92d35b6"
+  },
+  "mc_metric_replicates.csv": {
+    "original_path": "results/mc_metric_replicates_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv",
+    "sha256": "8773e4b783ffc92f70ed17aa773e17976ed7f43cd25020740279bcb3b96bf4a3"
+  },
+  "mc_aggregate_replicates.csv": {
+    "original_path": "results/mc_aggregate_replicates_spec-primary_B100_m200_seed42_O200_MC20_J4_20261013-163812-911243.csv",
+    "sha256": "e4ecdf4c0b87a40beab8c5838f3dd9e42fff3d3eff93d4cb1085fb8d07930dc6"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "status": "completed",
+  "started_at_utc": "2026-10-13T16:38:11.249624+00:00",
+  "supervisor_pid": 20310,
+  "command": [
+    "/home/jovyan/EvaluationFramework/.venv/bin/python",
+    "-u",
+    "-m",
+    "scripts.run_benchmark",
+    "--n-resamples",
+    "100",
+    "--tickers-per-draw",
+    "200",
+    "--seed",
+    "42",
+    "--n-outer-resamples",
+    "200",
+    "--n-mc-repeats",
+    "20",
+    "--n-jobs",
+    "4",
+    "--replicate-chunk-size",
+    "1",
+    "--update-canonical"
+  ],
+  "log": "/home/jovyan/EvaluationFramework/deliverables/final_run.log",
+  "generators": [
+    "AIL",
+    "GBM",
+    "MSV",
+    "SBBTS"
+  ],
+  "panel_sha256": {
+    "data/curated/ail_prices.parquet": "976c3a93b25e47af2742eaa5d3457ffc4aac9062cba0e74c397d6c59f434d751",
+    "data/curated/gbm_prices.parquet": "9f48b5e81640f267ea9db585d2f686ac92e0a4f6c0cabc7c234eadadf8c31a9f",
+    "data/curated/msv_prices.parquet": "4ec0063024442a0680ae598bf7480704b937c50351656dc28c064fa4a9f73f84",
+    "data/curated/real_prices.parquet": "044336d7ad4b552a1eb469018f936b776e8ff1da32656acf0348f0049921bec9",
+    "data/curated/sbbts_prices.parquet": "4a1c29f50746d1957f3a6bd11c90a2299c0f1bb9a8bb878afc271cf7eea4cefa"
+  },
+  "git_commit": "e8bc552d18a6d86e4dffeda21e0dd1fe0cf10d9e",
+  "benchmark_pid": 20316,
+  "returncode": 0,
+  "ended_at_utc": "2026-10-15T22:08:51.076026+00:00"
+}

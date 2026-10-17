@@ -1,0 +1,18 @@
+{
+  "AIL_intervals_containing_half": [
+    "M4"
+  ],
+  "all_points_within_outer_intervals": true,
+  "pointwise_intervals_not_equivalence_tests": true,
+  "aggregate_order_lowest_first": [
+    "AIL",
+    "MSV",
+    "SBBTS",
+    "GBM"
+  ],
+  "original_SBBTS_panel": true,
+  "source_tables": [
+    "metric_summary.csv",
+    "aggregate_summary.csv"
+  ]
+}

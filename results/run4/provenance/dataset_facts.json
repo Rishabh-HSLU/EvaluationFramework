@@ -1,0 +1,25 @@
+{
+  "data_source": "Alpaca",
+  "feed": "SIP",
+  "start_date": "2019-09-03",
+  "end_date": "2020-03-20",
+  "ticker_overlap": 948,
+  "retained_tickers": 600,
+  "coverage_floor": 0.7,
+  "trading_sessions": 139,
+  "full_sessions": 137,
+  "early_close_sessions": 2,
+  "early_close_dates": [
+    "2019-11-29",
+    "2019-12-24"
+  ],
+  "minute_price_timestamps": 53850,
+  "full_session_price_bars": 390,
+  "full_session_structural_returns": 389,
+  "M3_common_support_returns": 360,
+  "source_evidence": {
+    "curation_metadata": "curation_metadata.json",
+    "session_counts": "Computed from the actual real-panel market-clock index; full-session bar count 390.",
+    "M3_support": "fineval/metrics/aggregational_gaussianity.py at source_commit"
+  }
+}
