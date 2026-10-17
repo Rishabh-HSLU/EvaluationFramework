@@ -1,118 +1,108 @@
-# Sensitivity grid — pre-registration freeze
+# Frozen sensitivity grid
 
-Status update, 17 October 2026: the settings below remain frozen. Local
-historical results contain ten complete 19-specification/four-generator fast
-sweeps from 29–30 September (seeds 42 and 1–9). Their numerical code and
-seed-42 primary scores match run #4, but their input snapshots omit the SBBTS
-digest. They require a provenance audit before reporting; a fresh sweep has
-not been launched. The earlier statement that the grid had never run was
-stale. The historical freeze description below is retained as design evidence.
+Status update, 17 October 2026: the five-seed analysis is running with the exact
+run #4 panels. Completion and validation are pending. No sensitivity results
+are claimed here.
 
-Source of truth for every value below: `fineval/scripts/sensitivity/grid.py`
-at the merged trial state (tree identical to commit `0855491`). Provenance
-classifications are taken verbatim from `docs/parameter_provenance_audit.md`
-(audit date 2026-07-31); nothing is reclassified here.
+Source of truth: [grid.py](../fineval/scripts/sensitivity/grid.py), as recorded
+in execution commit `b9f404c`. The grid contains 19 specifications: the primary
+configuration, 15 single-parameter variations and three joint variations.
+The specifications remain unchanged during this run.
 
----
+## Interpretation
 
-## 1. Scope of the freeze
+This is an exploratory robustness analysis. Several settings were selected
+while AIL output was visible; the grid does not establish that these choices
+were independent of the evaluated generators. The
+[historical parameter audit](history/parameter_provenance_audit.md) records the
+selection evidence.
 
-This file freezes **which specifications will be run**, not their results. It
-covers the one-at-a-time (OAT) sensitivity grid only. The canonical benchmark
-configuration (`spec = primary`) is frozen by `fineval/config.py` and is
-reproduced in the grid as a self-contained table, so a divergence between the
-two is a test failure (`tests/test_spec_flag.py`), not a silent change.
+The analysis compares point estimates across specifications and seeds. It does
+not calculate an O=200 outer-bootstrap interval for each alternative. The
+primary paper intervals remain those from [run #4](../results/run4/README.md).
 
-Run kind at the time of drafting: `RUN_KIND = "exploratory"` (grid.py line 39).
-This string is written into the run directory name
-(`results/sweep_<stamp>_exploratory/`), into `grid_spec.json`, and into every
-manifest row. The sweep is labelled exploratory because `tail_alpha`,
-`tail_lambda`, `window` and `min_frac` were set while AIL's output was visible.
-The label is to be confirmed with the supervisor before submission.
+## Primary settings
 
-## 2. Primary (canonical) specification
-
-| parameter | value | metric | provenance (audit) |
-|---|---|---|---|
-| `n_grid` | 5001 | M1 | UNDOCUMENTED |
-| `tail_alpha` | 0.3 | M1 | **AIL-INFORMED** |
-| `tail_lambda` | 1.0 | M1 | **AIL-INFORMED** (via the sweep; final pick conventional) |
-| `window` | 60 | M4 | **AIL-INFORMED** |
-| `min_frac` | 1/2 | M4 (derives `min_periods`) | **AIL-INFORMED** |
-| `min_periods` | 30 | M4 | derived = `ceil(window × min_frac)`; inherits AIL-INFORMED |
-| `n_regimes` | 5 | M4 | UNDOCUMENTED |
-| `tail_fraction` | 0.05 | M4 | UNDOCUMENTED |
-| `regime_weights` | (1, 1, 1, 2, 3) raw | M4 | AMBIGUOUS (direction a-priori; magnitudes undocumented) |
-
-Not exposed as grid dials but fixed for every spec: `M2_LAG_MIN = 60`
-(INDEPENDENT), `M2_LAG_MAX = 388` (INDEPENDENT, structural),
-`M3_SCALES = [1, 5, 15, 30]` (UNDOCUMENTED origin), `M3_MIN_OBS = 100`
-(UNDOCUMENTED), `M3_SUPPORT_ANCHOR = "close"` (UNDOCUMENTED).
-
-## 3. The 19 specifications
-
-| # | spec_id | dial(s) | changed value(s) | notes |
-|---|---|---|---|---|
-| 1 | `primary` | — | canonical | reference for every OAT comparison |
-| 2 | `tail_alpha=0.00` | tail_alpha | 0.00 | recovers plain W1 weighting |
-| 3 | `tail_alpha=0.15` | tail_alpha | 0.15 | |
-| 4 | `tail_alpha=0.50` | tail_alpha | 0.50 | |
-| 5 | `tail_alpha=0.75` | tail_alpha | 0.75 | |
-| 6 | `tail_alpha=0.90` | tail_alpha | 0.90 | **not in the PDF's list** |
-| 7 | `tail_lambda=0.0` | tail_lambda | 0.0 | **not in the PDF's list**; removes tail emphasis |
-| 8 | `tail_lambda=0.5` | tail_lambda | 0.5 | |
-| 9 | `tail_lambda=2.0` | tail_lambda | 2.0 | |
-| 10 | `window=30` | window | 30 (min_periods 15) | |
-| 11 | `window=120` | window | 120 (min_periods 60) | |
-| 12 | `tail_fraction=0.025` | tail_fraction | 0.025 | |
-| 13 | `tail_fraction=0.100` | tail_fraction | 0.100 | |
-| 14 | `min_frac=0.333` | min_frac | 1/3 (min_periods 20) | **not in the PDF's list** |
-| 15 | `min_frac=0.667` | min_frac | 2/3 (min_periods 40) | **not in the PDF's list** |
-| 16 | `regime_weights=flat` | regime_weights | (1,1,1,1,1) | |
-| 17 | `corner=alpha0.75-lambda2.0` | tail_alpha + tail_lambda | 0.75, 2.0 | **corner, not in the PDF** |
-| 18 | `corner=win120-frac0.667` | window + min_frac | 120, 2/3 (min_periods 80) | **corner, not in the PDF** |
-| 19 | `corner=tailf0.10-flat` | tail_fraction + regime_weights | 0.100, flat | **corner, not in the PDF** |
-
-Swept ranges as implemented: `tail_alpha ∈ {0, 0.15, 0.3*, 0.5, 0.75, 0.90}`,
-`tail_lambda ∈ {0, 0.5, 1.0*, 2.0}`, `window ∈ {30, 60*, 120}`,
-`min_frac ∈ {1/3, 1/2*, 2/3}`, `tail_fraction ∈ {0.025, 0.05*, 0.10}`,
-`regime_weights ∈ {(1,1,1,2,3)*, flat}` (`*` = primary value, collapses onto
-spec 1 and is not re-run).
-
-Corners exist so the OAT no-interaction assumption can be tested rather than
-asserted; `Spec.dials` is the authoritative record of what each spec varies.
-
-## 4. Parameters deliberately NOT varied, and why
-
-| parameter | value | stated rationale |
+| Parameter | Value | Selection evidence |
 |---|---|---|
-| `n_grid` | 5001 | The rationale for J = 5001 was not recorded when it was set. It was fixed during development, is not varied in the sweep, and a post-hoc check (M1 at J = 2001, 5001, 10001; B = 100, m = 200, seed 42, all four generators) gives a maximum absolute score difference of 3.4e-04 between J = 2001 and J = 5001, and 3.3e-03 between J = 10001 and J = 5001. This check does not explain why 5001 was chosen. |
-| `n_regimes` | 5 | Regime count fixes the meaning of `regime_weights`; varying both would confound the weighting question with the partition question. UNDOCUMENTED origin. |
-| `B` (inner draws) | 100 | Controls Monte-Carlo error of the estimator, not the estimand; it is a precision dial reported separately, not a specification choice. |
-| `m` (tickers/draw) | 200 | Same: a sampling-precision dial. Also fixed so the real-real noise floor is comparable across specs. |
-| raw vs standardized returns (M4) | raw (Option B) | Recorded in `scripts/reasoning.md` as an AIL-informed structural decision; a sweep over it would be a different metric, not a sensitivity of this one. |
-| rolling vs EWMA volatility proxy (M4) | rolling | Recorded as AIL-informed; the proxy *family* was selected, the window is what the grid varies. |
-| M2 lag window | 60–388 | Structural: 388 is the longest lag with within-session support. |
-| M3 scales / support anchor | [1,5,15,30] / close | Changing them changes the common support (360 returns/session at lcm = 30) and therefore the estimand. |
+| M1 quantile-grid size | 5001 | Original selection rationale not recorded. |
+| M1 tail exponent | 0.3 | Selected with AIL output visible. |
+| M1 tail-weight scale | 1.0 | Compared with AIL output visible; final unit scale described as conventional. |
+| M4 volatility window | 60 minutes | Selected with AIL output visible. |
+| M4 minimum-observation fraction | 1/2 | Selected using gaps and AIL coverage. |
+| M4 minimum observations | 30 | Derived as ceil(window × fraction). |
+| M4 regimes | 5 | Original selection rationale not recorded. |
+| M4 tail fraction | 0.05 | Original selection rationale not recorded. |
+| M4 regime weights | (1, 1, 1, 2, 3), normalized | Greater weight on high-volatility regimes was intended; the specific magnitudes have no recorded rationale. |
 
-## 5. Seeds
+M2 uses lags 60–388. M3 uses scales 1, 5, 15 and 30, a minimum of 100
+observations per scale, and common support anchored at the session close.
+These settings are fixed across the grid.
 
-The harness accepts a **single** `--seed` (default 42), applied identically to
-every spec so that specs are paired on the same draw indices. Multi-seed
-support does not exist in `run_sweep.py` and would have to be added (an outer
-loop over seeds, or repeated invocations with distinct `--seed` and a seed
-column in the manifest). **Decision needed** (handoff report, decision 3).
+## Specifications
 
-Proposed, if multi-seed is wanted: root seeds `{42, 1, 2, 3, 4}` (5 seeds,
-matching the existing 8-seed audit's convention of 42 plus small integers), with
-42 as the anchor reported in the main table.
+Each variation starts from the primary configuration. Only the listed
+parameters and their derived values change.
 
-## 6. What a freeze commit would contain
+| Specification ID | Change from primary |
+|---|---|
+| `primary` | None |
+| `tail_alpha=0.00` | M1 exponent 0.00 |
+| `tail_alpha=0.15` | M1 exponent 0.15 |
+| `tail_alpha=0.50` | M1 exponent 0.50 |
+| `tail_alpha=0.75` | M1 exponent 0.75 |
+| `tail_alpha=0.90` | M1 exponent 0.90 |
+| `tail_lambda=0.0` | M1 tail-weight scale 0.0 |
+| `tail_lambda=0.5` | M1 tail-weight scale 0.5 |
+| `tail_lambda=2.0` | M1 tail-weight scale 2.0 |
+| `window=30` | M4 window 30; minimum observations 15 |
+| `window=120` | M4 window 120; minimum observations 60 |
+| `tail_fraction=0.025` | M4 tail fraction 0.025 |
+| `tail_fraction=0.100` | M4 tail fraction 0.100 |
+| `min_frac=0.333` | M4 fraction 1/3; minimum observations 20 |
+| `min_frac=0.667` | M4 fraction 2/3; minimum observations 40 |
+| `regime_weights=flat` | Equal weights across the five M4 regimes |
+| `corner=alpha0.75-lambda2.0` | M1 exponent 0.75 and tail-weight scale 2.0 |
+| `corner=win120-frac0.667` | M4 window 120 and fraction 2/3; minimum observations 80 |
+| `corner=tailf0.10-flat` | M4 tail fraction 0.100 and equal regime weights |
 
-1. This file at `docs/grid_spec_freeze.md`.
-2. The tagged commit hash of merged `main` (the grid file's content hash is
-   implied by the tag).
-3. No results. `grid_spec.json` is emitted per run by `run_sweep.py` and
-   already records `git_commit`, `seed`, `mode`, the full spec list and the
-   SHA-256 of every curated panel — that file, not this one, is the per-run
-   provenance record.
+The joint variations examine three selected parameter combinations; they do
+not exhaust all interactions.
+
+## Execution and comparison
+
+All four generators are included: AIL, GBM, MSV and SBBTS. The five curated
+panels are identical to those used by run #4, including its SBBTS panel.
+Their identities are recorded in [panel_digests.txt](panel_digests.txt).
+
+Each specification uses B=100 draws and 200 tickers per draw. The analysis uses
+root seeds 42, 1, 2, 3 and 4. Specifications share the same draw indices within
+each seed. The seed-42 primary metric scores must match the run #4 reference
+before the remaining specifications proceed.
+
+For one seed, run from the repository root:
+
+```bash
+uv run --frozen python -m scripts.reproduce sensitivity -- \
+    --fast --n-resamples 100 --tickers-per-draw 200 \
+    --seed 42 --n-jobs 4 --run-dir results/sensitivity/seed_42 \
+    --primary-reference results/run4/metric_summary.csv
+```
+
+Repeat with seeds 1, 2, 3 and 4, using a separate output directory for each;
+the primary-reference comparison applies only to seed 42. Fast mode reuses
+metrics whose parameters are unchanged and recalculates the aggregate score.
+It uses the same metric implementations as a full sweep.
+
+Each seed directory records its resolved specifications, input and source
+hashes, environment, status and result tables. Earlier September sweeps lack
+a recorded SBBTS input hash and are not the current reporting reference.
+
+## Scope of the analysis
+
+The grid holds preprocessing, the M4 volatility-proxy family, M3 support and
+scales, quantile-grid size, regime count, B and ticker sample size fixed.
+It therefore assesses the listed parameter variations, not every metric or
+preprocessing design choice. In particular, it does not compare rolling
+volatility with EWMA or establish robustness to generator-informed structural
+choices outside the grid.

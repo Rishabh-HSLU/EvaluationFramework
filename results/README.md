@@ -10,8 +10,8 @@ The root benchmark_results.csv and aggregate_results.csv are convenient
 canonical copies. Treat results/run4/ as the fixed paper reference when
 comparing a new run; new computations can replace the canonical copies.
 
-[Run #3](run3/README.md) contains the four historical O40/MC0 files, restored
-after their tracking was removed. They are not the final paper intervals.
+[Run #3](run3/README.md) contains the four historical O40/MC0 files.
+They are not the final paper intervals.
 runs_manifest.csv retains the run history; some older exploratory/point-only
 outputs are local and are not included in this reference bundle.
 

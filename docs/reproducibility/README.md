@@ -1,22 +1,16 @@
-# Reproducibility records
+# Reproducing the paper
 
-Start with the [run #4 paper reference](../../results/run4/README.md).
-It contains the comparison tables, replicate records, settings, input hashes
-and [paper-number source index](../../results/run4/paper_number_map.csv).
+Follow the [root README](../../README.md) to install the environment, prepare
+the data and run the benchmark.
 
-- [Supervisor panel check](supervisor_panel_check.md): older-curation mismatch
-  explanation and independent point-only verification, pending external rerun.
-- [Numerical environment](numerical_environment.md): CPU-dispatch launcher and
-  evidence from the two tested x86_64 machines.
-- [Panel digests](../panel_digests.txt): exact original inputs used by runs #3/#4.
-- [Frozen sensitivity settings](../grid_spec_freeze.md): grid and provenance;
-  historical sweeps require an input-provenance audit before reporting.
-- [Parameter provenance audit](../parameter_provenance_audit.md) and
-  [artifact provenance notes](../artefact_provenance_notes.md): historical
-  development evidence, not proof that every outstanding issue is resolved.
-- [Missingness report](../missingness_report.md): historical clock/support audit.
+| Reference | Contents |
+|---|---|
+| [Run #4](../../results/run4/README.md) | Paper tables, all outer and seed replicates, settings, input identities and full or point-only comparison commands. |
+| [Paper-number index](../../results/run4/paper_number_map.csv) | Source cells and display precision for reported values. |
+| [Panel digests](../panel_digests.txt) | SHA-256 identities of the five curated panels used by runs #3 and #4. |
+| [Numerical environment](numerical_environment.md) | CPU settings used for cross-machine panel reproduction and their tested scope. |
+| [Frozen sensitivity grid](../grid_spec_freeze.md) | The 19 specifications, parameter-selection provenance and execution settings. |
 
-The [run #3 records](../../results/run3/README.md), seed-sensitivity notebook and research notes were restored
-from before d85c2d4 to preserve the experiment history. They remain historical;
-run #4 is the current numerical reference. Large market and synthetic Parquet
-panels are supplied separately, not committed.
+[Historical records](../history/README.md) preserve earlier experiments and
+selection evidence. Run #4 is the reference for the current paper. Large
+Parquet inputs are supplied separately and are not stored in Git.

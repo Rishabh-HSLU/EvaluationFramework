@@ -1283,12 +1283,12 @@ them without the script or report:
   representation (values + elapsed-time gaps) can absorb directly, rather
   than something requiring imputation or session exclusion.
 
-See `docs/missingness_report.md` for full diagnostic detail beyond these
-three headline figures -- kept specifically for the ticker-concentration
-findings (216 of 600 tickers have zero complete sessions) and the
-coverage-floor correlation (+0.472 between per-ticker coverage and
-session-completeness rate), both of which bear directly on the 70%
-coverage-floor justification and aren't reflected above.
+Additional historical diagnostics recorded 216 of 600 tickers with zero
+complete sessions and a +0.472 correlation between per-ticker coverage and
+session-completeness rate. These figures concern the development snapshot;
+the diagnostic did not record its input digest and is not a verified audit
+of the run #4 panel. The separate diagnostic report is retained only in the
+local working archive.
 
 # SBBTS Training Grid: Irregular by Construction (2026-09-06)
 

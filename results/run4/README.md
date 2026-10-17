@@ -75,6 +75,30 @@ Default numeric tolerances are rtol=1e-10 and atol=1e-12; counts and seed IDs
 must match exactly. Use --rtol 0 --atol 0 for an exact numeric comparison.
 CSV file-byte hashes need not match for numeric agreement.
 
+## Check point estimates only
+
+After placing the five reference panels in `data/curated/` and checking their
+hashes as above, run the point estimator without the outer or seed repeats:
+
+~~~bash
+uv run --frozen python -m scripts.reproduce benchmark -- \
+    --n-resamples 100 --tickers-per-draw 200 --seed 42 \
+    --n-outer-resamples 0 --n-mc-repeats 0 --n-jobs 4
+~~~
+
+Compare the new run using its printed run number (5 is an example):
+
+~~~bash
+uv run --frozen python scripts/check_reproduction.py --run-number 5 --point-only
+~~~
+
+This checks the primary specification, B, ticker sample size and seed, then
+compares the 16 metric point scores, mean gaps, valid-draw counts and four
+aggregate estimates with their coverage counts. It does not compare confidence
+intervals or seed summaries. Numeric tolerances are the same as for a full
+comparison. Runs #3 and #4 used identical panels and have identical point
+estimates, so the same point calculation can be compared with either reference.
+
 ## Provenance and limits
 
 provenance/original_artifacts.json maps the organised filenames back to the

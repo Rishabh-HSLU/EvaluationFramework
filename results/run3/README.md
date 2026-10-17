@@ -1,8 +1,8 @@
 # Historical run #3
 
 O=40, MC=0, B=100, 200 tickers per draw, seed 42, four generators.
-These are the original reference files requested by Ludovic, not the final
-paper's confidence intervals. Use [run #4](../run4/README.md) for the current paper.
+These files preserve the earlier evaluation. Use
+[run #4](../run4/README.md) for the current paper results and confidence intervals.
 
 The four filenames are unchanged; only their directory changed from results/
 to results/run3/ for organisation. The historical manifest retains the original

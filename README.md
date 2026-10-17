@@ -299,27 +299,23 @@ results/aggregate_results.csv
 
 ---
 
-## Checking reproduction on a new machine
+## Reproducing on a new machine
 
-Clone the same Git commit, install from `uv.lock`, and follow the steps above
-without copying curated panels or benchmark results into the working clone.
-Supply only the external AIL input for this workflow. Keep historical panels
-and results in a separate reference directory for comparison.
+For the paper's numerical results, use the five original curated panels and
+follow the [run #4 instructions](results/run4/README.md). They cover both the
+full benchmark and the shorter point-estimate check. Verify the five panel
+hashes once before running the evaluation.
 
-Record the commit, Python and dependency versions, raw-input hashes, curation
-metadata, training/generation settings, and SHA-256 digests of all five panels
-(`real`, `ail`, `gbm`, `msv`, `sbbts`). Compare panel values, index, columns, and
-missing-value masks as well as file digests: a serialization difference and a
-data difference need separate explanations. Compare benchmark CSV values by
-metric, generator, and replicate identifier using the same run settings.
+To rebuild the inputs independently, clone the same source revision, install
+from `uv.lock`, and follow the data and generation steps above. Supply the
+external AIL input. Record the source revision, environment, raw-input hashes,
+curation metadata, training settings and output panel hashes. Fresh provider
+data or generator retraining can produce different panels despite matching
+seeds.
 
-The [run #4 reference bundle](results/run4/README.md) and
-[panel digest manifest](docs/panel_digests.txt) are tracked in Git.
-The original curated Parquet panels are supplied separately; no public panel
-download is included yet. The independent-machine check reproduced the
-real/AIL/GBM/MSV panels, but the full Lightning benchmark was stopped.
-Do not interpret that partial check as a completed independent reproduction
-of the final table.
+The tested cross-machine workflow reproduced the real, AIL, GBM and MSV panel
+hashes. The full independent benchmark was stopped before completion; that
+check therefore does not establish independent reproduction of the final table.
 
 ---
 
@@ -377,17 +373,16 @@ EvaluationFramework/
 │   ├── baseline_generation.py
 │   └── run_benchmark.py
 ├── docs/
-│   ├── reproducibility/             # reviewer reference and numerical environment
+│   ├── reproducibility/             # reproduction index and numerical environment
 │   ├── panel_digests.txt            # exact curated input identities
-│   └── grid_spec_freeze.md          # sensitivity settings and provenance
+│   ├── grid_spec_freeze.md          # sensitivity settings and provenance
+│   └── history/                     # earlier audits and development records
 ├── tests/
 ├── data/
 ├── results/
 ├── pyproject.toml
 └── README.md
 ```
-
-The distinction is intentional:
 
 - `fineval/` contains importable and testable application logic;
 - `scripts/` contains thin command-line launchers;
@@ -503,9 +498,9 @@ uv run --frozen python scripts/check_reproduction.py --run-number 5
 
 This compares all six result files by metric, generator and replicate ID.
 It reports numerical differences with explicit tolerances and exits nonzero
-on a mismatch. See the [run #4 instructions](results/run4/README.md) for exact
-panel replay and comparison details. New runs can update the root canonical
-CSVs; results/run4/ remains the fixed paper reference.
+on a mismatch. See the [run #4 instructions](results/run4/README.md) for full and
+point-only comparisons using the original panels. New runs can update the root
+canonical CSVs; results/run4/ remains the fixed paper reference.
 
 ---
 

@@ -29,13 +29,12 @@ rounded and reference panels were not substituted for generated controls.
 
 This setting was demonstrated on the two tested x86_64 environments; it is not
 a guarantee for every architecture, library build or Parquet writer version.
-That CPU-dispatch evidence does not establish the cause of a third party's
-mismatched files. Separately, on 17 October 2026 the user confirmed that the
-supervisor's Real/GBM/MSV mismatch arose from an older 14 July curation build;
-see [the supervisor panel check](supervisor_panel_check.md).
+CPU settings cannot reconcile panels built from different input snapshots.
+An older real-panel curation also changes controls generated from that panel.
+Check the curated input identities before comparing benchmark values.
 Fresh provider downloads can contain revisions, and neural-network retraining
 can differ across devices even with matching seeds.
 
-The full independent O=200/M=20 benchmark on Lightning was stopped; exact
-control-panel reproduction is not a claim of a completed independent
-reproduction of the final table.
+The cross-machine check reproduced the real, AIL, GBM and MSV panel hashes.
+The full independent O=200/M=20 benchmark was stopped before completion, so
+the final table has not been independently reproduced by that check.
