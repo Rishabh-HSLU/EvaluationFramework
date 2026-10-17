@@ -1,18 +1,23 @@
-# Local documentation and research notes
-/docs/
-/fineval/walkthrough.md
-/scripts/reasoning.md
+# Local working documents and research scratch space
 /paper/
 /methodology.html
 /todo.md
 
 # Local datasets, experiment outputs, and notebooks
 /data/
-/results/
+/results/*
+!/results/README.md
+!/results/runs_manifest.csv
+!/results/benchmark_results.csv
+!/results/aggregate_results.csv
+!/results/*_spec-primary_B100_m200_seed42_O40_MC0_J4_20260916-000258-077905.csv
+!/results/run4/
 /scripts/results/
 /fineval/scripts/results/
-/fineval/scripts/sensitivity/results/
-/scripts/notebooks/
+/fineval/scripts/sensitivity/results/*
+!/fineval/scripts/sensitivity/results/.gitignore
+/scripts/notebooks/*
+!/scripts/notebooks/seed_sensitivity.ipynb
 /ablation_output/
 /runs/
 *.parquet
