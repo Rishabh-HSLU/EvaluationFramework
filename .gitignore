@@ -55,7 +55,6 @@ htmlcov/
 /deliverables/
 /Benchmarking_Synthetic_Financial_Time_Series(1).zip
 /docs/migration.md
-/manuscript/build/
 
 # Fixed sensitivity reference; operational logs and recovery checkpoints stay local.
 !/results/sensitivity/
@@ -81,14 +80,5 @@ htmlcov/
 !/results/sensitivity/seed_*/sweep_metric_results.csv
 !/results/sensitivity/seed_*/sweep_aggregate_results.csv
 
-# Track manuscript source and artwork, keeping build products and local notes out.
-/manuscript/*.aux
-/manuscript/*.bbl
-/manuscript/*.blg
-/manuscript/*.log
-/manuscript/*.out
-/manuscript/*.spl
-/manuscript/*.pdf
-/manuscript/README
-/manuscript/REVISION_NOTES.md
-/manuscript/figures/sensitivity_*.png
+# Manuscript source and review builds stay local.
+/manuscript/

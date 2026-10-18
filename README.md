@@ -1,6 +1,8 @@
 # fineval
 
 A multi-metric fidelity benchmark for synthetic 1-minute financial return generators.
+
+**Paper results:** [Tables, figures and numerical sources](results/README.md).
 Each metric targets an empirical stylized fact, and every synthetic-real gap is
 benchmarked against an empirical real-corpus resampling baseline so the scores
 remain interpretable without selecting a reference generator.
@@ -527,11 +529,6 @@ These are point estimates. Run #4 remains the source of the primary confidence i
 ```bash
 uv run --frozen python scripts/check_reproduction.py --sensitivity
 ```
-
-## Manuscript
-
-[LaTeX source and build instructions](manuscript/README.md) accompany the recorded
-results and figures. The draft retains red markup for revisions made after run #4.
 
 ## Citation
 
