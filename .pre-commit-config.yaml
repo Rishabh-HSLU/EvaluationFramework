@@ -1,3 +1,5 @@
+exclude: '^manuscript/elsarticle(?:\.(?:cls|dtx|ins)|-harv\.bst)$'
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.19

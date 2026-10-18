@@ -1,0 +1,12 @@
+{
+  "numerical_inputs": [
+    "metric_seed_summary.csv",
+    "aggregate_seed_summary.csv"
+  ],
+  "script": "scripts/finalize_sensitivity.py",
+  "script_sha256": "df0ba30e0327c878909b255949f5e9e3ff26d8298e665a51a5bf65aa0f3f8966",
+  "change": "Vector PDF exports; score panels show only the primary and affected alternatives. Numerical benchmark results were not recomputed or altered.",
+  "original_numerical_source_revision": "b9f404c",
+  "reference_verifier": "scripts/check_reproduction.py",
+  "reference_verifier_sha256": "bec408abd40a0cf62cffd518df078aa95023e1c3d612b977a47a7ebaabedc773"
+}

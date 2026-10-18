@@ -20,3 +20,6 @@ Parquet inputs remain outside Git. Their exact identities are recorded in
 
 [Diagnostic feature figures](figures/run4/README.md) provide the M2–M4
 full-panel profiles, source CSVs and reproduction command.
+
+The [five-seed sensitivity grid](sensitivity/README.md)
+reports specification sensitivity separately from run #4.

@@ -25,7 +25,7 @@ SEEDS = (42, 1, 2, 3, 4)
 GENERATORS = ("AIL", "GBM", "MSV", "SBBTS")
 
 
-def validate_and_summarize(directory: Path) -> dict:
+def validate_and_summarize(directory: Path, *, write: bool = True) -> dict:
     metric_frames, aggregate_frames = [], []
     identities = []
     for seed in SEEDS:
@@ -151,7 +151,8 @@ def validate_and_summarize(directory: Path) -> dict:
         ("aggregate_seed_summary.csv", ag_summary),
         ("point_reference_crossings.csv", crossings),
     ]:
-        frame.to_csv(directory / name, index=False)
+        if write:
+            frame.to_csv(directory / name, index=False)
     report = {
         "status": "validated",
         "seeds": list(SEEDS),
@@ -167,7 +168,8 @@ def validate_and_summarize(directory: Path) -> dict:
         "input_sha256": identities[0]["dataset_sha256"],
         "source_sha256": identities[0]["source_sha256"],
     }
-    atomic_json(directory / "validation.json", report)
+    if write:
+        atomic_json(directory / "validation.json", report)
     lines = [
         "# Five-seed sensitivity results",
         "",
@@ -191,40 +193,47 @@ def validate_and_summarize(directory: Path) -> dict:
         "The analysis is exploratory. It documents the effects of the frozen choices",
         "without removing their AIL-informed selection history or testing all interactions.",
     ]
-    (directory / "summary.md").write_text("\n".join(lines) + "\n")
+    if write:
+        (directory / "summary.md").write_text("\n".join(lines) + "\n")
     return report
 
 
-def make_figures(directory: Path) -> None:
+def make_figures(directory: Path, output_directory: Path | None = None) -> None:
+    output_directory = directory if output_directory is None else output_directory
+    output_directory.mkdir(parents=True, exist_ok=True)
     m = pd.read_csv(directory / "metric_seed_summary.csv")
     a = pd.read_csv(directory / "aggregate_seed_summary.csv")
     specs = [s.spec_id for s in GRID]
-    fig, axes = plt.subplots(1, 2, figsize=(12, 8), constrained_layout=True)
+    plt.rcParams.update({"pdf.fonttype": 42, "ps.fonttype": 42, "font.size": 11})
+    fig, axes = plt.subplots(2, 1, figsize=(7.5, 8.5), constrained_layout=True)
     for axis, metric in zip(axes, ("M1", "M4"), strict=True):
+        shown = [s.spec_id for s in GRID if s.spec_id == "primary" or metric in s.affected_metrics]
         values = (
             m.loc[m.metric == metric]
             .pivot(index="spec_id", columns="generator", values="mean_delta")
-            .reindex(index=specs, columns=GENERATORS)
+            .reindex(index=shown, columns=GENERATORS)
         )
         bound = max(0.001, float(np.abs(values.to_numpy()).max()))
         plot = axis.imshow(values, aspect="auto", cmap="coolwarm", vmin=-bound, vmax=bound)
         axis.set_xticks(range(4), GENERATORS)
-        axis.set_yticks(range(19), specs, fontsize=7)
+        axis.set_yticks(range(len(shown)), shown, fontsize=11)
         axis.set_title(metric + ": mean change from same-seed primary")
         fig.colorbar(plot, ax=axis, label="Score change")
-    fig.savefig(directory / "score_sensitivity.png", dpi=180)
+    fig.savefig(output_directory / "score_sensitivity.png", dpi=180)
+    fig.savefig(output_directory / "score_sensitivity.pdf")
     plt.close(fig)
     values = a.pivot(index="spec_id", columns="generator", values="mean_percent_change").reindex(
         index=specs, columns=GENERATORS
     )
-    fig, axis = plt.subplots(figsize=(8, 8), constrained_layout=True)
+    fig, axis = plt.subplots(figsize=(7, 7), constrained_layout=True)
     bound = max(0.01, float(np.abs(values.to_numpy()).max()))
     plot = axis.imshow(values, aspect="auto", cmap="coolwarm", vmin=-bound, vmax=bound)
     axis.set_xticks(range(4), GENERATORS)
-    axis.set_yticks(range(19), specs, fontsize=8)
+    axis.set_yticks(range(19), specs, fontsize=12)
     axis.set_title("Mean percentage change in aggregate deviation")
     fig.colorbar(plot, ax=axis, label="Change from same-seed primary (%)")
-    fig.savefig(directory / "aggregate_sensitivity.png", dpi=180)
+    fig.savefig(output_directory / "aggregate_sensitivity.png", dpi=180)
+    fig.savefig(output_directory / "aggregate_sensitivity.pdf")
     plt.close(fig)
 
 
@@ -421,7 +430,6 @@ def build_review(workspace: Path) -> None:
             "elsarticle.ins",
             "README.md",
             "sections/*.tex",
-            "figures/*.png",
             "figures/*.pdf",
         ]:
             for path in manuscript.glob(pattern):
@@ -445,21 +453,21 @@ def build_review(workspace: Path) -> None:
         p.write_text(text.replace("## Citation", addition + "## Citation"))
     p = workspace / "results/README.md"
     text = p.read_text()
-    if "sensitivity/summary.md" not in text:
+    if "sensitivity/" not in text:
         p.write_text(
             text + "\nThe [five-seed sensitivity grid](sensitivity/summary.md)\n"
             "reports specification sensitivity separately from run #4.\n"
         )
     p = workspace / "docs/grid_spec_freeze.md"
     text = p.read_text()
-    start = text.index("Status update,")
+    start = text.index("Status update")
     end = text.index("Source of truth", start)
     p.write_text(
         text[:start]
         + (
             "Status update: the current 19-specification grid has completed for seeds\n"
             "42, 1, 2, 3 and 4, with all four generators and all five input hashes recorded.\n"
-            "See [validated sensitivity results](../results/sensitivity/summary.md).\n"
+            "See [validated sensitivity results](../results/sensitivity/README.md).\n"
             "The settings below are unchanged; the analysis remains exploratory.\n\n"
         )
         + text[end:]
@@ -469,8 +477,21 @@ def build_review(workspace: Path) -> None:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
-    parser.add_argument("--workspace", type=Path, required=True)
+    parser.add_argument("--workspace", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument(
+        "--figures-only",
+        action="store_true",
+        help="Redraw saved summaries without changing results or manuscript",
+    )
+    parser.add_argument(
+        "--figure-output-dir",
+        type=Path,
+        help="Write redrawn artwork separately from the fixed reference",
+    )
     args = parser.parse_args(argv)
+    if args.figures_only:
+        make_figures(args.run_dir, args.figure_output_dir)
+        return
     report = validate_and_summarize(args.run_dir)
     make_figures(args.run_dir)
     update_manuscript(args.run_dir, args.workspace, report)

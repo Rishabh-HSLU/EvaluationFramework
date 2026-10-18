@@ -1,0 +1,26 @@
+{
+  "status": "completed",
+  "seed": 1,
+  "completed_specs": [
+    "primary",
+    "tail_alpha=0.00",
+    "tail_alpha=0.15",
+    "tail_alpha=0.50",
+    "tail_alpha=0.75",
+    "tail_alpha=0.90",
+    "tail_lambda=0.0",
+    "tail_lambda=0.5",
+    "tail_lambda=2.0",
+    "window=30",
+    "window=120",
+    "tail_fraction=0.025",
+    "tail_fraction=0.100",
+    "min_frac=0.333",
+    "min_frac=0.667",
+    "corner=alpha0.75-lambda2.0",
+    "corner=win120-frac0.667",
+    "corner=tailf0.10-flat",
+    "regime_weights=flat"
+  ],
+  "total_specs": 19
+}

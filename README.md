@@ -517,6 +517,22 @@ python -m scripts.reproduce profiles
 include PDF/PNG figures, plotted CSV data and provenance. To redraw from
 saved CSVs without loading the panels, add `-- --plot-only`.
 
+## Sensitivity results
+
+The [19-specification, five-seed sensitivity reference](results/sensitivity/README.md)
+contains the full grid, numerical summaries, figures and input/source provenance.
+Generator orderings are unchanged within the tested grid; absolute scores vary.
+These are point estimates. Run #4 remains the source of the primary confidence intervals.
+
+```bash
+uv run --frozen python scripts/check_reproduction.py --sensitivity
+```
+
+## Manuscript
+
+[LaTeX source and build instructions](manuscript/README.md) accompany the recorded
+results and figures. The draft retains red markup for revisions made after run #4.
+
 ## Citation
 
 If you use this benchmark, please cite the accompanying paper (forthcoming).

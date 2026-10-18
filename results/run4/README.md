@@ -118,3 +118,13 @@ The original validation report records 59 passed checks. Raw per-draw feature
 and gap arrays were not saved; checks recover summaries from recorded mean
 gaps and complete replicate outputs. They are not a second execution of
 every feature extraction.
+
+The historical SBBTS training minima and their provenance are recorded in
+`provenance/sbbts_validation_minima.csv` and `provenance/sbbts_training_record.json`.
+The fourth iteration has the lowest logged minimum; losses across iterations
+use different targets and validation noise, so they do not define a shared
+outer-iteration selection criterion. These logs do not fill the missing
+historical panel-to-checkpoint generation manifest.
+
+The [sensitivity reference](../sensitivity/README.md) uses these same five panels
+and reports specification effects separately from the primary intervals.

@@ -1,0 +1,29 @@
+{
+  "source_revision": "b9f404c",
+  "completed_at_utc": "2026-10-17T22:10:29.846809+00:00",
+  "seeds": [
+    42,
+    1,
+    2,
+    3,
+    4
+  ],
+  "specifications": 19,
+  "single_parameter_alternatives": 15,
+  "joint_alternatives": 3,
+  "B": 100,
+  "tickers_per_draw": 200,
+  "generators": [
+    "AIL",
+    "GBM",
+    "MSV",
+    "SBBTS"
+  ],
+  "mode": "fast",
+  "outer_replicates_per_alternative": 0,
+  "mc_repeats_per_alternative": 0,
+  "comparison_design": "Same draw indices across specifications within each root seed.",
+  "reference_panels": "Original five run #4 curated panels; SBBTS unchanged.",
+  "scope": "Exploratory in-sample point-estimate sensitivity. Seed ranges are not confidence intervals.",
+  "execution_provenance": "Recorded source revision and numerical environment are in each seed snapshot. A separate physical second server is not established by these records."
+}

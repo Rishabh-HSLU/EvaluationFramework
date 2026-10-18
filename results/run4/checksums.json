@@ -22,6 +22,8 @@
     "provenance/run_events.log": "864c39bf174f3b716939ffcef46ac6b8a7eb392e1249e8a59cef3c486feafc25",
     "provenance/run_lifecycle.json": "c04594ec023a7e546352ab191ca9ebc3495a9263d533161cc373ecd198512371",
     "provenance/run_manifest.json": "92be64460bfdf8239e1cdf5df833edfbd71e2d5768c4483eb2ddde33d2ab9ee5",
-    "provenance/source_fingerprints.json": "3a217d49901844cbd29af21653f24ca92b831c33fcf19747dac7f0a8f5ea2122"
+    "provenance/source_fingerprints.json": "3a217d49901844cbd29af21653f24ca92b831c33fcf19747dac7f0a8f5ea2122",
+    "provenance/sbbts_validation_minima.csv": "4dad1257a6049de467e6d4f59c6bb67d595591836f0b4e0e48de77b59a3eaee4",
+    "provenance/sbbts_training_record.json": "085341407d53e737501b2aa1a92715f1cb474e293a755f90ffd5675d48da3605"
   }
 }

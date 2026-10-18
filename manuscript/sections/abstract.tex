@@ -1,0 +1,33 @@
+\begin{abstract}
+Synthetic financial time series are increasingly used in risk management, strategy backtesting, and stress testing, but their evaluation often relies on aggregate measures that neither identify specific failure modes nor distinguish generator error from finite-sample variability.
+We propose a diagnostic framework that evaluates synthetic financial returns through four stylized facts: tail-weighted marginal distribution, long-lag volatility clustering, aggregational Gaussianity, and regime-conditional tail shape.
+For each property, a dedicated feature map and distance measure quantify the discrepancy between real and synthetic return panels.
+Each synthetic--real discrepancy is benchmarked against an empirical
+real--real resampling baseline constructed from the observed ticker corpus, yielding a relative similarity score.
+Uncertainty with respect to ticker-corpus composition is quantified through an outer bootstrap that resamples the complete real and synthetic ticker panels and recomputes the full matched-resampling estimator.
+We apply the framework to one-minute returns from 600 U.S.-listed equities over 139 trading sessions spanning calm market conditions and the onset of the COVID-19 disruption.
+% RUN4-VERIFIED-ABSTRACT: O=200, M=20.
+{\color{red}{\color{black}
+We compare geometric Brownian motion and multi-scale stochastic
+volatility controls with AIL and Schr\"odinger--Bass Bridge for Time
+Series (SBBTS).}
+The comparison is an in-sample empirical fidelity assessment over the
+full historical window, including dates used for SBBTS early stopping.
+{\color{black}AIL's scores are 0.344 for the tail-weighted marginal distribution and
+0.214 for volatility clustering, with intervals below the empirical
+reference of 0.5.}
+Its aggregational-Gaussianity score is 0.362, with an interval that also
+lies below 0.5; only the regime-conditional-tail interval, for a score
+of 0.482, includes this reference.
+{\color{black}SBBTS improves on both controls for the latter two properties but
+remains close to GBM for the marginal distribution and volatility
+clustering.}
+}
+The framework therefore identifies which financially relevant statistical
+signatures a generator matches, providing a more
+informative benchmark than a single global measure.
+\end{abstract}
+
+\begin{keyword}
+stylized facts \sep deep generative models \sep evaluation metrics \sep bootstrap inference
+\end{keyword}

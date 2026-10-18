@@ -1,0 +1,572 @@
+{
+  "run_kind": "exploratory",
+  "created_at": "20261017-200035",
+  "git_commit": "b9f404c",
+  "n_resamples": 100,
+  "tickers_per_draw": 200,
+  "seed": 4,
+  "mode": "fast",
+  "dataset_sha256": {
+    "real_prices.parquet": "044336d7ad4b552a1eb469018f936b776e8ff1da32656acf0348f0049921bec9",
+    "ail_prices.parquet": "976c3a93b25e47af2742eaa5d3457ffc4aac9062cba0e74c397d6c59f434d751",
+    "gbm_prices.parquet": "9f48b5e81640f267ea9db585d2f686ac92e0a4f6c0cabc7c234eadadf8c31a9f",
+    "msv_prices.parquet": "4ec0063024442a0680ae598bf7480704b937c50351656dc28c064fa4a9f73f84",
+    "sbbts_prices.parquet": "4a1c29f50746d1957f3a6bd11c90a2299c0f1bb9a8bb878afc271cf7eea4cefa"
+  },
+  "specs": [
+    {
+      "spec_id": "primary",
+      "dial": "none",
+      "dial_value": null,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": []
+    },
+    {
+      "spec_id": "tail_alpha=0.00",
+      "dial": "tail_alpha",
+      "dial_value": 0.0,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.0,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_alpha"
+      ]
+    },
+    {
+      "spec_id": "tail_alpha=0.15",
+      "dial": "tail_alpha",
+      "dial_value": 0.15,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.15,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_alpha"
+      ]
+    },
+    {
+      "spec_id": "tail_alpha=0.50",
+      "dial": "tail_alpha",
+      "dial_value": 0.5,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.5,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_alpha"
+      ]
+    },
+    {
+      "spec_id": "tail_alpha=0.75",
+      "dial": "tail_alpha",
+      "dial_value": 0.75,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.75,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_alpha"
+      ]
+    },
+    {
+      "spec_id": "tail_alpha=0.90",
+      "dial": "tail_alpha",
+      "dial_value": 0.9,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.9,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_alpha"
+      ]
+    },
+    {
+      "spec_id": "tail_lambda=0.0",
+      "dial": "tail_lambda",
+      "dial_value": 0.0,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 0.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_lambda"
+      ]
+    },
+    {
+      "spec_id": "tail_lambda=0.5",
+      "dial": "tail_lambda",
+      "dial_value": 0.5,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 0.5,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_lambda"
+      ]
+    },
+    {
+      "spec_id": "tail_lambda=2.0",
+      "dial": "tail_lambda",
+      "dial_value": 2.0,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 2.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_lambda"
+      ]
+    },
+    {
+      "spec_id": "window=30",
+      "dial": "window",
+      "dial_value": 30,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 1.0,
+        "window": 30,
+        "min_periods": 15,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "window"
+      ]
+    },
+    {
+      "spec_id": "window=120",
+      "dial": "window",
+      "dial_value": 120,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 1.0,
+        "window": 120,
+        "min_periods": 60,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "window"
+      ]
+    },
+    {
+      "spec_id": "tail_fraction=0.025",
+      "dial": "tail_fraction",
+      "dial_value": 0.025,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.025,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_fraction"
+      ]
+    },
+    {
+      "spec_id": "tail_fraction=0.100",
+      "dial": "tail_fraction",
+      "dial_value": 0.1,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.1,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_fraction"
+      ]
+    },
+    {
+      "spec_id": "min_frac=0.333",
+      "dial": "min_frac",
+      "dial_value": 0.3333333333333333,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 20,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.3333333333333333
+      },
+      "dials": [
+        "min_frac"
+      ]
+    },
+    {
+      "spec_id": "min_frac=0.667",
+      "dial": "min_frac",
+      "dial_value": 0.6666666666666666,
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 40,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.6666666666666666
+      },
+      "dials": [
+        "min_frac"
+      ]
+    },
+    {
+      "spec_id": "corner=alpha0.75-lambda2.0",
+      "dial": "corner",
+      "dial_value": [
+        0.75,
+        2.0
+      ],
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.75,
+        "tail_lambda": 2.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_alpha",
+        "tail_lambda"
+      ]
+    },
+    {
+      "spec_id": "corner=win120-frac0.667",
+      "dial": "corner",
+      "dial_value": [
+        120,
+        0.6666666666666666
+      ],
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 1.0,
+        "window": 120,
+        "min_periods": 80,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "min_frac": 0.6666666666666666
+      },
+      "dials": [
+        "window",
+        "min_frac"
+      ]
+    },
+    {
+      "spec_id": "corner=tailf0.10-flat",
+      "dial": "corner",
+      "dial_value": [
+        0.1,
+        [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      ],
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.1,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "tail_fraction",
+        "regime_weights"
+      ]
+    },
+    {
+      "spec_id": "regime_weights=flat",
+      "dial": "regime_weights",
+      "dial_value": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "params": {
+        "n_grid": 5001,
+        "tail_alpha": 0.3,
+        "tail_lambda": 1.0,
+        "window": 60,
+        "min_periods": 30,
+        "n_regimes": 5,
+        "tail_fraction": 0.05,
+        "regime_weights": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "min_frac": 0.5
+      },
+      "dials": [
+        "regime_weights"
+      ]
+    }
+  ],
+  "source_sha256": {
+    "fineval/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fineval/benchmark/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fineval/benchmark/artifacts.py": "3a4e392d88ff126d02589dbce4342c3bb88e131aa7b5414c8006e15431f8e031",
+    "fineval/benchmark/config.py": "04e7ec5742f7de83d5b68ded30508d021d270249c356fe6ade4af9dfca71ad56",
+    "fineval/benchmark/datasets.py": "a7cc0ba6da7ae8009632cb724676e51e45750ea71263a20859f89bab042a7ce3",
+    "fineval/benchmark/reporting.py": "8467bde9380a344288b85c8a34c684593f7d01a078d0ab84487eb9a0b12c6b05",
+    "fineval/benchmark/runner.py": "f904d94556f3075e75e9627d62a1862827f2674df824f1785c4adbce8a89a8ac",
+    "fineval/bootstrap/__init__.py": "7a4f7882077c9aa4807fb3dc4ab574b53f48862dff1645f8dd37e5038cbfffdf",
+    "fineval/bootstrap/engine.py": "c544a19dbcb63db3602bf0534da1efb5d17b286150a563368c28a2c5a7bdc6d4",
+    "fineval/bootstrap/execution.py": "5f5b28b68017dac81ffba6979e6b3c945c6d349da602ac4db9ef98b306327ad1",
+    "fineval/bootstrap/models.py": "d78351939998f7b9e08fde75b0a5e3ab4435f31f2d6ae0c5e05a0369007fddbe",
+    "fineval/bootstrap/replicate_execution.py": "02888549537efcd78b4a86f0291173f346562a4eb172a6caf845f9a100b9f6b1",
+    "fineval/bootstrap/uncertainty.py": "00f4bc7c176b75729169106e7027651e7cb0f32bedd37ff249348a621db1f44c",
+    "fineval/config.py": "d01fd55ecca90067ffd8bf40894b5ab6535a7c483b9caf5ca31a0b6eeccd8a3a",
+    "fineval/data/__init__.py": "9482f1b2cb5b3b0bcdb6e3422a76a8f7f353ba4edbe74f221ca88ba9c997bfa9",
+    "fineval/data/curate.py": "6140de2740ae8ef6e98462272423a00e1a4b78d23882e0831ec8ac8cd513ae41",
+    "fineval/data/loader.py": "fe70a89af133abb197fbb0970a76e0312a765b2fe21e3c17f0a711620b050807",
+    "fineval/metrics/__init__.py": "1bc7d1976665296ba537ae28fc35e77777bd9de447612f9b73663728c5b83bc4",
+    "fineval/metrics/aggregational_gaussianity.py": "9c9f0b3650bdaa4a97eed0b5d90c5c4636f750f557f003ef18781410160b7497",
+    "fineval/metrics/base.py": "6ea1fb80abe72b53301f2e0f82f087baccc7dc07b68fc57e6f05d609584091a1",
+    "fineval/metrics/regime_tails.py": "b29309b7eca7b242fad9c000ecefc6a1cf959647d3fcba3a1265bd745daf7c0d",
+    "fineval/metrics/tail_weighted_marginal.py": "b006b8b5c947fff7dc6f5cb1423f2a2c26eb0638555b7f6fbd1b81694b22d989",
+    "fineval/metrics/volatility_clustering.py": "d2d1c9c797bf7cd0cd7e63ac5cf8dc93ae0d3921583cc880c75ef95282622c76",
+    "fineval/preprocessing/__init__.py": "e17cf109899a293768dad47a1f2a66c2e2d82e01c3adb5e94366720ed539b519",
+    "fineval/preprocessing/fff.py": "375157412a0c5e9252177befbcacba632a95089fd87bd2977fe151c2e3237f5e",
+    "fineval/preprocessing/pipeline.py": "125452a36a6c930dd5bdacbcd6df3ef51396f8f9ff686cd304588acf14b65a07",
+    "fineval/preprocessing/session_clock.py": "9e25f7f74e57ea882ad0afe390890e1640ab008870be84c16c369fc833518444",
+    "fineval/scripts/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fineval/scripts/sensitivity/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fineval/scripts/sensitivity/grid.py": "1372764d2c27f84070c143d227224a8f5f69d07a00be814f6b9086f1149a28fb",
+    "fineval/scripts/sensitivity/persistence.py": "3cc0915f2ae4b8173b2bcb2262ebef0c618615946cb857f7fd833e8d64516079",
+    "fineval/scripts/sensitivity/run_sweep.py": "a14a46a33959ef865b2bd0420bce571a00d2f77bb41ae264cc96383883c2b144",
+    "fineval/scripts/sensitivity/summarize_robustness.py": "47382091615097e1e9a457106f38f448a8b828b573e4157efa813f430102836d",
+    "scripts/reproduce.py": "92e9938d02e345c02a7f5c50357409b0bd7d6ba4d702e29e20fd580f5e8b4d1e"
+  },
+  "numerical_environment": {
+    "python": "3.13.16 | packaged by conda-forge | (main, Oct  7 2026, 00:29:52) [GCC 15.3.0]",
+    "architecture": "x86_64",
+    "libc": [
+      "glibc",
+      "2.43"
+    ],
+    "packages": {
+      "numpy": "2.4.5",
+      "pandas": "3.0.3",
+      "scipy": "1.17.1",
+      "pyarrow": "24.0.0"
+    },
+    "settings": {
+      "NPY_DISABLE_CPU_FEATURES": "X86_V4,AVX512_ICL,AVX512_SPR",
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1"
+    }
+  },
+  "primary_reference_sha256": null
+}

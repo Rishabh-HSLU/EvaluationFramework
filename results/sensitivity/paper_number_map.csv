@@ -1,0 +1,37 @@
+paper_location,quantity,source_file,source_key,source_column,source_pointer,exact_value,display,decimal_places
+Appendix B / Table sensitivity ranges,M1 AIL min_change,effect_ranges.csv,"{""quantity"": ""M1"", ""generator"": ""AIL""}",min_change,,-0.0451642829544493,-0.0452,4
+Appendix B / Table sensitivity ranges,M1 AIL max_change,effect_ranges.csv,"{""quantity"": ""M1"", ""generator"": ""AIL""}",max_change,,0.01441785940870749,0.0144,4
+Appendix B / Table sensitivity ranges,M1 GBM min_change,effect_ranges.csv,"{""quantity"": ""M1"", ""generator"": ""GBM""}",min_change,,-0.0008288637654548306,-0.0008,4
+Appendix B / Table sensitivity ranges,M1 GBM max_change,effect_ranges.csv,"{""quantity"": ""M1"", ""generator"": ""GBM""}",max_change,,0.0008686982090502955,0.0009,4
+Appendix B / Table sensitivity ranges,M1 MSV min_change,effect_ranges.csv,"{""quantity"": ""M1"", ""generator"": ""MSV""}",min_change,,-0.014025155154184996,-0.0140,4
+Appendix B / Table sensitivity ranges,M1 MSV max_change,effect_ranges.csv,"{""quantity"": ""M1"", ""generator"": ""MSV""}",max_change,,0.00584146578662352,0.0058,4
+Appendix B / Table sensitivity ranges,M1 SBBTS min_change,effect_ranges.csv,"{""quantity"": ""M1"", ""generator"": ""SBBTS""}",min_change,,-0.0005585663407142276,-0.0006,4
+Appendix B / Table sensitivity ranges,M1 SBBTS max_change,effect_ranges.csv,"{""quantity"": ""M1"", ""generator"": ""SBBTS""}",max_change,,0.0016671650340565683,0.0017,4
+Appendix B / Table sensitivity ranges,M4 AIL min_change,effect_ranges.csv,"{""quantity"": ""M4"", ""generator"": ""AIL""}",min_change,,-0.037805209482101754,-0.0378,4
+Appendix B / Table sensitivity ranges,M4 AIL max_change,effect_ranges.csv,"{""quantity"": ""M4"", ""generator"": ""AIL""}",max_change,,0.018142883828303646,0.0181,4
+Appendix B / Table sensitivity ranges,M4 GBM min_change,effect_ranges.csv,"{""quantity"": ""M4"", ""generator"": ""GBM""}",min_change,,-0.008553895633780857,-0.0086,4
+Appendix B / Table sensitivity ranges,M4 GBM max_change,effect_ranges.csv,"{""quantity"": ""M4"", ""generator"": ""GBM""}",max_change,,0.0072486384112131,0.0072,4
+Appendix B / Table sensitivity ranges,M4 MSV min_change,effect_ranges.csv,"{""quantity"": ""M4"", ""generator"": ""MSV""}",min_change,,-0.024036950182579286,-0.0240,4
+Appendix B / Table sensitivity ranges,M4 MSV max_change,effect_ranges.csv,"{""quantity"": ""M4"", ""generator"": ""MSV""}",max_change,,0.014900087123216776,0.0149,4
+Appendix B / Table sensitivity ranges,M4 SBBTS min_change,effect_ranges.csv,"{""quantity"": ""M4"", ""generator"": ""SBBTS""}",min_change,,-0.012127359192891832,-0.0121,4
+Appendix B / Table sensitivity ranges,M4 SBBTS max_change,effect_ranges.csv,"{""quantity"": ""M4"", ""generator"": ""SBBTS""}",max_change,,0.016796778647747673,0.0168,4
+Appendix B / Table sensitivity ranges,G_dev AIL min_change,effect_ranges.csv,"{""quantity"": ""G_dev"", ""generator"": ""AIL""}",min_change,,-1.8013964514559944,-1.80,2
+Appendix B / Table sensitivity ranges,G_dev AIL max_change,effect_ranges.csv,"{""quantity"": ""G_dev"", ""generator"": ""AIL""}",max_change,,5.079100363234068,5.08,2
+Appendix B / Table sensitivity ranges,G_dev GBM min_change,effect_ranges.csv,"{""quantity"": ""G_dev"", ""generator"": ""GBM""}",min_change,,-4.44787160462109,-4.45,2
+Appendix B / Table sensitivity ranges,G_dev GBM max_change,effect_ranges.csv,"{""quantity"": ""G_dev"", ""generator"": ""GBM""}",max_change,,6.743894863052358,6.74,2
+Appendix B / Table sensitivity ranges,G_dev MSV min_change,effect_ranges.csv,"{""quantity"": ""G_dev"", ""generator"": ""MSV""}",min_change,,-4.075024270886473,-4.08,2
+Appendix B / Table sensitivity ranges,G_dev MSV max_change,effect_ranges.csv,"{""quantity"": ""G_dev"", ""generator"": ""MSV""}",max_change,,8.555054221019521,8.56,2
+Appendix B / Table sensitivity ranges,G_dev SBBTS min_change,effect_ranges.csv,"{""quantity"": ""G_dev"", ""generator"": ""SBBTS""}",min_change,,-3.754079943703126,-3.75,2
+Appendix B / Table sensitivity ranges,G_dev SBBTS max_change,effect_ranges.csv,"{""quantity"": ""G_dev"", ""generator"": ""SBBTS""}",max_change,,2.995457242165922,3.00,2
+Section 4.5,specifications,validation.json,,,specifications,19,19,0
+Section 4.5,single_parameter_alternatives,validation.json,,,single_parameter_alternatives,15,15,0
+Section 4.5,two_parameter_corners,validation.json,,,two_parameter_corners,3,3,0
+Repository,metric_rows,validation.json,,,metric_rows,1520,1520,0
+Repository,aggregate_rows,validation.json,,,aggregate_rows,380,380,0
+Section 4.5,point_reference_crossings,validation.json,,,point_reference_crossings,0,0,0
+Section 4.5,ordering_changes.M1.changed_orderings,validation.json,,,ordering_changes.M1.changed_orderings,0,0,0
+Section 4.5,ordering_changes.M1.comparisons,validation.json,,,ordering_changes.M1.comparisons,45,45,0
+Section 4.5,ordering_changes.M4.changed_orderings,validation.json,,,ordering_changes.M4.changed_orderings,0,0,0
+Section 4.5,ordering_changes.M4.comparisons,validation.json,,,ordering_changes.M4.comparisons,45,45,0
+Section 4.5,ordering_changes.aggregate.changed_orderings,validation.json,,,ordering_changes.aggregate.changed_orderings,0,0,0
+Section 4.5,ordering_changes.aggregate.comparisons,validation.json,,,ordering_changes.aggregate.comparisons,90,90,0

@@ -1,0 +1,26 @@
+\section{Related Work}\label{sec:related_work}
+
+Financial time-series generators are commonly evaluated by examining whether their outputs reproduce established empirical properties of asset returns.
+\citet{takahashi2019modeling} assess generated series against stylized facts including heavy tails, volatility clustering, leverage effects, and gain/loss asymmetry.
+Similarly, \citet{wiese2020quant} evaluate both marginal and temporal properties and show that their Quant GAN can reproduce volatility clustering, leverage effects, and serial dependence.
+More recently, \citet{kwon2024stylized} systematically compare GAN architectures and find that their ability to recover univariate and multivariate stylized facts depends strongly on the generator architecture.
+Diffusion-based approaches have also been evaluated in this manner: \citet{tanaka2025cofindiff} examine whether generated series preserve financial properties under specified trend and volatility conditions, while \citet{zhang2026sfag} incorporate selected stylized facts directly into the training objective.
+These studies establish the importance of financially grounded evaluation, but the resulting diagnostics are generally presented as plots, summary statistics, tests of presence, or uncalibrated discrepancies.
+They therefore provide limited guidance on whether an observed synthetic--real difference exceeds the variation naturally arising between finite samples of real data.
+
+Several studies instead combine multiple evaluation criteria.
+\citet{ericson2024deep} introduce financial modelling indicators covering distributional distance, autocorrelation structure, and backtesting, and compare several conditional generators on historical yield-curve data and simulated processes.
+\citet{hounwanou2025evaluating} similarly combine maximum mean discrepancy, autocorrelation and volatility-clustering diagnostics, and downstream evaluations based on portfolio optimisation and volatility forecasting.
+These approaches broaden evaluation beyond any single measure of realism, but their components retain different numerical scales and interpretations.
+Consequently, they produce a collection of complementary indicators rather than a common reference against which the severity of each discrepancy can be assessed.
+
+Our framework builds on this multi-criteria perspective but differs in both its diagnostic focus and its reference for interpretation.
+Rather than reporting heterogeneous financial diagnostics separately or
+collapsing them into a single global measure, it evaluates distinct financial
+properties individually and benchmarks each synthetic--real discrepancy
+against the variation observed between matched resamples of the real ticker
+corpus.
+This common empirical reference gives the resulting metrics a consistent
+interpretation and indicates which targeted statistical signatures exhibit
+larger or smaller discrepancies.
+The framework therefore provides a calibrated diagnostic assessment of generator fidelity, rather than an unreferenced collection of indicators or a single aggregate verdict.

@@ -1,0 +1,497 @@
+\section{Method}\label{sec:method}
+
+We introduce an evaluation framework that measures the fidelity of
+synthetic financial return series by decomposing the comparison between
+real and synthetic returns into a set of metrics, each targeting a
+distinct empirical regularity of asset returns \citep{cont2001empirical}.
+The design of these metrics is guided by the desiderata of
+\citet{raisa2025position} for synthetic-data evaluation measures.
+
+The framework targets positive empirical regularities---properties
+exhibited by real returns, such as heavy tails and volatility
+clustering---rather than absence-based criteria such as zero linear
+autocorrelation of raw returns.
+Such criteria have weak discriminative power because even a structurally
+inadequate generator such as geometric Brownian motion satisfies them by
+construction.
+
+The object of evaluation is a generator: any procedure producing
+synthetic returns for a fixed cross-section of assets observed on a
+common intraday clock.
+The framework itself is generator-agnostic, and any generator satisfying
+this input--output specification can be benchmarked.
+
+Throughout the paper, a \emph{panel} is a matrix of log returns
+$X \in \mathbb{R}^{T \times N}$ whose columns are $N$ assets and whose
+rows are $T$ intraday timestamps on a common market clock; entry
+$X_{t,i}$ is the log return of asset $i$ over minute $t$.
+The framework takes as input real and synthetic panels aligned to the same intraday clock.
+The panels need not share ticker identities, because real and synthetic ticker subsamples are drawn independently from their respective panels.
+Both panels undergo the same preprocessing pipeline described in (Section~\ref{sec:experiments}).
+For each metric, the framework asks whether the synthetic returns
+reproduce the corresponding statistical property of the real returns.
+Because two resamples of the observed real ticker corpus do not agree
+exactly, their discrepancy provides an empirical reference under the chosen
+sampling protocol.
+The score compares the synthetic--real gap with this corpus-resampling gap (Section~\ref{sec:method_scoring}).
+
+\subsection{Metric Architecture}\label{sec:method_architecture}
+
+Every metric in the framework shares a common construction.
+A metric $k$ consists of two components: a \emph{feature map} $\phi_k$,
+which extracts from a panel of returns the statistical signature of a
+stylized fact (for instance, the empirical quantile function of pooled
+returns, or the autocorrelation function of absolute returns), and a
+\emph{distance} $\rho_k$, which measures the discrepancy between two
+such signatures.
+The gap between two panels $\mathcal{A}$ and $\mathcal{B}$ under metric
+$k$ is the pullback of $\rho_k$ through $\phi_k$:
+\begin{equation}
+  g_k(\mathcal{A}, \mathcal{B})
+  = \rho_k\bigl(\phi_k(\mathcal{A}),\, \phi_k(\mathcal{B})\bigr).
+  \label{eq:pullback}
+\end{equation}
+
+This construction has two practical consequences.
+First, each gap is diagnostic: because $\phi_k$ targets a specific
+stylized fact, a large gap identifies the distributional or temporal
+structure responsible for the discrepancy rather than merely signalling
+an unspecified difference.
+Second, the framework is extensible: an additional property can be
+incorporated by defining a new feature map and distance without modifying
+the scoring or inference machinery of
+Section~\ref{sec:method_scoring}.
+
+Because $\rho_k$ compares only the extracted signatures, $g_k$ is blind
+by construction to everything the feature map discards: two panels that
+differ substantially can nonetheless satisfy
+$g_k(\mathcal{A}, \mathcal{B}) = 0$ whenever they share the same
+signature.
+This blindness is deliberate.
+Each feature map is intentionally insensitive to structures outside its
+target.
+For example, the marginal-distribution map is unchanged by reordering
+returns, so temporal dependence is invisible to it.
+No individual metric can therefore certify overall fidelity; the
+framework instead assesses complementary properties separately.
+
+\paragraph{M1: Tail-weighted marginal distribution}
+Real returns exhibit heavy-tailed marginal distributions: extreme
+returns occur far more frequently than under Gaussianity
+\citep{cont2001empirical}.
+M1 compares the unconditional return distributions of two panels, with
+increased sensitivity to discrepancies in the tails.
+The feature map first divides the returns of each ticker by their sample
+standard deviation, computed with Bessel's correction over the finite returns of
+that ticker in the panel; the ticker mean is not subtracted.
+Without this step, pooling returns across tickers with unequal variances yields a
+scale mixture that is leptokurtic even when every individual series is Gaussian,
+so the pooled tail would partly reflect cross-sectional volatility dispersion
+rather than distributional shape.
+The map then pools the standardized returns within each panel and evaluates the
+empirical quantile function $\hat{Q}(u)$ at $J$ equally spaced
+probability levels
+$u_j=(j+\tfrac{1}{2})/J$, $j=0,\ldots,J-1$.
+This excludes $u=0$ and $u=1$, whose estimates correspond to the
+sample minimum and maximum and are therefore the least stable order
+statistics.
+The distance is a tail-weighted $L1$ discrepancy between empirical
+quantile functions, motivated by the quantile representation of the
+one-dimensional Wasserstein-1 distance
+\citep{villani2009optimal}:
+\begin{equation}
+g_1(\mathcal{A},\mathcal{B})
+= \frac{1}{J}\sum_{j=0}^{J-1}
+\widetilde{w}(u_j)
+\left|
+\hat{Q}_{\mathcal{A}}(u_j)
+-
+\hat{Q}_{\mathcal{B}}(u_j)
+\right|
+\label{eq:m1}
+\end{equation}
+The normalized weights are defined as
+\begin{equation}
+\widetilde{w}(u_j)
+= \frac{w(u_j)}
+{J^{-1}\sum_{k=0}^{J-1}w(u_k)},
+\qquad
+w(u)
+= 1+\lambda
+\left[
+u^{-\alpha}+(1-u)^{-\alpha}
+\right].
+\label{eq:m1_weights}
+\end{equation}
+Here, $\alpha>0$ controls how strongly the weighting concentrates near
+the distributional boundaries, while $\lambda>0$ controls the strength
+of the tail component relative to the uniform component; configured
+values are reported in Section~\ref{sec:experiments}.
+Normalizing the weights to unit mean prevents the quantile-grid
+resolution $J$ from mechanically changing the overall scale of the
+distance; the weighting therefore redistributes sensitivity toward the
+tails rather than rescaling the metric.
+
+We use a smooth weighting rather than a hard tail indicator because a
+hard cutoff is sensitive to small shifts of probability mass across the
+cutoff under resampling and discards discrepancies in the bulk of the
+distribution.
+Because the unconditional distribution does not depend on temporal
+ordering, any reordering of returns within a series leaves $g_1$
+unchanged; temporal structure is therefore invisible to this metric by
+construction, in the sense of
+Section~\ref{sec:method_architecture}.
+
+\paragraph{M2: Volatility clustering}
+Real returns exhibit volatility clustering, whose quantitative signature
+is the slow decay of the autocorrelation of absolute returns over long
+lags \citep{ding1993long, cont2001empirical}.
+We use absolute rather than squared returns because the autocorrelation
+of $\lvert r_t\rvert^d$ is typically strongest and most persistent for
+$d$ near one \citep{ding1993long}.
+For each asset separately, the feature map computes the sample
+autocorrelation of absolute returns at the selected lags and then
+averages the resulting curves across assets; we write $\bar{a}(k)$ for
+this cross-sectional average at lag $k$.
+With 389 valid within-session returns, the largest admissible lag is
+$K=388$, while the evaluated lag window is
+$\mathcal{K}={k_{\min},\ldots,k_{\max}}$, with $k_{\max}\leq K$.
+
+Two estimator details matter for intraday data.
+First, the lag-$k$ products in the numerator are accumulated strictly
+within trading sessions: observations separated by an overnight
+boundary are not treated as lag-$k$ pairs, since including them would
+contaminate the estimate with cross-session dependence, particularly at
+long lags.
+Second, the centring and variance normalization are computed from the
+full sample of each asset, without correcting for the decreasing number
+of valid pairs at larger lags.
+This produces the intended shrinkage toward zero at long lags of the
+biased-style autocorrelation estimator.
+
+The distance is the average absolute difference between the
+cross-sectionally averaged curves over the selected long-lag window:
+\begin{equation}
+g_2(\mathcal{A},\mathcal{B})
+= \frac{1}{|\mathcal{K}|}
+\sum_{k\in\mathcal{K}}
+\left|
+\bar{a}_{\mathcal{A}}(k)
+-
+\bar{a}_{\mathcal{B}}(k)
+\right|,
+\label{eq:m2}
+\end{equation}
+where the configured values of $k_{\min}$ and $k_{\max}$ are reported in
+Section~\ref{sec:experiments}.
+The window focuses on long lags because short-lag autocorrelation of
+absolute returns can also be reproduced by short-memory volatility
+models and is therefore less discriminative of persistent volatility
+clustering.
+
+\paragraph{M3: Aggregational Gaussianity}
+The distribution of returns changes systematically under temporal
+aggregation: at fine sampling scales returns are typically strongly
+leptokurtic, while their distribution tends toward Gaussianity as returns
+are summed over longer horizons \citep{cont2001empirical}.
+The trajectory of this convergence contains information that a marginal
+comparison at a single scale cannot capture: two processes may share a
+one-period distribution yet aggregate differently because of differences
+in their temporal dependence.
+
+The feature map aggregates one-minute log returns into non-overlapping
+$h$-minute blocks by summation, for each horizon $h$ in a set
+$\mathcal{H}$ that includes the base scale $h=1$.
+Aggregation is confined within trading sessions, so no aggregated return
+spans an overnight boundary, and blocks containing missing observations
+are discarded rather than partially summed.
+\edited{All horizons are evaluated on the same contiguous within-session
+support, so that the aggregation curve does not confound changes in scale
+with changes in the time of day sampled.
+For the horizons
+$\mathcal{H}=\{1,5,15,30\}$, a session with 390 price observations provides
+389 within-session return positions.
+The largest common support divisible
+by every horizon is therefore $30\lfloor389/30\rfloor=360$ positions.
+We anchor this segment at the session close, retaining the final 360
+return positions at every horizon.
+This fixes the intraday interval used
+for comparison and excludes the earlier return positions; the resulting
+feature therefore describes aggregation over this closing segment rather
+than the entire session.
+Sessions shorter than the required support are
+excluded from M3.
+Within the retained support, blocks containing missing
+observations remain excluded as described above.}
+
+Aggregated returns are pooled across assets and sessions, and the bias-corrected sample
+Pearson kurtosis $\hat{K}(h)=\hat{\kappa}(h)+3$ is computed at each scale, where $\hat{\kappa}(h)$ denotes sample excess kurtosis.
+
+The feature is the normalized aggregation curve
+$\hat{K}(h)/\hat{K}(1)$, which equals $1$ at the base scale and describes
+the relative evolution of kurtosis across aggregation horizons.
+Using Pearson rather than excess kurtosis avoids unstable normalization
+for approximately Gaussian processes, whose base-scale excess kurtosis
+may be close to zero.
+The distance is the mean absolute difference between the two curves over
+the scales at which both are defined:
+\begin{equation}
+g_3(\mathcal{A},\mathcal{B})
+= \frac{1}{\lvert\mathcal{H}'\rvert}
+\sum_{h\in\mathcal{H}'}
+\left\lvert
+\frac{\hat{K}_{\mathcal{A}}(h)}
+{\hat{K}_{\mathcal{A}}(1)}
+-
+\frac{\hat{K}_{\mathcal{B}}(h)}
+{\hat{K}_{\mathcal{B}}(1)}
+\right\rvert,
+\label{eq:m3}
+\end{equation}
+where $\mathcal{H}'\subseteq\mathcal{H}$ denotes the scales at which both
+curves are finite.
+Scales with too few valid aggregated observations are excluded rather
+than estimated, with the observation floor and configured scale set
+reported in Section~\ref{sec:experiments}.
+
+Classical kurtosis is used because it corresponds directly to the
+standard formulation of aggregational Gaussianity.
+Because sample kurtosis remains sensitive to extreme observations, the
+implementation also provides the quantile-based estimator of
+\citet{moors1988} as an optional robustness variant, although it is not
+used in the reported results.
+
+\paragraph{M4: Regime-conditional tail shape}
+The unconditional distribution compared by M1 averages over market
+conditions.
+For risk applications, however, it is also relevant whether the
+heaviness of return tails varies across volatility regimes in a
+realistic manner.
+M4 therefore compares the conditional tail-shape profile across
+relative volatility regimes.
+
+The feature map proceeds in three steps.
+First, for each asset, a strictly lagged volatility proxy
+$\hat{\sigma}_{i,t-1}$ is computed as the rolling standard deviation of
+prior returns over a trailing window.
+The calculation is restarted at every session boundary, so that neither
+the preceding session nor the current return $r_{i,t}$ can influence
+the regime assigned to that return.
+% >>> NEW (added for sensitivity analysis; defines min_frac, previously
+% >>> in Table 1 but undefined in text). Please review wording and
+% >>> verify the mechanism against the implementation --- the text
+% >>> asserts exclusion, not imputation. Remove  when approved.
+The trailing window is only partially populated near the start of
+each session.
+We retain a return only when the fraction of valid observations in its
+window meets a minimum coverage threshold, and exclude it otherwise,
+since a sparsely estimated proxy assigns regimes unreliably.
+The proxy is used only to label observations; returns are not
+standardized by it, since doing so would remove the conditional
+variation that the metric is intended to capture.
+
+Second, all valid volatility--return pairs are pooled across assets and
+partitioned into a set $\mathcal{Q}$ of volatility-regime quantile bins,
+with cut points computed separately from each panel.
+This self-labeling evaluates whether real and synthetic data exhibit
+similar tail behaviour across their respective relative volatility
+regimes, rather than evaluating synthetic observations against
+volatility levels defined by the real panel.
+
+Third, within each regime $q$, a Generalized Pareto Distribution is
+fitted by maximum likelihood, with location fixed at zero, to the
+excesses $|r|-u_q$ conditional on $|r|>u_q$, where $u_q$ is a high
+within-regime quantile \citep{mcneil2000estimation}.
+The feature vector contains the estimated tail-shape parameters
+$\hat{\xi}^{(q)}$ for $q\in\mathcal{Q}$.
+Because the threshold is defined separately within each regime and only
+the GPD shape parameter is retained, M4 compares conditional tail shape
+rather than regime-specific exceedance frequencies or absolute tail
+scales.
+Absolute returns are used because the metric targets conditional tail
+behaviour in magnitude; tail asymmetry is treated as a separate
+property.
+
+The distance is a weighted mean absolute difference between the two
+tail-shape profiles,
+
+\begin{equation}
+g_4(\mathcal{A},\mathcal{B})
+= \sum_{q\in\mathcal{Q}'}
+\tilde{w}_q
+\left|
+\hat{\xi}_{\mathcal{A}}^{(q)}
+-
+\hat{\xi}_{\mathcal{B}}^{(q)}
+\right|,
+\qquad
+\tilde{w}_q
+= \frac{w_q}
+{\sum_{j\in\mathcal{Q}'} w_j},
+\label{eq:m4}
+\end{equation}
+where larger weights are assigned to higher-volatility regimes because
+of their relevance for stress applications.
+The weights are renormalized over the set
+$\mathcal{Q}'\subseteq\mathcal{Q}$ of regimes for which both estimates
+are defined.
+A regime is excluded when it contains too few exceedances for stable
+tail-shape estimation.
+The exceedance floor, regime count, rolling-window length, minimum
+rolling-window coverage, threshold quantile, and regime weights are
+reported in Section~\ref{sec:experiments}.
+
+
+\subsection{Scoring Protocol}\label{sec:method_scoring}
+
+Raw gap values are difficult to interpret on their own because the metrics
+have different units and numerical scales.
+Moreover, independently estimated statistical signatures generally exhibit
+nonzero discrepancies in finite samples.
+We therefore compare each synthetic--real gap with an empirical real--real
+baseline computed from two ticker resamples of the observed real corpus under
+the same sampling protocol.
+This baseline quantifies disagreement induced by resampling the available
+corpus.
+
+For each metric $k$, we estimate two quantities through repeated ticker
+resampling.
+An \emph{evaluation draw} is one round of resampling; we run $R$ draws,
+indexed by $r=1,\ldots,R$.
+In draw $r$, we sample $n$ assets with replacement twice from the real
+panel, obtaining $\mathcal{R}_r^{(1)}$ and
+$\mathcal{R}_r^{(2)}$, and once from the synthetic panel, obtaining
+$\mathcal{S}_r$.
+The sample size $n$ is fixed across draws and satisfies $n\leq N$.
+Averaging over draws gives the \emph{real--real baseline gap} and the
+\emph{synthetic--real gap},
+\begin{equation}
+  \bar{g}^{\,rr}_k
+  = \frac{1}{R} \sum_{r=1}^{R}
+    g_k\bigl(\mathcal{R}_r^{(1)}, \mathcal{R}_r^{(2)}\bigr),
+  \qquad
+  \bar{g}^{\,sr}_k
+  = \frac{1}{R} \sum_{r=1}^{R}
+    g_k\bigl(\mathcal{R}_r^{(1)}, \mathcal{S}_r\bigr).
+  \label{eq:gaps}
+\end{equation}
+The first real sample $\mathcal{R}_r^{(1)}$ appears in both gaps, inducing correlation between the real–real and synthetic–real distances within each draw.
+Sharing this reference sample reduces the Monte Carlo variability of their comparison. The $R$ matched draws provide Monte Carlo estimates of the average gaps induced by the resampling protocol, conditional on the observed real and synthetic panels.
+Because sampling is performed with replacement, the two real samples may overlap.
+These inner draws do not themselves quantify how the score would vary under a different ticker corpus; corpus-level uncertainty is estimated through the outer bootstrap described in Section~\ref{sec:method_ci}.
+
+The similarity score for metric $k$ is
+\begin{equation}
+  s_k
+  = \frac{\bar{g}^{\,rr}_k}{\bar{g}^{\,rr}_k + \bar{g}^{\,sr}_k}
+  \in [0, 1].
+  \label{eq:score}
+\end{equation}
+If both estimated gaps are exactly zero, the ratio is undefined and the
+implementation returns $s_k=0.5$ by convention, reflecting equality of the
+two estimated gaps.
+
+The matched design---the same ticker-sample size $n$ in every
+comparison---is essential.
+Gap values fall as sample size grows, because larger samples estimate
+each feature more precisely.
+A baseline computed at a larger $n$ than the synthetic comparison would
+therefore be too small, and the score would be biased downward; the
+reverse holds for a smaller $n$.
+Matching controls this sample-size effect by placing the real–real and synthetic–real gaps on the same finite-sample scale. It does not remove other sources of sampling or corpus variability.
+
+The score is centred at $s_k=0.5$ in the algebraic sense that
+$\bar g_k^{sr}=\bar g_k^{rr}$ if and only if $s_k=0.5$.
+When $\bar g_k^{sr}>\bar g_k^{rr}$, the score falls below 0.5, indicating
+that the synthetic--real discrepancy exceeds the empirical real-corpus
+resampling gap.
+When $\bar g_k^{sr}<\bar g_k^{rr}$, the score rises above 0.5, indicating
+that the synthetic--real discrepancy is smaller than that resampling gap.
+
+These comparisons are relative to the observed ticker corpus and the chosen
+sampling protocol.
+A value near 0.5 does not establish that the generator reproduces the
+underlying real process or even that the extracted feature distributions are
+equivalent.
+Likewise, a value above 0.5 is not necessarily preferable: it may reflect
+close agreement, but it may also arise from over-smoothing, reduced
+cross-sectional variability, or other generator deficiencies.
+The score should therefore be interpreted as a relative gap comparison,
+rather than as a grade to be maximized, and should be considered together
+with the underlying feature estimates and the remaining metrics.
+
+\subsection{Outer-bootstrap confidence intervals}\label{sec:method_ci}
+
+We quantify uncertainty with respect to ticker-corpus composition using an outer bootstrap. Let $X^R$ denote the preprocessed real panel with $N_R$ ticker columns, and let $X^{S,j}$ denote the corresponding preprocessed panel for generator $j$, with $N_{S,j}$ synthetic paths.
+
+For each outer replicate $o=1,\ldots,O$, we sample $N_R$ real ticker columns with replacement from $X^R$ and independently sample $N_{S,j}$ synthetic columns with replacement from each $X^{S,j}$.
+The same outer-resampled real panel is used for every metric and generator within a replicate.
+On each resulting pair of outer-resampled corpora, we rerun the complete $R$-draw matched estimator of Section~\ref{sec:method_scoring} and obtain one score $s_k^{*(o)}$ for every metric–generator pair.
+
+The reported 95\% confidence interval is the 2.5th–97.5th percentile range of the $O$ outer-bootstrap scores. The point estimate is computed separately on the original observed panels. Consequently, the point estimate is not mathematically required to lie inside the percentile interval.
+
+The outer bootstrap is applied to the already preprocessed return panels. The resulting intervals therefore quantify sensitivity to ticker-corpus composition conditional on the observed time window, the preprocessing transformations estimated from the original panels, the fitted generators, and the available generated samples. They do not include uncertainty from refitting or retraining the generators.
+
+Separately, we assess numerical stability by repeating the fixed-corpus matched estimator under independent inner-resampling seeds. The resulting standard deviation and range measure Monte Carlo sensitivity and are not interpreted as confidence intervals.
+
+\subsection{Aggregate deviation score}\label{sec:method_aggregate}
+
+The per-metric scores $s_1,\ldots,s_K$ are the framework's primary output,
+because they identify the financial properties for which a generator exhibits
+larger or smaller discrepancies.
+For applications requiring a single summary, we additionally define an
+optional aggregate deviation score.
+
+For metric $k$, let
+\[
+    r_k = \frac{\bar g_k^{sr}}{\bar g_k^{rr}}
+\]
+denote the synthetic--real gap relative to the empirical real-corpus
+resampling gap.
+The ratio $r_k=1$ indicates equality of the two estimated gaps, whereas
+$r_k>1$ and $r_k<1$ indicate deviations in opposite directions.
+Because both directions represent departure from the reference value, we
+define the symmetric metric-specific deviation
+\[
+    d_k
+    =
+    \exp\!\left(\left|\log r_k\right|\right)
+    =
+    \max\left(r_k,\frac{1}{r_k}\right)
+    \geq 1.
+\]
+
+The aggregate deviation score is the geometric mean of these symmetric
+deviations,
+\[
+    G_{\mathrm{dev}}
+    =
+    \left(\prod_{k=1}^{K}d_k\right)^{1/K}
+    =
+    \exp\!\left(
+        \frac{1}{K}\sum_{k=1}^{K}\left|\log r_k\right|
+    \right).
+\]
+It is computed in log space for numerical stability and is defined when all
+metric-specific ratios are finite and strictly positive.
+
+The value $G_{\mathrm{dev}}=1$ is obtained only when every included
+metric has $r_k=1$.
+Larger values indicate a greater average multiplicative deviation from the
+empirical real-corpus reference, regardless of direction.
+Unlike the geometric mean of the signed ratios, deviations above and below
+one cannot cancel.
+
+The aggregate remains secondary to the per-metric results.
+It discards both the identity of the metric responsible for a discrepancy
+and whether the corresponding ratio lies above or below one.
+It must therefore be reported alongside the individual scores and gap ratios,
+rather than as a standalone assessment of generator fidelity.
+
+Uncertainty for $G_{\mathrm{dev}}$ is obtained directly from the outer
+bootstrap.
+Within each outer replicate, all metric-specific ratios are recomputed and
+combined using the equation above.
+The reported interval is the 2.5th--97.5th percentile range of the resulting
+outer-bootstrap aggregate values; no additional bootstrap over the inner
+evaluation draws is performed.

@@ -1,8 +1,9 @@
 # Frozen sensitivity grid
 
-Status update, 17 October 2026: the five-seed analysis is running with the exact
-run #4 panels. Completion and validation are pending. No sensitivity results
-are claimed here.
+Status update: the current 19-specification grid has completed for seeds
+42, 1, 2, 3 and 4, with all four generators and all five input hashes recorded.
+See [validated sensitivity results](../results/sensitivity/README.md).
+The settings below are unchanged; the analysis remains exploratory.
 
 Source of truth: [grid.py](../fineval/scripts/sensitivity/grid.py), as recorded
 in execution commit `b9f404c`. The grid contains 19 specifications: the primary
@@ -85,7 +86,7 @@ For one seed, run from the repository root:
 ```bash
 uv run --frozen python -m scripts.reproduce sensitivity -- \
     --fast --n-resamples 100 --tickers-per-draw 200 \
-    --seed 42 --n-jobs 4 --run-dir results/sensitivity/seed_42 \
+    --seed 42 --n-jobs 4 --run-dir results/sensitivity_reproduction/seed_42 \
     --primary-reference results/run4/metric_summary.csv
 ```
 

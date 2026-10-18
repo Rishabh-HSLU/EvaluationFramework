@@ -5,3 +5,6 @@ docs/panel_digests.txt text eol=lf
 # Preserve figure binary bytes and their recorded digests.
 *.pdf -text
 *.png -text
+
+# Preserve the bundled publisher class/style as supplied.
+manuscript/elsarticle* -whitespace

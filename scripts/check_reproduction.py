@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import statistics
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -211,6 +212,157 @@ def verify_point_reference(directory: Path) -> dict:
     return {"reference_files_verified": 3, "reference_scope": "point_estimates_only"}
 
 
+def verify_sensitivity(directory: Path) -> dict:
+    """Check the published grid without reading panels or changing its files."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from scripts.finalize_sensitivity import validate_and_summarize
+
+    manifest = json.loads((directory / "reference_checksums.json").read_text())["files"]
+    for name, wanted in manifest.items():
+        if hashlib.sha256((directory / name).read_bytes()).hexdigest() != wanted:
+            raise ValueError(f"Sensitivity reference file digest mismatch: {name}")
+    calculated = validate_and_summarize(directory, write=False)
+    expected_inputs = json.loads((ROOT / "results/run4/provenance/panel_digests.json").read_text())
+    expected_inputs = {Path(name).name: value for name, value in expected_inputs.items()}
+    if calculated["input_sha256"] != expected_inputs:
+        raise ValueError("Sensitivity inputs differ from the original run #4 panels")
+    if calculated != json.loads((directory / "validation.json").read_text()):
+        raise ValueError("Sensitivity validation report disagrees with the seed records")
+    metrics = read_csv(directory / "metric_results.csv")
+    aggregates = read_csv(directory / "aggregate_results.csv")
+    for filename, combined, identifiers in [
+        ("sweep_metric_results.csv", metrics, ("seed", "spec_id", "metric", "generator")),
+        ("sweep_aggregate_results.csv", aggregates, ("seed", "spec_id", "generator")),
+    ]:
+        original = [
+            row
+            for seed in calculated["seeds"]
+            for row in read_csv(directory / f"seed_{seed}" / filename)
+        ]
+        if not compare_tables(original, combined, identifiers, 2e-12, 2e-14)["passed"]:
+            raise ValueError(f"Combined sensitivity table disagrees with seed records: {filename}")
+    primary = [row for row in metrics if row["spec_id"] == "primary" and row["seed"] == "42"]
+    columns = (
+        "metric",
+        "generator",
+        "score",
+        "g_rr_mean",
+        "g_sr_mean",
+        "n_valid_draws",
+        "n_total_draws",
+    )
+    reference = [
+        {k: row[k] for k in columns} for row in read_csv(directory / "primary_reference.csv")
+    ]
+    if not compare_tables(reference, primary, ("metric", "generator"), 1e-10, 1e-12)["passed"]:
+        raise ValueError("Sensitivity seed-42 primary does not match run #4")
+    base_m = keyed(
+        [row for row in metrics if row["spec_id"] == "primary"], ("seed", "metric", "generator")
+    )
+    base_a = keyed(
+        [row for row in aggregates if row["spec_id"] == "primary"], ("seed", "generator")
+    )
+    expected_m, expected_a = [], []
+    groups_m, groups_a = {}, {}
+    for row in metrics:
+        delta = float(row["score"]) - float(
+            base_m[(row["seed"], row["metric"], row["generator"])]["score"]
+        )
+        if not close(delta, row["delta_score"]):
+            raise ValueError("Sensitivity score change disagrees with paired primary")
+        groups_m.setdefault((row["spec_id"], row["metric"], row["generator"]), []).append(
+            (float(row["score"]), delta)
+        )
+    for (spec, metric, generator), values in groups_m.items():
+        scores, deltas = zip(*values, strict=True)
+        expected_m.append(
+            dict(
+                spec_id=spec,
+                metric=metric,
+                generator=generator,
+                mean_score=statistics.mean(scores),
+                seed_sd=statistics.stdev(scores),
+                min_score=min(scores),
+                max_score=max(scores),
+                mean_delta=statistics.mean(deltas),
+                min_delta=min(deltas),
+                max_delta=max(deltas),
+            )
+        )
+    for row in aggregates:
+        percent = 100 * (
+            float(row["G_dev"]) / float(base_a[(row["seed"], row["generator"])]["G_dev"]) - 1
+        )
+        if not close(percent, row["relative_change_percent"]):
+            raise ValueError("Sensitivity aggregate change disagrees with paired primary")
+        groups_a.setdefault((row["spec_id"], row["generator"]), []).append(
+            (float(row["G_dev"]), percent)
+        )
+    for (spec, generator), values in groups_a.items():
+        scores, percentages = zip(*values, strict=True)
+        expected_a.append(
+            dict(
+                spec_id=spec,
+                generator=generator,
+                mean_G_dev=statistics.mean(scores),
+                seed_sd=statistics.stdev(scores),
+                min_G_dev=min(scores),
+                max_G_dev=max(scores),
+                mean_percent_change=statistics.mean(percentages),
+            )
+        )
+    for expected, filename, identifiers in [
+        (expected_m, "metric_seed_summary.csv", ("spec_id", "metric", "generator")),
+        (expected_a, "aggregate_seed_summary.csv", ("spec_id", "generator")),
+    ]:
+        if not compare_tables(expected, read_csv(directory / filename), identifiers, 2e-12, 2e-14)[
+            "passed"
+        ]:
+            raise ValueError(f"Sensitivity seed summary disagrees with raw scores: {filename}")
+    for entry in read_csv(directory / "effect_ranges.csv"):
+        source = metrics if entry["quantity"] in {"M1", "M4"} else aggregates
+        column = "delta_score" if source is metrics else "relative_change_percent"
+        changes = [
+            float(row[column])
+            for row in source
+            if row["generator"] == entry["generator"]
+            and row["spec_id"] != "primary"
+            and (source is aggregates or row["metric"] == entry["quantity"])
+        ]
+        if not close(min(changes), entry["min_change"]) or not close(
+            max(changes), entry["max_change"]
+        ):
+            raise ValueError("Sensitivity effect range disagrees with paired changes")
+    number_index = read_csv(directory / "paper_number_map.csv")
+    for entry in number_index:
+        path = directory / entry["source_file"]
+        if path.suffix == ".csv":
+            selectors = json.loads(entry["source_key"])
+            rows = [
+                row for row in read_csv(path) if all(row[k] == str(v) for k, v in selectors.items())
+            ]
+            if len(rows) != 1:
+                raise ValueError("Ambiguous sensitivity paper number")
+            value = float(rows[0][entry["source_column"]])
+        else:
+            value = json.loads(path.read_text())
+            for part in entry["source_pointer"].split("."):
+                value = value[int(part)] if isinstance(value, list) else value[part]
+        if not close(value, json.loads(entry["exact_value"])):
+            raise ValueError("Sensitivity paper source value mismatch")
+        if entry["display"] != f"{float(value):.{int(entry['decimal_places'])}f}":
+            raise ValueError("Sensitivity paper rounding mismatch")
+    return {
+        "reference_files_verified": len(manifest),
+        "metric_rows_verified": len(metrics),
+        "aggregate_rows_verified": len(aggregates),
+        "paper_number_entries_verified": len(number_index),
+        "ordering_changes": calculated["ordering_changes"],
+        "point_reference_crossings": calculated["point_reference_crossings"],
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference-dir", type=Path, default=ROOT / "results/run4")
@@ -221,6 +373,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Compare point scores, gaps and coverage only; omit outer/seed summaries",
     )
+    parser.add_argument(
+        "--sensitivity",
+        action="store_true",
+        help="Also verify the saved five-seed sensitivity reference",
+    )
+    parser.add_argument("--sensitivity-dir", type=Path, default=ROOT / "results/sensitivity")
     parser.add_argument("--rtol", type=float, default=1e-10)
     parser.add_argument("--atol", type=float, default=1e-12)
     args = parser.parse_args(argv)
@@ -295,6 +453,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             report["passed"] = True
+        if args.sensitivity:
+            report["sensitivity"] = verify_sensitivity(args.sensitivity_dir)
         print(json.dumps(report, indent=2))
         return 0 if report["passed"] else 1
     except (ValueError, KeyError, OSError) as exc:

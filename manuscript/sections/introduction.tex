@@ -1,0 +1,45 @@
+\section{Introduction}\label{sec:introduction}
+
+Synthetic financial time series are increasingly studied for applications including portfolio optimisation and volatility forecasting \citep{hounwanou2025evaluating}, as well as the evaluation of trading strategies under alternative simulated paths \citep{zhang2026sfag}.
+The reliability of these applications depends on whether generated series preserve the statistical structures that govern financial risk and market dynamics.
+Financial returns exhibit persistent empirical regularities, commonly referred to as stylized facts, including heavy-tailed marginal distributions, volatility clustering, and aggregational Gaussianity \citep{cont2001empirical}.
+In particular, the autocorrelation of absolute returns can remain positive over long lags, providing a quantitative signature of volatility persistence \citep{ding1993long}.
+A generator that reproduces one of these properties while distorting another may produce plausible-looking data but still yield misleading conclusions in downstream financial analyses.
+
+Evaluating this fidelity remains difficult.
+Existing approaches commonly assess whether synthetic observations can be distinguished from real ones \citep{yoon2019timegan}, whether predictive models trained on synthetic data transfer to real data \citep{esteban2017realvalued}, or whether the real and synthetic samples are close under a global distributional distance \citep{gretton2012kernel}.
+These approaches provide useful overall assessments of realism or utility, but they generally do not identify which financially relevant structures are preserved or distorted.
+Finance-specific evaluations instead commonly report whether generated series recover selected stylized facts, such as heavy tails, volatility clustering, leverage effects, or gain/loss asymmetry \citep{takahashi2019modeling, tanaka2025cofindiff}.
+Although such checks are financially meaningful, demonstrating that a property is present does not by itself establish whether its magnitude, persistence, or conditional structure matches that of the real data.
+
+This limitation is particularly important because recent generators increasingly incorporate financial properties directly into their training objectives.
+\citet{zhang2026sfag}, for example, formulate differentiable losses that encourage generated series to reproduce selected stylized facts.
+When a property has been explicitly optimized during training, merely confirming its presence provides limited independent evidence of fidelity.
+Evaluation must instead determine how closely the magnitude, persistence, and conditional structure of the generated property match those of real data.
+More generally, recent work has documented specific failure modes of generative-data metrics and advocated targeted sanity checks for determining whether a metric detects known deficiencies \citep{raisa2025position}.
+
+To address this need, we propose a diagnostic framework for evaluating synthetic financial return panels.
+Rather than reducing fidelity to a single global measure, the framework evaluates four financially relevant properties separately: the tail-weighted marginal distribution, long-lag volatility clustering, aggregational Gaussianity, and regime-conditional tail shape.
+Each synthetic--real discrepancy is calibrated against the disagreement between matched real-data subsamples, providing a common reference for interpreting otherwise heterogeneous metrics.
+The resulting profile identifies which structures a generator preserves and where it departs from real financial data.
+
+% RUN4-VERIFIED-INTRODUCTION: only AIL M4 includes 0.5.
+{\color{red}{\color{black}
+We apply the framework to one-minute returns from 600 U.S.-listed
+equities and compare geometric Brownian motion, multi-scale stochastic
+volatility, AIL, and Schr\"odinger--Bass Bridge for Time Series (SBBTS).}
+The results distinguish their statistical profiles: AIL's marginal
+distribution, volatility-clustering, and aggregational-Gaussianity
+intervals fall below the empirical reference of 0.5, while its
+regime-conditional-tail interval includes it.
+The comparison uses 200 outer ticker-corpus replicates, with a separate
+20-seed analysis of numerical stability on the fixed observed panels.
+An exploratory 19-specification analysis over five paired seeds further
+examines sensitivity to the selected M1 and M4 parameters; the observed
+orderings are retained across these alternatives.
+{\color{black}SBBTS improves on both controls for the latter two properties but remains
+close to GBM on the first two.}
+{\color{black}The main contribution is therefore a financially interpretable evaluation
+protocol that localizes discrepancies relative to the variability observed
+within real data.
+}}

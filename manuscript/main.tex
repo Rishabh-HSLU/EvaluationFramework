@@ -1,0 +1,101 @@
+\documentclass[preprint,12pt,authoryear]{elsarticle}
+
+% --- Math ---
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+
+% --- Typography ---
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+% --- Figures and Tables ---
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{float}
+
+% --- Acronyms ---
+\usepackage{acro}
+\DeclareAcronym{mmd}{
+  short = MMD,
+  long  = Maximum Mean Discrepancy
+}
+\DeclareAcronym{tstr}{
+  short = TSTR,
+  long  = Train on Synthetic{,} Test on Real
+}
+\DeclareAcronym{garch}{short = GARCH, long = Generalized Autoregressive Conditional Heteroscedasticity}
+\DeclareAcronym{gpd}{short = GPD, long = Generalized Pareto Distribution}
+\DeclareAcronym{acf}{short = ACF, long = Autocorrelation Function}
+\DeclareAcronym{fff}{short = FFF, long = Flexible Fourier Form}
+
+
+% --- Hyperlinks ---
+\usepackage[colorlinks=true,citecolor=blue,linkcolor=blue,urlcolor=blue]{hyperref}
+\makeatletter
+\pdfstringdefDisableCommands{%
+  \def\corref#1{}%
+  \def\cnotenum#1{}%
+  \def\@corref#1{}%
+}
+\makeatother
+
+% --- Misc ---
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+% --- Custom commands ---
+\newcommand{\grr}{\bar{g}_{\mathrm{rr}}}
+\newcommand{\gsr}{\bar{g}_{\mathrm{sr}}}
+\newcommand{\Sb}{s_b}
+\newcommand{\abs}[1]{\lvert #1 \rvert}
+\newcommand{\norm}[1]{\lVert #1 \rVert}
+\DeclareMathOperator{\ACF}{ACF}
+\DeclareMathOperator{\Cov}{Cov}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\CVaR}{CVaR}
+\DeclareMathOperator{\VaR}{VaR}
+
+%% --- Review markup: remove wrapper once approved ---
+\newcommand{\edited}[1]{\textcolor{red}{#1}}
+% --- Review markup: remove wrappers once approved ---
+\newcommand{\tbd}[1]{\textcolor{red}{\textbf{[#1]}}}
+
+\journal{Journal of Finance and Data Science}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{An Evaluation Framework for Benchmarking Synthetic Financial Time Series Generators}
+
+\author[1]{Rishabh Yadav}\corref{cor1}
+\cortext[cor1]{Correspondence: rishabhmandirian@outlook.com}
+\author[2]{Daniele Marmiroli}
+\author[2]{Ragnar Ragnars}
+\author[1]{Ludovic Amruthalingam}
+
+
+\address[1]{Lucerne University of Applied Sciences and Arts, Rotkreuz, Switzerland}
+\address[2]{Ahead Innovation Labs, Schindellegi, Switzerland}
+
+\input{sections/abstract}
+\end{frontmatter}
+
+
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/method}
+\input{sections/experiments}
+\input{sections/discussion}
+\input{sections/conclusion}
+\clearpage
+\input{sections/appendix}
+\clearpage
+
+\bibliographystyle{elsarticle-harv}
+\bibliography{references}
+
+\end{document}

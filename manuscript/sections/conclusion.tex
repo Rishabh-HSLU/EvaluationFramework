@@ -1,0 +1,30 @@
+\section{Conclusion}\label{sec:conclusion}
+
+{\color{red}
+We introduced a diagnostic framework for comparing synthetic financial
+return panels through four stylized facts.
+Matched real--real and synthetic--real discrepancies provide a common
+relative reference, while an outer ticker-corpus bootstrap and
+independent inner-seed repeats distinguish corpus variation from
+numerical variation.
+The one-minute equity comparison identifies different strengths and
+deficiencies across the four generators.
+AIL has the smallest aggregate deviation and the highest scores on
+the marginal distribution, aggregational Gaussianity, and conditional
+tails, while MSV has the highest volatility-clustering score.
+Only AIL's conditional-tail interval includes real--real gap parity;
+this does not establish equivalence.
+SBBTS improves on both controls for aggregational Gaussianity and
+conditional tails but remains close to GBM on the other two properties.
+The leading generator for each metric and the aggregate ordering
+remain unchanged across 20 inner-resampling seeds.
+The framework therefore complements aggregate assessments with an
+interpretable account of where synthetic panels depart from observed
+financial data.
+The results constitute an in-sample empirical fidelity assessment of
+fixed generator outputs over the full historical window, including the
+SBBTS early-stopping overlap. The completed 19-specification analysis over
+five paired seeds preserves the observed M1, M4 and aggregate orderings
+within the tested ranges. Independent-period evaluation, repeated generator
+fits and sensitivity to broader structural choices remain necessary extensions.
+}

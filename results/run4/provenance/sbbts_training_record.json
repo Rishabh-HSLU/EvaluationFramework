@@ -1,0 +1,13 @@
+{
+  "source_log": "data/sbbts/training_log.csv",
+  "source_log_sha256": "2a4b98bc5e8a1ace3f87238be1fa7c427a011f90d29896831ca6e600a40eec32",
+  "training_text_log_sha256": "49b85d5f2f1a92396089fe7ea47506c7166f98ef1c4d1fcb954d90cd58f318c5",
+  "epoch_indexing": "The source uses zero-based outer_iter and epoch; one-based values are also provided.",
+  "validation_dates": [
+    "2020-02-12",
+    "2020-03-20"
+  ],
+  "selection": "Early stopping selects an epoch within each of five outer iterations. The described protocol uses the final outer iteration rather than selecting the smallest loss across iterations.",
+  "comparability": "Frozen-transform regression targets and validation noise differ across outer iterations. Raw minima are not a common cross-iteration selection criterion.",
+  "historical_panel_mapping": "The original panel-to-checkpoint generation manifest is unavailable. This training log documents the training record, not a proven exact regeneration recipe for the historical panel."
+}
