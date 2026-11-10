@@ -2,7 +2,7 @@
   "scope": "In-sample full-panel empirical fidelity; descriptive features, not matched-bootstrap scores or confidence intervals",
   "randomness": "No sampling, no random seed, no retraining",
   "panels": {
-    "data/curated/ail_prices.parquet": "976c3a93b25e47af2742eaa5d3457ffc4aac9062cba0e74c397d6c59f434d751",
+    "data/curated/indigo_prices.parquet": "976c3a93b25e47af2742eaa5d3457ffc4aac9062cba0e74c397d6c59f434d751",
     "data/curated/gbm_prices.parquet": "9f48b5e81640f267ea9db585d2f686ac92e0a4f6c0cabc7c234eadadf8c31a9f",
     "data/curated/msv_prices.parquet": "4ec0063024442a0680ae598bf7480704b937c50351656dc28c064fa4a9f73f84",
     "data/curated/real_prices.parquet": "044336d7ad4b552a1eb469018f936b776e8ff1da32656acf0348f0049921bec9",
@@ -115,7 +115,7 @@
       "m3_common_support": 360,
       "m3_eligible_sessions": 137
     },
-    "AIL": {
+    "InDiGO": {
       "timestamps": 53850,
       "tickers": 600,
       "sessions": 139,
@@ -167,6 +167,6 @@
     "m4_tail_fraction": 0.05,
     "m4_min_exceedances": 500
   },
-  "rendering_source_sha256": "95ba0f36fdfae1c81854c9c9aa5d87cd57686d092057ed1b98b067770ffa68b4",
+  "rendering_source_sha256": "756684daefde22a9054336473e0d9797751b06c172e0b0bb0476f5b275f628f3",
   "rendering_matplotlib_version": "3.10.9"
 }

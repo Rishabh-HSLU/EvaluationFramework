@@ -22,7 +22,7 @@ from fineval.scripts.sensitivity.grid import GRID
 from fineval.scripts.sensitivity.persistence import atomic_json, file_digest
 
 SEEDS = (42, 1, 2, 3, 4)
-GENERATORS = ("AIL", "GBM", "MSV", "SBBTS")
+GENERATORS = ("InDiGO", "GBM", "MSV", "SBBTS")
 
 
 def validate_and_summarize(directory: Path, *, write: bool = True) -> dict:
@@ -191,7 +191,7 @@ def validate_and_summarize(directory: Path, *, write: bool = True) -> dict:
         "demonstrate sensitivity robustness for their own unvaried parameters.",
         "",
         "The analysis is exploratory. It documents the effects of the frozen choices",
-        "without removing their AIL-informed selection history or testing all interactions.",
+        "without removing their InDiGO-informed selection history or testing all interactions.",
     ]
     if write:
         (directory / "summary.md").write_text("\n".join(lines) + "\n")
@@ -262,7 +262,7 @@ def update_manuscript(directory: Path, workspace: Path, report: dict) -> None:
     section = r"""% SENSITIVITY-VALIDATED: fixed 19-specification grid, five paired seeds.
 \subsection{\edited{Sensitivity analysis}}\label{sec:sensitivity}
 {\color{red}
-Several metric parameters were selected during development with AIL outputs
+Several metric parameters were selected during development with InDiGO outputs
 visible. We therefore evaluate the frozen 19-specification grid on the same
 four generators and fixed panels, using 100 matched draws and 200 tickers
 per draw under each of five root seeds (42, 1, 2, 3, and 4).
@@ -289,7 +289,7 @@ M2 and M3 parameters are held fixed, so their unchanged scores do not
 demonstrate robustness to changes in those parameters.
 The grid measures sensitivity within its specified ranges and selected
 interactions. It does not establish robustness to every structural choice,
-including the volatility-proxy family, or undo the AIL-informed selection
+including the volatility-proxy family, or undo the InDiGO-informed selection
 history. The primary specification is retained independently of these outcomes.
 }
 """
@@ -340,7 +340,7 @@ same-seed primary. Lower aggregate deviation indicates closer gap parity.}}
     text = (
         text[:start]
         + (
-            "Some metric parameters were chosen during development with AIL\n"
+            "Some metric parameters were chosen during development with InDiGO\n"
             "outputs visible. The sensitivity analysis documents how scores and\n"
             "orderings respond to the frozen alternatives; its numerical results\n"
             "do not remove that selection history. The examined ranges and three\n"

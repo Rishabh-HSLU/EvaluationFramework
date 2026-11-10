@@ -73,7 +73,7 @@ the two tested x86_64 machines. Options after `--` go to the selected script.
 ### 1. Download the raw market data
 
 The canonical experiment downloads the 948-ticker overlap with the supplied
-AIL dataset, using Alpaca's SIP feed, 1-minute bars, and split adjustment. The
+InDiGO dataset, using Alpaca's SIP feed, 1-minute bars, and split adjustment. The
 requested period is September 3, 2019 to March 20, 2020. Your Alpaca account
 must have access to these historical SIP bars.
 
@@ -104,22 +104,26 @@ A fresh provider download can differ from an earlier snapshot because of
 market-data revisions. Preserve the raw inputs and compare their provenance
 and curated outputs before claiming an exact reproduction.
 
-### 2. Supply the AIL input and curate the datasets
+### 2. Supply the InDiGO input and curate the datasets
 
-Obtain the original AIL input parquet from the study authors and place it at:
+The InDiGO core model was previously labeled AIL. Original archives using
+`ail_prices.parquet` or `data/ail_synthetic_data/` remain supported. The name
+change preserves panel bytes, numerical results, and the original random streams.
+
+Obtain the original InDiGO input parquet from the study authors and place it at:
 
 ```text
-data/ail_synthetic_data/dataset_US_1-10B_2019-09-2020-03.parquet
+data/indigo_synthetic_data/dataset_US_1-10B_2019-09-2020-03.parquet
 ```
 
-This external input is not included in Git. It is the input to AIL curation,
-not the smaller curated AIL panel. Reproducing AIL model training is a separate
+This external input is not included in Git. It is the input to InDiGO curation,
+not the smaller curated InDiGO panel. Reproducing InDiGO model training is a separate
 workflow; the benchmark workflow starts from this supplied input. No public
 download link is currently provided in this repository.
 
 Loaders normalize each raw source into the common wide-format contract. The
 curation pipeline aligns all datasets to the NYSE 1-minute market clock and
-writes `data/curated/real_prices.parquet`, `ail_prices.parquet`, and
+writes `data/curated/real_prices.parquet`, `indigo_prices.parquet`, and
 `curation_metadata.json`. The study snapshot retains 600 real tickers from
 the 948-ticker overlap; check the actual retained universe after downloading
 and curating fresh data. Both raw input paths are resolved from the repository
@@ -310,12 +314,12 @@ hashes once before running the evaluation.
 
 To rebuild the inputs independently, clone the same source revision, install
 from `uv.lock`, and follow the data and generation steps above. Supply the
-external AIL input. Record the source revision, environment, raw-input hashes,
+external InDiGO input. Record the source revision, environment, raw-input hashes,
 curation metadata, training settings and output panel hashes. Fresh provider
 data or generator retraining can produce different panels despite matching
 seeds.
 
-The tested cross-machine workflow reproduced the real, AIL, GBM and MSV panel
+The tested cross-machine workflow reproduced the real, InDiGO, GBM and MSV panel
 hashes. The full independent benchmark was stopped before completion; that
 check therefore does not establish independent reproduction of the final table.
 

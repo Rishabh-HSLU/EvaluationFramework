@@ -16,7 +16,7 @@
   "ticker_counts": {
     "real_raw": 948,
     "synthetic_raw": {
-      "AIL": 952
+      "InDiGO": 952
     },
     "intersection": 948,
     "final_universe": 600
@@ -29,7 +29,7 @@
       "max": 0.9989600742804086,
       "std": 0.1514711365733689
     },
-    "AIL": {
+    "InDiGO": {
       "mean": 0.7480385035788583,
       "median": 0.757205199628598,
       "min": 0.16787372330547817,
@@ -46,6 +46,6 @@
   },
   "source_file_sha256": {
     "Real": "28f3431e7cf4b5a6903c6a7c5ae5eae2efe7ad3cf693fab08e26d966ef9941a3",
-    "AIL": "2b9428226ac96ba4fe834554f5faf74f36e61f17824de8d7de05ee6360c5c7fc"
+    "InDiGO": "2b9428226ac96ba4fe834554f5faf74f36e61f17824de8d7de05ee6360c5c7fc"
   }
 }

@@ -1,15 +1,15 @@
 [16:38:12] Starting benchmark: B=100, m=200, seed=42, outer=200, MC repeats=20, requested workers=4. Planned matched draws: 22,000.
 [16:38:12] [1/8] Load curated datasets — /home/jovyan/EvaluationFramework/data/curated
 [16:38:13] Loaded Real: 53,850 timestamps × 600 paths in 0.6s.
-[16:38:13] Loaded AIL: 53,850 timestamps × 600 paths in 0.4s.
+[16:38:13] Loaded InDiGO: 53,850 timestamps × 600 paths in 0.4s.
 [16:38:14] Loaded GBM: 53,850 timestamps × 600 paths in 0.7s.
 [16:38:15] Loaded MSV: 53,850 timestamps × 600 paths in 0.6s.
 [16:38:15] Loaded SBBTS: 53,850 timestamps × 600 paths in 0.7s.
-[16:38:15] Generators: AIL, GBM, MSV, SBBTS.
+[16:38:15] Generators: InDiGO, GBM, MSV, SBBTS.
 [16:38:15] Dataset loading completed in 3.0s.
 [16:38:15] [2/8] Preprocess real-synthetic pairs — log returns, overnight mask and conditional FFF
-[16:38:15] Preprocessing Real vs AIL...
-[16:38:18] Preprocessed AIL: real=(53850, 600), synthetic=(53850, 600) in 2.6s.
+[16:38:15] Preprocessing Real vs InDiGO...
+[16:38:18] Preprocessed InDiGO: real=(53850, 600), synthetic=(53850, 600) in 2.6s.
 [16:38:18] Preprocessing Real vs GBM...
 [16:38:20] Preprocessed GBM: real=(53850, 600), synthetic=(53850, 600) in 1.8s.
 [16:38:20] Preprocessing Real vs MSV...

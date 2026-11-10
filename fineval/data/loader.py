@@ -18,7 +18,7 @@ class MarketDataset:
             be strings, values must be float64. NaN where no trade occurred.
 
         name : str
-            Human-readable label used in plots and reports (e.g. "Real", "AIL").
+            Human-readable label used in plots and reports (e.g. "Real", "InDiGO").
 
         is_synthetic : bool
             True for synthetic datasets, False for real market data.
@@ -51,7 +51,7 @@ class BaseLoader(ABC):
     Attributes:
 
         name: str
-            Label for Real or Synthetic market data (AIL, GBM, etc.)
+            Label for Real or Synthetic market data (InDiGO, GBM, etc.)
 
         is_synthetic: bool
             Specifies the object is Real or Synthetic

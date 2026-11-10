@@ -13,6 +13,7 @@ from fineval.data import (
     MSVBaselineLoader,
     SBBTSBaselineLoader,
 )
+from fineval.naming import resolve_indigo_path
 from fineval.preprocessing import PreprocessingPipeline
 
 from .config import CURATED_DIR
@@ -28,7 +29,7 @@ def load_default_datasets(progress_callback: Callable[[int], None]) -> tuple:
     """Load the curated Real panel and every available synthetic panel.
 
     Returns ``(real, synthetics)`` where ``synthetics`` is a list of
-    ``MarketDataset`` in the fixed order AIL, GBM, MSV, SBBTS. AIL, GBM and
+    ``MarketDataset`` in the fixed order InDiGO, GBM, MSV, SBBTS. InDiGO, GBM and
     MSV are required; SBBTS is included when ``sbbts_prices.parquet`` exists
     (it is produced by ``scripts.sbbts_generate`` from a trained checkpoint
     and is absent until then). Which generators were loaded is logged so a
@@ -41,8 +42,8 @@ def load_default_datasets(progress_callback: Callable[[int], None]) -> tuple:
             is_synthetic=False,
         ),
         CuratedParquetLoader(
-            parquet_path=str(CURATED_DIR / "ail_prices.parquet"),
-            name="AIL",
+            parquet_path=str(resolve_indigo_path(CURATED_DIR / "indigo_prices.parquet")),
+            name="InDiGO",
             is_synthetic=True,
         ),
         GBMBaselineLoader(parquet_path=str(CURATED_DIR / "gbm_prices.parquet")),

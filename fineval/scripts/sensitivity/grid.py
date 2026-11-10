@@ -55,7 +55,7 @@ METRIC_PARAM_KEYS = (
 
 #: Every key a spec carries. ``min_frac`` is a grid-level dial rather than a
 #: metric argument: the metric takes ``min_periods``, but the parameter whose
-#: provenance is AIL-informed is the *coefficient* that produces it, so the
+#: provenance is InDiGO-informed is the *coefficient* that produces it, so the
 #: coefficient is what a spec has to be able to vary.
 PARAM_KEYS = (*METRIC_PARAM_KEYS, "min_frac")
 
@@ -181,9 +181,9 @@ GRID: tuple[Spec, ...] = (
     _spec("tail_fraction", 0.025, "tail_fraction=0.025", tail_fraction=0.025),
     _spec("tail_fraction", 0.10, "tail_fraction=0.100", tail_fraction=0.10),
     # min_frac sweep: {1/3, 1/2*, 2/3} at window=60; min_periods follows.
-    # Item 2 — the coefficient chosen by two AIL-scored sweeps, previously
+    # Item 2 — the coefficient chosen by two InDiGO-scored sweeps, previously
     # pinned at 1/2 in every spec. 1/3 is the superseded optimum (mp=20) and
-    # 2/3 the runner-up the re-sweep rejected on AIL-coverage grounds (mp=40).
+    # 2/3 the runner-up the re-sweep rejected on InDiGO-coverage grounds (mp=40).
     _spec("min_frac", 1 / 3, "min_frac=0.333", min_frac=1 / 3, min_periods=20),
     _spec("min_frac", 2 / 3, "min_frac=0.667", min_frac=2 / 3, min_periods=40),
     # Item 3 — M1 corner. Both single-dial counterparts already exist

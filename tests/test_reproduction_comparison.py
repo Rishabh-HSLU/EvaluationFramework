@@ -14,8 +14,8 @@ REFERENCE = Path(__file__).resolve().parents[1] / "results/run4"
 
 def test_comparison_matches_identifiers_not_row_order():
     reference = [
-        {"metric": "M1", "generator": "AIL", "score": "0.34"},
-        {"metric": "M2", "generator": "AIL", "score": "0.21"},
+        {"metric": "M1", "generator": "InDiGO", "score": "0.34"},
+        {"metric": "M2", "generator": "InDiGO", "score": "0.21"},
     ]
     result = compare_tables(
         reference, list(reversed(reference)), ("metric", "generator"), 1e-10, 1e-12
@@ -24,8 +24,8 @@ def test_comparison_matches_identifiers_not_row_order():
 
 
 def test_small_roundoff_is_reported_but_material_difference_fails():
-    reference = [{"generator": "AIL", "score": "0.34", "n_valid_draws": "100"}]
-    actual = [{"generator": "AIL", "score": "0.34000000000001", "n_valid_draws": "100"}]
+    reference = [{"generator": "InDiGO", "score": "0.34", "n_valid_draws": "100"}]
+    actual = [{"generator": "InDiGO", "score": "0.34000000000001", "n_valid_draws": "100"}]
     result = compare_tables(reference, actual, ("generator",), 1e-10, 1e-12)
     assert result["passed"]
     assert result["max_absolute_numeric_difference"] > 0
@@ -37,7 +37,7 @@ def test_small_roundoff_is_reported_but_material_difference_fails():
 
 
 def test_missing_and_duplicate_cells_are_rejected():
-    reference = [{"generator": "AIL", "score": "0.34"}]
+    reference = [{"generator": "InDiGO", "score": "0.34"}]
     with pytest.raises(ValueError, match="identifier sets"):
         compare_tables(reference, [], ("generator",), 1e-10, 1e-12)
     with pytest.raises(ValueError, match="Duplicate"):

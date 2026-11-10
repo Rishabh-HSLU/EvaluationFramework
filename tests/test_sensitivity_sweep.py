@@ -38,7 +38,7 @@ def test_failed_specs_produce_a_failing_exit(monkeypatch, tmp_path) -> None:
         "preprocess_pairs",
         lambda *_args: (
             pd.DataFrame(),
-            {name: pd.DataFrame() for name in ("AIL", "GBM", "MSV", "SBBTS")},
+            {name: pd.DataFrame() for name in ("InDiGO", "GBM", "MSV", "SBBTS")},
         ),
     )
     monkeypatch.setattr(

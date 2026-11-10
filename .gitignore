@@ -82,3 +82,7 @@ htmlcov/
 
 # Manuscript source and review builds stay local.
 /manuscript/
+
+# Supplied manuscript statement source remains local.
+/statements.tex
+!/results/generator_naming.json

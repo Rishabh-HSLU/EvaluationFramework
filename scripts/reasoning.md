@@ -3,8 +3,8 @@
 ## Ticker Universe Curation
 
 **Summary.** We started this project with 948 real-data tickers and an
-AIL synthetic universe of 952. After curation, 600 tickers remain — the
-subset where both real and AIL have at least 70% non-missing data on
+InDiGO synthetic universe of 952. After curation, 600 tickers remain — the
+subset where both real and InDiGO have at least 70% non-missing data on
 the NYSE 1-minute market clock. This section explains how we got
 there, including an earlier curation framing we discarded once a
 deeper diagnostic showed it was solving the wrong problem.
@@ -41,12 +41,12 @@ curation initially existed to keep the bridge in its valid regime:
 filter out tickers whose longest missing run was too long.
 
 On the real-data side, this produced a clean 248-ticker universe:
-median missing fraction 1.7%, median longest gap 19 minutes. AIL
+median missing fraction 1.7%, median longest gap 19 minutes. InDiGO
 covered all 248. We thought the universe was locked.
 
 #### 2.2 The problem the diagnostic revealed
 
-Applying the same lens to AIL's gap structure broke the picture. AIL
+Applying the same lens to InDiGO's gap structure broke the picture. InDiGO
 had a mean missing fraction of 14.7% — roughly 7× higher than real —
 and 74 of the 248 tickers had longest gaps exceeding a full trading
 session, some up to 44 sessions long. "Apply the same Brownian Bridge
@@ -59,11 +59,11 @@ designed to detect departures from Gaussianity — fat tails, volatility
 clustering, kurtosis decay. Every minute we bridge injects a return
 drawn from exactly the distribution the metrics are meant to flag as
 unrealistic. Bridging 2% of real data and 15% of synthetic data
-silently pulls AIL's measured statistics toward the null hypothesis
+silently pulls InDiGO's measured statistics toward the null hypothesis
 the framework is trying to test against. Equal procedure turned out to
 mean unequal contamination.
 
-A deeper look explained where AIL's missingness comes from. The
+A deeper look explained where InDiGO's missingness comes from. The
 generator hard-caps at 50,000 rows per ticker and spends roughly 10%
 of those rows on timestamps outside NYSE regular session hours (mostly
 the hour after the closing bell). That accounts almost exactly for the
@@ -100,19 +100,19 @@ compute a return across absence — covers both.
 
 Dropping NaNs gives unbiased estimates only if missingness is
 unrelated to the value that would have been observed. The natural
-worry: maybe AIL fails to emit during turbulent minutes because
-they're harder to generate. If so, dropping AIL's NaNs would
+worry: maybe InDiGO fails to emit during turbulent minutes because
+they're harder to generate. If so, dropping InDiGO's NaNs would
 systematically remove its turbulent observations, making it look
 better at tail and clustering behavior than it actually is.
 
 We tested this by correlating daily missingness rates with a market
-volatility proxy. The result was clean: both real and AIL show
+volatility proxy. The result was clean: both real and InDiGO show
 *negative* correlation between missingness and volatility (−0.575 and
 −0.573), and missingness drops during the March 2020 crash on both
 sides. The hard minutes aren't being dropped — they're better
 observed. The likely mechanism is mundane: calm periods have less
 trading activity, so more no-print minutes; crisis periods see every
-minute trade. Real and AIL show nearly identical patterns, so whatever
+minute trade. Real and InDiGO show nearly identical patterns, so whatever
 drives the gaps affects both sides symmetrically. The
 missingness-not-at-random concern is resolved empirically.
 
@@ -164,7 +164,7 @@ estimation precision both remain favorable.
 | Step | Tickers |
 |---|---|
 | Raw real-data universe | 948 |
-| Raw AIL synthetic universe | 952 |
+| Raw InDiGO synthetic universe | 952 |
 | Intersection (present in both) | 948 |
 | After 70% joint-coverage floor | 600 |
 
@@ -198,7 +198,7 @@ both returns at `t` and `t+1` become NaN. A decomposition analysis
 confirmed this is not new information loss — the "extra" NaN at each
 gap boundary reflects the honest fact that a 1-minute return requires
 both `P_t` and `P_{t-1}` to exist. Real NaN fraction rises from 9.5%
-(prices) to 16.5% (returns); AIL from 18% to 30%. The valid returns
+(prices) to 16.5% (returns); InDiGO from 18% to 30%. The valid returns
 that survive are genuinely adjacent 1-minute price pairs with
 untouched temporal ordering and distributional shape.
 
@@ -224,9 +224,9 @@ expected variance profile across the session is flat. Dividing a flat
 series by a U-shaped real profile would synthetically suppress its
 open/close returns and inflate its midday returns: an artificial,
 inverted smile injected before the evaluation metrics ever see the
-data. Empirical checks confirmed AIL, by contrast, learns the real
-smile closely — open/mid variance ratio of 5.91 (AIL) vs. 5.98 (real),
-close/mid of 1.32 vs. 1.52 — so applying FFF to AIL is exactly as
+data. Empirical checks confirmed InDiGO, by contrast, learns the real
+smile closely — open/mid variance ratio of 5.91 (InDiGO) vs. 5.98 (real),
+close/mid of 1.32 vs. 1.52 — so applying FFF to InDiGO is exactly as
 justified as applying it to real.
 
 **The test.** For each series, the pipeline computes the pooled
@@ -239,7 +239,7 @@ separates the two regimes.
 
 **The decision.** If CV > 0.3, the pipeline fits an FFF model native
 to that specific series and deseasonalizes it. If not, the series
-passes through unchanged. Validated empirically: real CV = 0.944, AIL
+passes through unchanged. Validated empirically: real CV = 0.944, InDiGO
 CV = 0.974 (both fitted and applied), GBM CV ≈ 0 (correctly skipped).
 
 **Why this matters for the benchmark.** Each series' own seasonality
@@ -323,7 +323,7 @@ no lag structure for an overnight-style leak to hide in.
 
 At the initial soft-weight defaults (α = 0.3, λ = 1.0):
 
-| | Real–AIL | Real–GBM | Discrimination ratio |
+| | Real–InDiGO | Real–GBM | Discrimination ratio |
 |---|---:|---:|---:|
 | Hard indicator (before) | 0.001764 | 0.236065 | 133.9× |
 | Soft-weight (after) | 0.021027 | 2.693146 | 128.1× |
@@ -334,7 +334,7 @@ whole grid instead of only the outer 10%. The discrimination ratio
 held (133.9× → 128.1×, a ~4% shift) rather than collapsing — evidence
 that the bulk is informative in the *same direction* as the tails.
 GBM's Gaussian shape is wrong almost everywhere, not just in the
-tails, while AIL's marginal shape tracks real closely almost
+tails, while InDiGO's marginal shape tracks real closely almost
 everywhere; had the ratio crashed toward 1, that would have meant the
 bulk was diluting a signal that only lived in the tails. It doesn't.
 
@@ -347,7 +347,7 @@ letting a single noisy extreme-quantile estimate dominate the whole
 metric — the same over-emphasis failure mode that had already ruled
 out raw kurtosis for M4.
 
-| α | Real–AIL | Real–GBM | ratio | ratio Δ vs. α=0 |
+| α | Real–InDiGO | Real–GBM | ratio | ratio Δ vs. α=0 |
 |---:|---:|---:|---:|---:|
 | 0.00 | 0.0126 | 1.604 | 127.6× | — |
 | 0.15 | 0.0153 | 1.966 | 128.9× | +1.0% |
@@ -363,8 +363,8 @@ The knee sits at α ≈ 0.3–0.5. From α = 0 to 0.3 the ratio is flat,
 even marginally improving — tail emphasis adds clean signal in this
 range. Past α = 0.5 the ratio erodes, and by α = 0.75–1.0 it
 collapses. The mechanism is visible directly in the raw numbers: from
-α = 0 to α = 1, the real–AIL distance inflates **103×** (0.0126 →
-1.305) while real–GBM inflates only **74×** (1.604 → 119.4) — AIL is
+α = 0 to α = 1, the real–InDiGO distance inflates **103×** (0.0126 →
+1.305) while real–GBM inflates only **74×** (1.604 → 119.4) — InDiGO is
 being penalized faster than GBM as α grows, meaning the metric is
 increasingly scoring sampling noise in the single most extreme
 empirical quantile rather than genuine tail mismatch.
@@ -377,7 +377,7 @@ before degradation begins, not an arbitrary round number.
 With α fixed at the now-locked 0.3, λ was swept over {0.0, 0.5, 1.0,
 2.0}:
 
-| λ | Real–AIL | Real–GBM | ratio |
+| λ | Real–InDiGO | Real–GBM | ratio |
 |---:|---:|---:|---:|
 | 0.0 | 0.0042 | 0.535 | 127.6× |
 | 0.5 | 0.0126 | 1.614 | 128.0× |
@@ -458,14 +458,14 @@ lag-k cross-product sum is confined within each session block.
 
 ### Empirical validation
 
-| | Real–AIL distance | Real–GBM distance | Discrimination ratio |
+| | Real–InDiGO distance | Real–GBM distance | Discrimination ratio |
 |---|---:|---:|---:|
 | Before fix | 6.196 | 83.451 | 13.5× |
 | After fix | 2.794 | 38.644 | 13.8× |
 
 Both distances roughly halved, and the discrimination ratio was
 essentially unchanged. This is the expected signature of a common-mode
-leak: overnight contamination inflated the ACF for real, AIL, and GBM
+leak: overnight contamination inflated the ACF for real, InDiGO, and GBM
 alike, so it partly cancelled out of the real-vs-synthetic gap while
 still being present in absolute terms. The ratio looking stable is why
 the bug went unnoticed — but stability of the ratio doesn't mean the
@@ -577,21 +577,21 @@ computed the same way.
 
 At the final scale set `{1, 5, 15, 30}`:
 
-| Scale | κ/κ(1) Real | κ/κ(1) AIL | κ/κ(1) GBM |
+| Scale | κ/κ(1) Real | κ/κ(1) InDiGO | κ/κ(1) GBM |
 |------:|------------:|-----------:|-----------:|
 |     1 |      1.0000 |     1.0000 |     1.0000 |
 |     5 |      0.6447 |     0.5225 |     1.0400 |
 |    15 |      0.4974 |     0.4016 |     1.0874 |
 |    30 |      0.4104 |     0.3049 |     1.0998 |
 
-- Real–AIL distance: 0.0809, Real–GBM distance: 0.4187
+- Real–InDiGO distance: 0.0809, Real–GBM distance: 0.4187
 - **Discrimination ratio: 5.2×**
 Real shows the expected decay toward Gaussianity as scale increases.
 GBM is flat near 1.0 at every scale — slightly above 1.0 due to
 sampling noise, consistent with no genuine tail-thinning process to
-converge from. AIL tracks real's *direction* of decay but converges
+converge from. InDiGO tracks real's *direction* of decay but converges
 noticeably faster (0.52 vs. 0.64 at scale 5; 0.30 vs. 0.41 at scale
-30) — a real, interpretable finding: AIL does not fully preserve the
+30) — a real, interpretable finding: InDiGO does not fully preserve the
 persistence of heavy tails across aggregation scales, thinning out
 too quickly relative to real data. Discrimination is weaker than M1,
 M2, and M6 (5.2× vs. 128×, 13.8×, 32.6× respectively), but the
@@ -628,10 +628,10 @@ volatility regimes, fit GPD on tail exceedances per regime, and
 extract the shape parameter ξ.
 
 This failed empirically on our data. Contiguous-segment analysis
-showed a median non-NaN run length of 4 bars (real) and 3 bars (AIL).
+showed a median non-NaN run length of 4 bars (real) and 3 bars (InDiGO).
 AR-GARCH needs roughly 250+ contiguous observations for stable
 parameter estimates. Requiring 250-bar segments discards 79% of real
-data and 95% of AIL data — and the discarded data is biased toward
+data and 95% of InDiGO data — and the discarded data is biased toward
 volatile periods, where gaps cluster, which is exactly what a
 regime-conditional metric should be most sensitive to.
 
@@ -660,7 +660,7 @@ causal standard deviation:
 - Rolling60 gave better discrimination against a bad generator
   (real–GBM `|Δξ|` = 0.153 vs. EWMA's 0.065).
 - Rolling60 gave tighter tracking of a good generator
-  (real–AIL `|Δξ|` = 0.0048 vs. EWMA's 0.0080).
+  (real–InDiGO `|Δξ|` = 0.0048 vs. EWMA's 0.0080).
 Rolling60 wins on both axes, has no hyperparameter beyond window
 length, and is fully gap-tolerant — it restarts cleanly after NaN
 runs.
@@ -680,7 +680,7 @@ biasing the lower quintiles.
 
 An empirical sweep tested seven values from 10% to 83% of the window:
 
-| min_p | frac | \|Δξ\| R–AIL | \|Δξ\| R–GBM | ratio | valid % AIL |
+| min_p | frac | \|Δξ\| R–InDiGO | \|Δξ\| R–GBM | ratio | valid % InDiGO |
 |------:|-----:|-------------:|-------------:|------:|------------:|
 |     6 |  10% |        0.0033 |        0.1521 | 45.8× |       99.1% |
 |    10 |  17% |        0.0035 |        0.1521 | 43.8× |       98.4% |
@@ -693,15 +693,15 @@ An empirical sweep tested seven values from 10% to 83% of the window:
 GBM discrimination stays essentially flat (~0.152) across every
 setting — the metric never loses its ability to reject a bad
 generator. All the damage from an over-strict `min_periods` shows up
-on the good-generator side: AIL's real–AIL gap balloons from 0.002 to
-0.022 as coverage drops, because the metric starts penalizing AIL for
+on the good-generator side: InDiGO's real–InDiGO gap balloons from 0.002 to
+0.022 as coverage drops, because the metric starts penalizing InDiGO for
 data sparsity rather than genuine tail differences.
 
 **Decision (superseded — see below):** `min_periods = 20` (33% of
-window). It has the tightest real–AIL gap (0.0022), the best
-discrimination ratio (68×), and 92% AIL coverage — no meaningful data
+window). It has the tightest real–InDiGO gap (0.0022), the best
+discrimination ratio (68×), and 92% InDiGO coverage — no meaningful data
 loss. Below 20, noisier std estimates add jitter that inflates the
-AIL distance; above 20, calm-period exclusion dominates. Expressed as
+InDiGO distance; above 20, calm-period exclusion dominates. Expressed as
 a fraction (`min_periods = ⌈window × 1/3⌉`) so it scales automatically
 if the window length changes.
 
@@ -728,9 +728,9 @@ imposed, passed through the preprocessing pipeline (FFF correctly
 skipped due to flat CV), and evaluated under Option B / Rolling60:
 
 - Real turbulent-regime ξ: +0.181
-- AIL turbulent-regime ξ: +0.184
+- InDiGO turbulent-regime ξ: +0.184
 - GBM turbulent-regime ξ: −0.010
-The real–GBM gap (0.153) is 32× larger than the real–AIL gap (0.0048).
+The real–GBM gap (0.153) is 32× larger than the real–InDiGO gap (0.0048).
 The metric cleanly separates a generator that captures
 regime-conditional tail structure from one that doesn't.
 
@@ -759,19 +759,19 @@ session boundary instead of reaching into the prior day.
 **Immediate effect on the ξ vectors.** Before vs. after the fix, at
 the original `min_periods = 20`:
 
-| | Real ξ (Q0–Q4) | AIL ξ (Q0–Q4) | R–AIL dist | R–GBM dist | ratio |
+| | Real ξ (Q0–Q4) | InDiGO ξ (Q0–Q4) | R–InDiGO dist | R–GBM dist | ratio |
 |---|---|---|---:|---:|---:|
 | Before (cross-session bleed) | [−0.012, 0.009, 0.035, 0.057, 0.183] | [−0.014, 0.009, 0.031, 0.057, 0.188] | 0.0027 | 0.1664 | 61.8× |
 | After (session-aware, mp=20) | [−0.025, −0.008, 0.008, 0.029, 0.185] | [−0.036, −0.020, −0.005, 0.017, 0.192] | 0.0097 | 0.1528 | 15.7× |
 
 GBM was essentially unaffected (no autocorrelation structure for
-cross-session bleed to exploit). Real and AIL both shifted toward
+cross-session bleed to exploit). Real and InDiGO both shifted toward
 lower (more negative) ξ in the calm regimes (Q0–Q2) — consistent with
 removing prior-day closing volatility that had been inflating the
-apparent turbulence of the "calm" label. But AIL moved roughly twice
-as far as real (Q0: real −0.013, AIL −0.022), which is why the
-real–AIL distance nearly quadrupled: the old cross-session bleed had
-been masking a genuine discrepancy in how AIL handles the
+apparent turbulence of the "calm" label. But InDiGO moved roughly twice
+as far as real (Q0: real −0.013, InDiGO −0.022), which is why the
+real–InDiGO distance nearly quadrupled: the old cross-session bleed had
+been masking a genuine discrepancy in how InDiGO handles the
 session-open transition, not just adding noise.
 
 **Re-sweeping `min_periods`.** Because the original sweep (Section:
@@ -781,7 +781,7 @@ the leaky window — where reach-back into the prior session provided
 longer applied. It was re-run identically (7 values, 10%–83% of
 window) under the corrected window:
 
-| min_p | frac | \|Δξ\| R–AIL | \|Δξ\| R–GBM | ratio | valid % R | valid % AIL |
+| min_p | frac | \|Δξ\| R–InDiGO | \|Δξ\| R–GBM | ratio | valid % R | valid % InDiGO |
 |------:|-----:|-------------:|-------------:|------:|----------:|-------------:|
 |     6 |  10% |        0.0110 |        0.1368 | 12.5× |     97.4% |       96.1% |
 |    10 |  17% |        0.0120 |        0.1369 | 11.4× |     95.9% |       93.8% |
@@ -794,10 +794,10 @@ window) under the corrected window:
 The shape changed entirely from the original sweep. Under session-aware
 rolling, `min_periods = 20` sits in a shallow trough (12.7×), not a
 peak — the old spike at 20 was an artifact of the leaky window's
-artificial coverage boost near session opens. The real–AIL gap falls
+artificial coverage boost near session opens. The real–InDiGO gap falls
 steadily from mp=6 to mp=40 (0.0110 → 0.0042) as stricter thresholds
 filter out noisier near-open volatility estimates, up until mp=50
-where AIL coverage collapses to 31.6% and the gap widens again from
+where InDiGO coverage collapses to 31.6% and the gap widens again from
 data sparsity — the same trade-off shape seen in the original sweep,
 just shifted to a higher `min_periods` because a genuinely intraday
 window now needs more real observations to reach an equally stable
@@ -805,7 +805,7 @@ estimate.
 
 **Revised decision:** `min_periods = 30` (50% of window), not 40.
 Discrimination is essentially tied (30.4× vs. 33.0×), but 30 retains
-meaningfully more data (69.7% vs. 51.7% AIL coverage) and avoids
+meaningfully more data (69.7% vs. 51.7% InDiGO coverage) and avoids
 resting the published number on a thin-data regime. `window = 60` was
 not re-swept — the session-boundary fix changes how far `min_periods`
 can safely reach, not the window length itself, so window is treated
@@ -814,14 +814,14 @@ as still-validated.
 **Final validation at `min_periods = 30`:**
 
 - Real ξ: [−0.025, −0.008, 0.009, 0.030, 0.184]
-- AIL ξ: [−0.029, −0.010, 0.004, 0.024, 0.189]
+- InDiGO ξ: [−0.029, −0.010, 0.004, 0.024, 0.189]
 - GBM ξ: [−0.115, −0.122, −0.118, −0.124, −0.011]
-- Real–AIL distance: 0.0047, Real–GBM distance: 0.1530
+- Real–InDiGO distance: 0.0047, Real–GBM distance: 0.1530
 - **Discrimination ratio: 32.6×**
 This lands between the 30.4×/33.0× sweep values, confirming the swept
 number transfers cleanly to the production class. It sits below the
 pre-fix 61.8×, but that figure was inflated by cross-session leakage
-masking a real AIL discrepancy at the session open; 32.6× is the
+masking a real InDiGO discrepancy at the session open; 32.6× is the
 honest number for a metric now measuring what its docstring claims.
 
 ### Final specification
@@ -878,7 +878,7 @@ The first complete run of the matched-N ticker bootstrap (B = 100
 resamples, 200 tickers per draw, seed 42; `scripts/run_benchmark.py`)
 produced:
 
-| Metric | Stylized fact | AIL | GBM |
+| Metric | Stylized fact | InDiGO | GBM |
 |---|---|---|---|
 | M1 | Unconditional heavy tails | 0.484 [0.450, 0.517] | 0.028 [0.024, 0.031] |
 | M2 | Volatility clustering | 0.220 [0.199, 0.242] | 0.020 [0.018, 0.023] |
@@ -886,13 +886,13 @@ produced:
 | M6 | Regime-conditional tails | 0.461 [0.431, 0.490] | 0.045 [0.041, 0.049] |
 
 GBM is rejected by every metric, as a Gaussian, memoryless baseline
-should be. AIL sits essentially at real-sample parity on M1 (0.484)
+should be. InDiGO sits essentially at real-sample parity on M1 (0.484)
 and M6 (0.461) — its marginal distribution and its
 regime-conditional tail response are statistically indistinguishable
 from an independent draw of real data at this resolution. The two
 scores that stand out are M2 (0.220) and, less severely, M4 (0.380).
 
-## Why AIL's M2 score is low: a small bias caught by a tight noise floor
+## Why InDiGO's M2 score is low: a small bias caught by a tight noise floor
 
 The headline number looks harsh for a generator that plainly *does*
 cluster volatility, so the raw components matter:
@@ -900,9 +900,9 @@ cluster volatility, so the raw components matter:
 | M2 | mean distance |
 |---|---:|
 | g_rr (real vs real, noise floor) | 0.794 |
-| g_sr (real vs AIL) | 2.809 |
+| g_sr (real vs InDiGO) | 2.809 |
 
-The real-vs-AIL gap is not the anomaly — 2.809 on the full panel
+The real-vs-InDiGO gap is not the anomaly — 2.809 on the full panel
 matches the 2.794 recorded when the session-leak fix was validated
 (Section: M2, Empirical validation). What drives the score is the
 *noise floor*: real data's cross-sectional |r| ACF curve is extremely
@@ -910,10 +910,10 @@ stable across independent 200-ticker subsamples, so mean(g_rr) is
 small and the metric has high statistical power.
 
 A full-panel diagnostic (600 tickers, single pass, no bootstrap) shows
-what that power is detecting. AIL's ACF curve tracks real's *shape*
+what that power is detecting. InDiGO's ACF curve tracks real's *shape*
 almost perfectly, but sits uniformly below it at nearly every lag:
 
-| | Real | AIL |
+| | Real | InDiGO |
 |---|---:|---:|
 | ACF of \|r\| at lag 1 | 0.389 | 0.377 |
 | ACF at lag 60 | 0.246 | 0.228 |
@@ -921,7 +921,7 @@ almost perfectly, but sits uniformly below it at nearly every lag:
 | ACF half-life (lag where ACF falls below half its lag-1 value) | 119 min | 107 min |
 
 The per-lag gap is only ~0.01–0.02, but it is a persistent bias, not
-scattered noise — AIL's volatility clustering decays roughly 10%
+scattered noise — InDiGO's volatility clustering decays roughly 10%
 faster than real's. Summed over the 330 lags of M2's scoring window,
 that bias accumulates to 3.5× the real-vs-real noise floor, which the
 ratio-of-means normalization converts to 0.22.
@@ -932,10 +932,10 @@ Two conclusions follow:
    floor is what allows a subtle, systematic discrepancy to be
    detected at all; a noisier metric would wave this through as
    sampling variation.
-2. **The finding is corroborated independently by M4.** AIL's excess
+2. **The finding is corroborated independently by M4.** InDiGO's excess
    kurtosis also decays faster than real's under temporal aggregation
    (κ(5)/κ(1) = 0.52 vs 0.64; Section: M4, Empirical validation).
-   Both metrics point at the same underlying property: AIL
+   Both metrics point at the same underlying property: InDiGO
    under-persists long-memory structure — it reproduces short-range
    volatility texture well but loses persistence faster than real
    markets do, a known tendency of generative sequence models with no
@@ -985,7 +985,7 @@ FIGARCH (Baillie, Bollerslev & Mikkelsen, 1996) is the canonical
 long-memory GARCH: ARCH(∞) weights decaying as k^-(1+d). A
 FIGARCH(0, d, 0) simulation (truncated ARCH(∞), per-ticker variance
 targeting, 100-ticker sweep panel) produced, against real's
-full-panel ACF curve (sum |Δρ| over lags 60–390; real–AIL = 2.79,
+full-panel ACF curve (sum |Δρ| over lags 60–390; real–InDiGO = 2.79,
 real–GBM = 38.6 on the same scale):
 
 | d | ACF lag 1 | lag 60 | lag 120 | curve distance |
@@ -996,7 +996,7 @@ real–GBM = 38.6 on the same scale):
 | 0.75 | 0.643 | 0.068 | 0.031 | 33.1 |
 
 Real's curve is 0.389 / 0.246 / 0.192 at those lags. Even the best d
-misses by 8× the AIL distance: FIGARCH's hyperbolic decay collapses
+misses by 8× the InDiGO distance: FIGARCH's hyperbolic decay collapses
 by lag 60 no matter how d is tuned.
 
 The diagnostic that explains why: undoing the ACF estimator's
@@ -1060,9 +1060,9 @@ Sweep over (ν_slow, ν_fast, τ) on the 100-ticker panel:
 
 The selected parameters (ν_slow = 0.9, ν_fast = 0.3, τ = 20, H = 0.9)
 match real's measured curve nearly point-for-point, with a curve
-distance of 1.85 — *closer than AIL's 2.79*. MSV is intentionally an
+distance of 1.85 — *closer than InDiGO's 2.79*. MSV is intentionally an
 M2 specialist: it has no heavy-tail mechanism beyond the lognormal
-vol mixture and no regime-tail design, so it should beat AIL on M2
+vol mixture and no regime-tail design, so it should beat InDiGO on M2
 while losing to it elsewhere — the signature of a valid
 single-purpose positive control.
 
@@ -1095,22 +1095,22 @@ single-purpose positive control.
 Same protocol (B = 100, 200 tickers per draw, seed 42), now on the
 per-cell RNG streams and with MSV added:
 
-| Metric | Stylized fact | AIL | GBM | MSV |
+| Metric | Stylized fact | InDiGO | GBM | MSV |
 |---|---|---|---|---|
 | M1 | Unconditional heavy tails | 0.478 [0.447, 0.509] | 0.025 [0.023, 0.028] | 0.025 [0.023, 0.028] |
 | M2 | Volatility clustering | 0.203 [0.181, 0.226] | 0.019 [0.016, 0.021] | 0.265 [0.237, 0.291] |
 | M4 | Aggregational Gaussianity | 0.378 [0.346, 0.410] | 0.121 [0.108, 0.136] | 0.170 [0.152, 0.189] |
 | M6 | Regime-conditional tails | 0.485 [0.456, 0.514] | 0.047 [0.043, 0.051] | 0.133 [0.122, 0.145] |
 
-Every AIL and GBM score sits inside its first-run confidence interval
+Every InDiGO and GBM score sits inside its first-run confidence interval
 (compare to the table in "The first full benchmark run" above) — the
 RNG restructure changed which tickers get drawn, not the measurement.
-MSV lands exactly where it was designed to: above AIL on M2 (0.265 vs.
-0.203, the metric it was built to specialize in) and below AIL on
+MSV lands exactly where it was designed to: above InDiGO on M2 (0.265 vs.
+0.203, the metric it was built to specialize in) and below InDiGO on
 every other metric, since it has no heavy-tail or regime-conditional
 mechanism beyond its lognormal volatility mixture. This is the
 positive control behaving as a positive control — it validates that
-the benchmark can discriminate a generator that is *better* than AIL
+the benchmark can discriminate a generator that is *better* than InDiGO
 at the one property it targets, not only worse generators like GBM.
 
 # M2 Lag Weighting: The Window Is the Weight (2026-07-05)
@@ -1144,7 +1144,7 @@ over the *B = 100 draws realized under one seed's RNG stream* — it was
 never structurally guaranteed to bound variability across *different*
 seeds, i.e. different realizations of which 200 tickers get drawn into
 each of those 100 resamples. To check whether it does anyway, the full
-benchmark (B = 100, 200 tickers/draw, all four metrics × AIL/GBM/MSV)
+benchmark (B = 100, 200 tickers/draw, all four metrics × InDiGO/GBM/MSV)
 was rerun at seven additional seeds — `1, 2, ..., 7` — holding
 everything else fixed
 (`scripts/notebooks/seed_sensitivity.ipynb`, self-contained,
@@ -1153,8 +1153,8 @@ no external CSVs).
 ### The good news first: every qualitative conclusion held
 
 Across all 8 seeds, the generator rank ordering by the aggregate score
-G was identical every time — `AIL < MSV < GBM` (best to worst) — and
-MSV beat AIL on M2 specifically in all 8 seeds, exactly as the
+G was identical every time — `InDiGO < MSV < GBM` (best to worst) — and
+MSV beat InDiGO on M2 specifically in all 8 seeds, exactly as the
 positive-control design intends. Per-metric point estimates moved by
 the modest amount the sampling-noise story predicts (score ranges of
 0.004–0.05 across the 8 seeds, depending on the cell) — nothing that
@@ -1185,7 +1185,7 @@ used as its own anchor in turn, coverage averaged across all 8 choices
 | M6 | 0.83 |
 
 Roughly half of M2's apparent problem was that `seed = 42` happened to
-be an atypical (low) draw for M2/AIL specifically — M6/AIL's coverage
+be an atypical (low) draw for M2/InDiGO specifically — M6/InDiGO's coverage
 recovered almost completely under LOO (0.43 → 0.82), confirming that
 kind of anchor artifact is real and worth correcting for. But M2
 remains the worst-covered metric even under the fair diagnostic, so an
@@ -1199,7 +1199,7 @@ interval:
 
 | | M1 | M2 | M4 | M6 |
 |---|---:|---:|---:|---:|
-| AIL | 0.41 | **1.13** | 0.77 | 0.81 |
+| InDiGO | 0.41 | **1.13** | 0.77 | 0.81 |
 | GBM | 0.81 | **1.04** | 0.78 | 0.65 |
 | MSV | 0.83 | 0.94 | 0.73 | 0.75 |
 
@@ -1251,7 +1251,7 @@ independently tested).
 `scripts/investigate_missingness.py` measured the real panel's missing-bar
 structure directly, standalone -- it reads the curated real parquet and
 writes `scripts/missingness_report.md`, changing nothing. It ran on a
-600-ticker curation (AIL-joined, matching the 82,200 = 600 x 137
+600-ticker curation (InDiGO-joined, matching the 82,200 = 600 x 137
 full-session (ticker, session) cells below); the specific ticker set
 differs from whatever curation happens to be current, but the shape of
 the missingness is a property of the real data, not of which curation run
@@ -1404,7 +1404,7 @@ on this machine; kept here for the record, not as a value to train with.
 **Current -- real corpus (2026-09-07):** the real 948-ticker corpus was
 fetched from Alpaca on this machine (`scripts/fetch_alpaca.py`, all 948
 tickers, 0 errors) and curated real-only (`scripts/curate_real_only.py`,
-739 tickers at the 70% coverage floor -- more than the 600 the AIL-joined
+739 tickers at the 70% coverage floor -- more than the 600 the InDiGO-joined
 curation retained, since there is no second dataset's coverage to
 intersect against). `build_training_examples` produced 101,175 examples
 (68 dropped for fewer than 2 surviving bars). `corpus_min_delta_t` gives
@@ -1453,8 +1453,8 @@ pipeline in the repository yet, buckets were sized directly to the paper's
 
 **Current:** `scripts/sbbts_batching.py::DEFAULT_BATCH_SIZE` is 64. That
 module's own commit message reports 8 buckets and 1,288 batches from an
-AIL-joined curation (600 tickers, 82,163 examples); this machine's
-real-only curation (no AIL, see below) retains 739 tickers and 101,175
+InDiGO-joined curation (600 tickers, 82,163 examples); this machine's
+real-only curation (no InDiGO, see below) retains 739 tickers and 101,175
 examples, giving 8 buckets and **1,585** batches instead (2.6% padding vs.
 a naive pad-to-389 scheme's 10.9%) -- more tickers pass the 70% coverage
 floor without a second dataset's coverage to intersect against. Same
@@ -1470,13 +1470,13 @@ timing measures one full pass over all micro-batches in an epoch
 regardless of the accumulation grouping, so this choice does not need a
 separate wall-clock re-measurement of its own.
 
-## AIL is out of scope; curating real prices does not need it
+## InDiGO is out of scope; curating real prices does not need it
 
-`scripts/build_curated_datasets.py` always loads AIL as part of the same
+`scripts/build_curated_datasets.py` always loads InDiGO as part of the same
 run: `CurationPipeline` structurally used it to compute the ticker
-intersection and the joint coverage floor. AIL's raw source
-(`data/ail_synthetic_data/dataset_US_1-10B_2019-09-2020-03.parquet`) is
-not available on this machine and SBBTS does not use AIL at all, so
+intersection and the joint coverage floor. InDiGO's raw source
+(`data/indigo_synthetic_data/dataset_US_1-10B_2019-09-2020-03.parquet`) is
+not available on this machine and SBBTS does not use InDiGO at all, so
 `build_curated_datasets.py` cannot be reused as-is for SBBTS's real-only
 data needs.
 
@@ -1490,7 +1490,7 @@ coverage column, `_subset_to_intersection`/`_save_datasets`/`_save_metadata`
 all iterate over `synthetic_datasets`/`synth_aligned` and are no-ops on an
 empty one. So the fix was to remove that one guard (with the
 `synthetic_datasets` docstring updated to say an empty list means
-real-only curation), not to write a parallel curation path. `AILSyntheticLoader`
+real-only curation), not to write a parallel curation path. `InDiGOSyntheticLoader`
 itself is untouched -- never imported, built, or referenced by the new
 path.
 
@@ -1545,15 +1545,15 @@ to a file or committed. `data/raw_intraday/` (2.9 GB) and
 `data/curated/real_prices.parquet` now exist on this machine but are
 gitignored, as always -- nothing about the git history changed.
 
-## SBBTS reverts to the canonical panel now that AIL curation works (2026-09-07)
+## SBBTS reverts to the canonical panel now that InDiGO curation works (2026-09-07)
 
 The 739-ticker real-only training path (`scripts/curate_real_only.py`, the
-`CurationPipeline` validation relaxation, and the "AIL is out of scope"
-section above) was a workaround for AIL's raw source being unavailable on
+`CurationPipeline` validation relaxation, and the "InDiGO is out of scope"
+section above) was a workaround for InDiGO's raw source being unavailable on
 this machine, not a design decision -- SBBTS was always meant to train on
 the same canonical `real_prices.parquet` that GBM and MSV are curated and
 scored against, for consistency across generators. Once a working copy of
-AIL's raw source was obtained and `build_curated_datasets.py` ran to
+InDiGO's raw source was obtained and `build_curated_datasets.py` ran to
 completion (600 tickers, matching the historical figure), that workaround
 was reverted: the `CurationPipeline` validation guard is back to requiring
 at least one synthetic dataset, `scripts/curate_real_only.py` and its test

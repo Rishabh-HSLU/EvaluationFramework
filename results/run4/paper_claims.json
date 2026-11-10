@@ -1,11 +1,11 @@
 {
-  "AIL_intervals_containing_half": [
+  "InDiGO_intervals_containing_half": [
     "M4"
   ],
   "all_points_within_outer_intervals": true,
   "pointwise_intervals_not_equivalence_tests": true,
   "aggregate_order_lowest_first": [
-    "AIL",
+    "InDiGO",
     "MSV",
     "SBBTS",
     "GBM"

@@ -6,25 +6,28 @@ data/curated/.
 """
 
 from fineval.benchmark.config import CURATED_DIR, ROOT_DIR
-from fineval.data import AILSyntheticLoader, CurationPipeline, RealDataLoader
+from fineval.data import CurationPipeline, InDiGOSyntheticLoader, RealDataLoader
+from fineval.naming import resolve_indigo_path
 
 REAL_DIR = ROOT_DIR / "data" / "raw_intraday"
-AIL_PATH = ROOT_DIR / "data" / "ail_synthetic_data" / "dataset_US_1-10B_2019-09-2020-03.parquet"
+INDIGO_PATH = resolve_indigo_path(
+    ROOT_DIR / "data" / "indigo_synthetic_data" / "dataset_US_1-10B_2019-09-2020-03.parquet"
+)
 OUTPUT_DIR = CURATED_DIR
 
 
 def main() -> None:
-    """Curate the Real and AIL panels into OUTPUT_DIR."""
+    """Curate the Real and InDiGO panels into OUTPUT_DIR."""
     real = RealDataLoader(directory=str(REAL_DIR)).load()
-    ail = AILSyntheticLoader(parquet_path=str(AIL_PATH)).load()
+    indigo = InDiGOSyntheticLoader(parquet_path=str(INDIGO_PATH)).load()
 
     pipeline = CurationPipeline(
         real_dataset=real,
-        synthetic_datasets=[ail],
+        synthetic_datasets=[indigo],
         start_date="2019-09-03",
         end_date="2020-03-20",
         output_dir=str(OUTPUT_DIR),
-        source_paths={"Real": str(REAL_DIR), "AIL": str(AIL_PATH)},
+        source_paths={"Real": str(REAL_DIR), "InDiGO": str(INDIGO_PATH)},
     )
     pipeline.run()
 

@@ -12,7 +12,7 @@ from fineval.scripts.sensitivity import run_sweep
 from fineval.scripts.sensitivity.grid import GRID
 from fineval.scripts.sensitivity.persistence import atomic_json, save_snapshot
 
-GENERATORS = ("AIL", "GBM", "MSV", "SBBTS")
+GENERATORS = ("InDiGO", "GBM", "MSV", "SBBTS")
 
 
 @pytest.mark.parametrize(

@@ -220,7 +220,7 @@
       "passed": true
     },
     {
-      "check": "Panel digest unchanged: data/curated/ail_prices.parquet",
+      "check": "Panel digest unchanged: data/curated/indigo_prices.parquet",
       "passed": true
     },
     {
@@ -242,7 +242,7 @@
   ],
   "n_checks": 59,
   "panel_sha256": {
-    "data/curated/ail_prices.parquet": {
+    "data/curated/indigo_prices.parquet": {
       "sha256": "976c3a93b25e47af2742eaa5d3457ffc4aac9062cba0e74c397d6c59f434d751",
       "bytes": 49469058
     },
@@ -286,14 +286,14 @@
     3832008670
   ],
   "point_outside_interval": [],
-  "AIL_intervals_containing_half": [
+  "InDiGO_intervals_containing_half": [
     "M4"
   ],
   "rankings_across_mc_seeds": {
     "M1": {
-      "highest_point_generator": "AIL",
+      "highest_point_generator": "InDiGO",
       "highest_across_seeds": {
-        "AIL": 20
+        "InDiGO": 20
       }
     },
     "M2": {
@@ -303,20 +303,20 @@
       }
     },
     "M3": {
-      "highest_point_generator": "AIL",
+      "highest_point_generator": "InDiGO",
       "highest_across_seeds": {
-        "AIL": 20
+        "InDiGO": 20
       }
     },
     "M4": {
-      "highest_point_generator": "AIL",
+      "highest_point_generator": "InDiGO",
       "highest_across_seeds": {
-        "AIL": 20
+        "InDiGO": 20
       }
     }
   },
   "aggregate_rankings_across_mc_seeds": {
-    "AIL,MSV,SBBTS,GBM": 20
+    "InDiGO,MSV,SBBTS,GBM": 20
   },
   "roundtrip_validation_tolerance": {
     "relative": 2e-12,

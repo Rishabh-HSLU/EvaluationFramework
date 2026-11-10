@@ -47,7 +47,7 @@
   },
   "source_commit": "e8bc552d18a6d86e4dffeda21e0dd1fe0cf10d9e",
   "generator_set": [
-    "AIL",
+    "InDiGO",
     "GBM",
     "MSV",
     "SBBTS"

@@ -6,7 +6,7 @@ and the [frozen grid](../grid_spec_freeze.md) for the current sensitivity design
 
 | Record | Scope |
 |---|---|
-| [Parameter provenance audit](parameter_provenance_audit.md) | Selection evidence, including choices made with AIL output visible, and the scope of the current sensitivity grid. |
+| [Parameter provenance audit](parameter_provenance_audit.md) | Selection evidence, including choices made with InDiGO output visible, and the scope of the current sensitivity grid. |
 | [Research notes](../../scripts/reasoning.md) | Development decisions and intermediate experiments; some definitions and labels are superseded. |
 | [Seed-sensitivity notebook](../../scripts/notebooks/seed_sensitivity.ipynb) | Eight-seed experiment using earlier metric definitions and three generators. |
 | [Run #3](../../results/run3/README.md) | Earlier four-generator evaluation with O=40 and M=0. |

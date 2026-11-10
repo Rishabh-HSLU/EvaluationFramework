@@ -34,11 +34,11 @@ of the source files.
 Example
 -------
     real = RealDataLoader(directory=REAL_DIR).load()
-    ail  = AILSyntheticLoader(parquet_path=AIL_PATH).load()
+    indigo  = InDiGOSyntheticLoader(parquet_path=INDIGO_PATH).load()
 
     pipeline = CurationPipeline(
         real_dataset=real,
-        synthetic_datasets=[ail],
+        synthetic_datasets=[indigo],
         start_date="2019-09-03",
         end_date="2020-03-20",
         output_dir="data/curated",
@@ -82,7 +82,7 @@ class CurationPipeline:
     synthetic_datasets : list[MarketDataset]
         One or more loaded synthetic datasets to curate alongside the
         real data. Listed to support multi-generator evaluation
-        (AIL, SBBTS, ...).
+        (InDiGO, SBBTS, ...).
     start_date : str
         Inclusive start of the evaluation window, ISO format (YYYY-MM-DD).
     end_date : str
@@ -363,7 +363,7 @@ class CuratedParquetLoader(BaseLoader):
 
     For datasets that are already on the curated market clock — either
     the output of CurationPipeline (real_prices.parquet,
-    ail_prices.parquet) or a baseline generated directly on that clock
+    indigo_prices.parquet) or a baseline generated directly on that clock
     (gbm_prices.parquet). No reshaping is needed; the file is read,
     contract-validated by BaseLoader, and wrapped in a MarketDataset.
 
@@ -467,9 +467,9 @@ class SBBTSBaselineLoader(CuratedParquetLoader):
         super().__init__(parquet_path=parquet_path, name="SBBTS", is_synthetic=True)
 
 
-class AILSyntheticLoader(BaseLoader):
+class InDiGOSyntheticLoader(BaseLoader):
     """
-    Loads AIL synthetic data from a long-format parquet file.
+    Loads InDiGO synthetic data from a long-format parquet file.
 
     Expects columns: tr_ric, timestamp, close. Tickers in tr_ric
     carry exchange suffixes that are stripped to plain symbols to
@@ -479,16 +479,16 @@ class AILSyntheticLoader(BaseLoader):
     Attributes:
 
         parquet_path : str
-            Path to the AIL synthetic parquet file.
+            Path to the InDiGO synthetic parquet file.
 
     Example::
 
-        loader  = AILSyntheticLoader(parquet_path="path/to/ail.parquet")
+        loader  = InDiGOSyntheticLoader(parquet_path="path/to/indigo.parquet")
         dataset = loader.load()
     """
 
     def __init__(self, parquet_path: str):
-        super().__init__(name="AIL", is_synthetic=True)
+        super().__init__(name="InDiGO", is_synthetic=True)
         self.parquet_path = parquet_path
 
     def _load_raw(self) -> pd.DataFrame:
@@ -507,3 +507,7 @@ class AILSyntheticLoader(BaseLoader):
 
         print(f"Done: {prices.shape}")
         return prices
+
+
+# Compatibility for original notebooks and externally archived scripts.
+AILSyntheticLoader = InDiGOSyntheticLoader

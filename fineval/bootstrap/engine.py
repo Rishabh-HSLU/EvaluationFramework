@@ -16,6 +16,7 @@ import pandas as pd
 
 from ..config import SEED
 from ..metrics.base import BaseMetric, matched_gap_means
+from ..naming import generator_seed_name
 from .execution import execute_inner_draws, resolve_n_jobs, subsample_panel
 from .models import ReplicateAnalysis
 
@@ -65,13 +66,17 @@ class MatchedTickerBootstrap:
 
     def _stream(self, role: int, *names: str) -> np.random.Generator:
         """Return an independent RNG stream for one stochastic role."""
-        entropy = [self.seed, role, *(zlib.crc32(name.encode()) for name in names)]
+        entropy = [
+            self.seed,
+            role,
+            *(zlib.crc32(generator_seed_name(name).encode()) for name in names),
+        ]
         return np.random.default_rng(entropy)
 
     @staticmethod
     def _check_no_crc32_collision(names: list[str]) -> None:
         """Guard against two names silently sharing a keyed RNG stream."""
-        digests = [zlib.crc32(name.encode()) for name in names]
+        digests = [zlib.crc32(generator_seed_name(name).encode()) for name in names]
         if len(set(digests)) != len(names):
             raise ValueError(f"crc32 collision among generator names {names!r}")
 

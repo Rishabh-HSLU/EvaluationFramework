@@ -17,4 +17,4 @@ per-seed records. M2/M3 settings were fixed; copied unchanged results do not
 demonstrate sensitivity robustness for their own unvaried parameters.
 
 The analysis is exploratory. It documents the effects of the frozen choices
-without removing their AIL-informed selection history or testing all interactions.
+without removing their InDiGO-informed selection history or testing all interactions.

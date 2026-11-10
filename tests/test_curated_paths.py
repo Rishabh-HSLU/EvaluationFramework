@@ -27,7 +27,7 @@ def test_every_script_resolves_the_same_curated_directory() -> None:
 
 def test_raw_curation_inputs_are_repository_relative() -> None:
     assert build_curated_datasets.REAL_DIR == ROOT_DIR / "data" / "raw_intraday"
-    assert build_curated_datasets.AIL_PATH.parent == ROOT_DIR / "data" / "ail_synthetic_data"
+    assert build_curated_datasets.INDIGO_PATH.parent == ROOT_DIR / "data" / "indigo_synthetic_data"
 
 
 def test_curated_paths_do_not_depend_on_the_working_directory(monkeypatch, tmp_path) -> None:

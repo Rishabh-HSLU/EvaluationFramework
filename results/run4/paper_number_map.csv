@@ -1,12 +1,12 @@
 paper_location,quantity,source_file,source_key,source_column,source_pointer,exact_value,display,decimal_places
-Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M1""}",score,,0.34359018272044994,0.3436,4
-Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M1""}",ci_low,,0.28922294705745066,0.2892,4
-Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M1""}",ci_high,,0.42921105896371564,0.4292,4
-Abstract / Section 4.4,score (three decimals),metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M1""}",score,,0.34359018272044994,0.344,3
-Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M1""}",mc_mean,,0.38069877014188397,0.3807,4
-Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M1""}",mc_sd,,0.013097475461777796,0.0131,4
-Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M1""}",mc_min,,0.34359018272044994,0.3436,4
-Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M1""}",mc_max,,0.40214611547933893,0.4021,4
+Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M1""}",score,,0.34359018272044994,0.3436,4
+Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M1""}",ci_low,,0.28922294705745066,0.2892,4
+Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M1""}",ci_high,,0.42921105896371564,0.4292,4
+Abstract / Section 4.4,score (three decimals),metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M1""}",score,,0.34359018272044994,0.344,3
+Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M1""}",mc_mean,,0.38069877014188397,0.3807,4
+Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M1""}",mc_sd,,0.013097475461777796,0.0131,4
+Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M1""}",mc_min,,0.34359018272044994,0.3436,4
+Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M1""}",mc_max,,0.40214611547933893,0.4021,4
 Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M1""}",score,,0.01837909211548121,0.0184,4
 Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M1""}",ci_low,,0.017782345358071976,0.0178,4
 Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M1""}",ci_high,,0.022513331838478583,0.0225,4
@@ -31,14 +31,14 @@ Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""SBBTS""
 Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M1""}",mc_sd,,0.0013843037230504356,0.0014,4
 Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M1""}",mc_min,,0.024527662464515633,0.0245,4
 Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M1""}",mc_max,,0.030867128162645845,0.0309,4
-Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M2""}",score,,0.21356996760244382,0.2136,4
-Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M2""}",ci_low,,0.1725979417941686,0.1726,4
-Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M2""}",ci_high,,0.34824688009355886,0.3482,4
-Abstract / Section 4.4,score (three decimals),metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M2""}",score,,0.21356996760244382,0.214,3
-Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M2""}",mc_mean,,0.23919123096988953,0.2392,4
-Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M2""}",mc_sd,,0.014127570168764229,0.0141,4
-Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M2""}",mc_min,,0.21356996760244382,0.2136,4
-Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M2""}",mc_max,,0.26078414370195285,0.2608,4
+Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M2""}",score,,0.21356996760244382,0.2136,4
+Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M2""}",ci_low,,0.1725979417941686,0.1726,4
+Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M2""}",ci_high,,0.34824688009355886,0.3482,4
+Abstract / Section 4.4,score (three decimals),metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M2""}",score,,0.21356996760244382,0.214,3
+Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M2""}",mc_mean,,0.23919123096988953,0.2392,4
+Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M2""}",mc_sd,,0.014127570168764229,0.0141,4
+Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M2""}",mc_min,,0.21356996760244382,0.2136,4
+Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M2""}",mc_max,,0.26078414370195285,0.2608,4
 Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M2""}",score,,0.0185996784412183,0.0186,4
 Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M2""}",ci_low,,0.018341269921226894,0.0183,4
 Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M2""}",ci_high,,0.023697490345599943,0.0237,4
@@ -63,14 +63,14 @@ Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""SBBTS""
 Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M2""}",mc_sd,,0.0015438291942725516,0.0015,4
 Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M2""}",mc_min,,0.02010373368027218,0.0201,4
 Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M2""}",mc_max,,0.025494326950832622,0.0255,4
-Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M3""}",score,,0.362241412427247,0.3622,4
-Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M3""}",ci_low,,0.24454906211132924,0.2445,4
-Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M3""}",ci_high,,0.4911525297867158,0.4912,4
-Abstract / Section 4.4,score (three decimals),metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M3""}",score,,0.362241412427247,0.362,3
-Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M3""}",mc_mean,,0.36317377570012893,0.3632,4
-Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M3""}",mc_sd,,0.01595526275254702,0.0160,4
-Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M3""}",mc_min,,0.3298477122106105,0.3298,4
-Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M3""}",mc_max,,0.39323869868878636,0.3932,4
+Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M3""}",score,,0.362241412427247,0.3622,4
+Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M3""}",ci_low,,0.24454906211132924,0.2445,4
+Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M3""}",ci_high,,0.4911525297867158,0.4912,4
+Abstract / Section 4.4,score (three decimals),metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M3""}",score,,0.362241412427247,0.362,3
+Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M3""}",mc_mean,,0.36317377570012893,0.3632,4
+Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M3""}",mc_sd,,0.01595526275254702,0.0160,4
+Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M3""}",mc_min,,0.3298477122106105,0.3298,4
+Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M3""}",mc_max,,0.39323869868878636,0.3932,4
 Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M3""}",score,,0.10246875151953028,0.1025,4
 Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M3""}",ci_low,,0.07015671399403468,0.0702,4
 Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M3""}",ci_high,,0.14329797241520056,0.1433,4
@@ -95,14 +95,14 @@ Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""SBBTS""
 Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M3""}",mc_sd,,0.01177855704648038,0.0118,4
 Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M3""}",mc_min,,0.26286335531243504,0.2629,4
 Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M3""}",mc_max,,0.3049070404834075,0.3049,4
-Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M4""}",score,,0.48176019109650675,0.4818,4
-Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M4""}",ci_low,,0.39217496649350897,0.3922,4
-Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M4""}",ci_high,,0.5052941343571371,0.5053,4
-Abstract / Section 4.4,score (three decimals),metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M4""}",score,,0.48176019109650675,0.482,3
-Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M4""}",mc_mean,,0.490809127200212,0.4908,4
-Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M4""}",mc_sd,,0.01660121761619431,0.0166,4
-Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M4""}",mc_min,,0.46689841531420756,0.4669,4
-Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""AIL"", ""metric"": ""M4""}",mc_max,,0.5276513329257961,0.5277,4
+Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M4""}",score,,0.48176019109650675,0.4818,4
+Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M4""}",ci_low,,0.39217496649350897,0.3922,4
+Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M4""}",ci_high,,0.5052941343571371,0.5053,4
+Abstract / Section 4.4,score (three decimals),metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M4""}",score,,0.48176019109650675,0.482,3
+Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M4""}",mc_mean,,0.490809127200212,0.4908,4
+Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M4""}",mc_sd,,0.01660121761619431,0.0166,4
+Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M4""}",mc_min,,0.46689841531420756,0.4669,4
+Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""InDiGO"", ""metric"": ""M4""}",mc_max,,0.5276513329257961,0.5277,4
 Table 2 / Section 4.4,score,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M4""}",score,,0.03844369647864088,0.0384,4
 Table 2 / Section 4.4,ci_low,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M4""}",ci_low,,0.03487466592088312,0.0349,4
 Table 2 / Section 4.4,ci_high,metric_summary.csv,"{""generator"": ""GBM"", ""metric"": ""M4""}",ci_high,,0.043833390227786276,0.0438,4
@@ -127,13 +127,13 @@ Appendix: tab:mc-stability,mc_mean,metric_summary.csv,"{""generator"": ""SBBTS""
 Appendix: tab:mc-stability,mc_sd,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M4""}",mc_sd,,0.004677449331506132,0.0047,4
 Appendix: tab:mc-stability,mc_min,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M4""}",mc_min,,0.11537667068655755,0.1154,4
 Appendix: tab:mc-stability,mc_max,metric_summary.csv,"{""generator"": ""SBBTS"", ""metric"": ""M4""}",mc_max,,0.13617647102187183,0.1362,4
-Table 2 / Section 4.4,G_dev,aggregate_summary.csv,"{""generator"": ""AIL""}",G_dev,,1.9105265468280968,1.911,3
-Table 2 / Section 4.4,ci_low,aggregate_summary.csv,"{""generator"": ""AIL""}",ci_low,,1.521712401502847,1.522,3
-Table 2 / Section 4.4,ci_high,aggregate_summary.csv,"{""generator"": ""AIL""}",ci_high,,2.324859485598352,2.325,3
-Appendix: tab:mc-aggregate,mc_mean,aggregate_summary.csv,"{""generator"": ""AIL""}",mc_mean,,1.7664827794447238,1.766,3
-Appendix: tab:mc-aggregate,mc_sd,aggregate_summary.csv,"{""generator"": ""AIL""}",mc_sd,,0.05684594685005919,0.057,3
-Appendix: tab:mc-aggregate,mc_min,aggregate_summary.csv,"{""generator"": ""AIL""}",mc_min,,1.6824408878584758,1.682,3
-Appendix: tab:mc-aggregate,mc_max,aggregate_summary.csv,"{""generator"": ""AIL""}",mc_max,,1.9105265468280968,1.911,3
+Table 2 / Section 4.4,G_dev,aggregate_summary.csv,"{""generator"": ""InDiGO""}",G_dev,,1.9105265468280968,1.911,3
+Table 2 / Section 4.4,ci_low,aggregate_summary.csv,"{""generator"": ""InDiGO""}",ci_low,,1.521712401502847,1.522,3
+Table 2 / Section 4.4,ci_high,aggregate_summary.csv,"{""generator"": ""InDiGO""}",ci_high,,2.324859485598352,2.325,3
+Appendix: tab:mc-aggregate,mc_mean,aggregate_summary.csv,"{""generator"": ""InDiGO""}",mc_mean,,1.7664827794447238,1.766,3
+Appendix: tab:mc-aggregate,mc_sd,aggregate_summary.csv,"{""generator"": ""InDiGO""}",mc_sd,,0.05684594685005919,0.057,3
+Appendix: tab:mc-aggregate,mc_min,aggregate_summary.csv,"{""generator"": ""InDiGO""}",mc_min,,1.6824408878584758,1.682,3
+Appendix: tab:mc-aggregate,mc_max,aggregate_summary.csv,"{""generator"": ""InDiGO""}",mc_max,,1.9105265468280968,1.911,3
 Table 2 / Section 4.4,G_dev,aggregate_summary.csv,"{""generator"": ""GBM""}",G_dev,,28.031223524414255,28.031,3
 Table 2 / Section 4.4,ci_low,aggregate_summary.csv,"{""generator"": ""GBM""}",ci_low,,23.7497539523683,23.750,3
 Table 2 / Section 4.4,ci_high,aggregate_summary.csv,"{""generator"": ""GBM""}",ci_high,,30.218748061625142,30.219,3

@@ -27,7 +27,12 @@ FILES = {
 
 def read_csv(path: Path) -> list[dict]:
     with path.open(newline="") as handle:
-        return list(csv.DictReader(handle))
+        rows = list(csv.DictReader(handle))
+    for row in rows:
+        for key in ("generator", "panel"):
+            if row.get(key) in {"AIL", "ail", "indigo", "INDIGO"}:
+                row[key] = "InDiGO"
+    return rows
 
 
 def keyed(rows: list[dict], columns: tuple[str, ...]) -> dict:
@@ -177,6 +182,8 @@ def verify_reference(directory: Path) -> dict:
         if path.suffix == ".csv":
             rows = tables.get(path.name, read_csv(path))
             keys = json.loads(entry["source_key"])
+            if keys.get("generator") in {"AIL", "ail"}:
+                keys["generator"] = "InDiGO"
             selected = [row for row in rows if all(row[k] == str(v) for k, v in keys.items())]
             if len(selected) != 1:
                 raise ValueError(f"Ambiguous paper number: {entry['quantity']}")
@@ -204,7 +211,7 @@ def verify_point_reference(directory: Path) -> dict:
             raise ValueError(f"Reference file digest mismatch: {name}")
     metrics = keyed(read_csv(directory / "metric_summary.csv"), ("metric", "generator"))
     aggregates = keyed(read_csv(directory / "aggregate_summary.csv"), ("generator",))
-    generators = {"AIL", "GBM", "MSV", "SBBTS"}
+    generators = {"InDiGO", "GBM", "MSV", "SBBTS"}
     if set(metrics) != {(m, g) for m in ("M1", "M2", "M3", "M4") for g in generators}:
         raise ValueError("Point reference must contain all 16 metric cells")
     if set(aggregates) != {(g,) for g in generators}:
@@ -339,6 +346,8 @@ def verify_sensitivity(directory: Path) -> dict:
         path = directory / entry["source_file"]
         if path.suffix == ".csv":
             selectors = json.loads(entry["source_key"])
+            if selectors.get("generator") in {"AIL", "ail"}:
+                selectors["generator"] = "InDiGO"
             rows = [
                 row for row in read_csv(path) if all(row[k] == str(v) for k, v in selectors.items())
             ]

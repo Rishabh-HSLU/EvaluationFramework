@@ -13,7 +13,7 @@ The specifications remain unchanged during this run.
 ## Interpretation
 
 This is an exploratory robustness analysis. Several settings were selected
-while AIL output was visible; the grid does not establish that these choices
+while InDiGO output was visible; the grid does not establish that these choices
 were independent of the evaluated generators. The
 [historical parameter audit](history/parameter_provenance_audit.md) records the
 selection evidence.
@@ -27,10 +27,10 @@ primary paper intervals remain those from [run #4](../results/run4/README.md).
 | Parameter | Value | Selection evidence |
 |---|---|---|
 | M1 quantile-grid size | 5001 | Original selection rationale not recorded. |
-| M1 tail exponent | 0.3 | Selected with AIL output visible. |
-| M1 tail-weight scale | 1.0 | Compared with AIL output visible; final unit scale described as conventional. |
-| M4 volatility window | 60 minutes | Selected with AIL output visible. |
-| M4 minimum-observation fraction | 1/2 | Selected using gaps and AIL coverage. |
+| M1 tail exponent | 0.3 | Selected with InDiGO output visible. |
+| M1 tail-weight scale | 1.0 | Compared with InDiGO output visible; final unit scale described as conventional. |
+| M4 volatility window | 60 minutes | Selected with InDiGO output visible. |
+| M4 minimum-observation fraction | 1/2 | Selected using gaps and InDiGO coverage. |
 | M4 minimum observations | 30 | Derived as ceil(window × fraction). |
 | M4 regimes | 5 | Original selection rationale not recorded. |
 | M4 tail fraction | 0.05 | Original selection rationale not recorded. |
@@ -72,7 +72,7 @@ not exhaust all interactions.
 
 ## Execution and comparison
 
-All four generators are included: AIL, GBM, MSV and SBBTS. The five curated
+All four generators are included: InDiGO, GBM, MSV and SBBTS. The five curated
 panels are identical to those used by run #4, including its SBBTS panel.
 Their identities are recorded in [panel_digests.txt](panel_digests.txt).
 

@@ -10,7 +10,7 @@ thread per worker, then forwards the arguments and process exit status.
 
 ## Evidence
 
-A clean independent Lightning clone regenerated the real and AIL panels with
+A clean independent Lightning clone regenerated the real and InDiGO panels with
 the original file digests. Initially the regenerated GBM and MSV panels had
 identical shapes, indices, columns, missing masks and dtypes, but different
 finite prices: maximum absolute differences were 6.82e-13 and 8.49e-9.
@@ -35,6 +35,6 @@ Check the curated input identities before comparing benchmark values.
 Fresh provider downloads can contain revisions, and neural-network retraining
 can differ across devices even with matching seeds.
 
-The cross-machine check reproduced the real, AIL, GBM and MSV panel hashes.
+The cross-machine check reproduced the real, InDiGO, GBM and MSV panel hashes.
 The full independent O=200/M=20 benchmark was stopped before completion, so
 the final table has not been independently reproduced by that check.

@@ -46,7 +46,7 @@ def _panel(index: pd.DatetimeIndex, n_tickers: int, seed: int) -> pd.DataFrame:
 @pytest.fixture(scope="module")
 def corpora() -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
     index = _session_index(N_SESSIONS)
-    return _panel(index, 24, 1), {"ail": _panel(index, 24, 2), "gbm": _panel(index, 24, 3)}
+    return _panel(index, 24, 1), {"indigo": _panel(index, 24, 2), "gbm": _panel(index, 24, 3)}
 
 
 def _engine(n_jobs: int) -> MatchedTickerBootstrap:
@@ -57,6 +57,20 @@ def _engine(n_jobs: int) -> MatchedTickerBootstrap:
         seed=42,
         n_jobs=n_jobs,
     )
+
+
+def test_generator_rename_preserves_all_four_metric_results(corpora) -> None:
+    real, synthetics = corpora
+    original = _engine(n_jobs=1)
+    current = _engine(n_jobs=1)
+    before = original.run(real, {"AIL": synthetics["indigo"]}, show_progress=False)
+    after = current.run(real, {"InDiGO": synthetics["indigo"]}, show_progress=False)
+    before["generator"] = "InDiGO"
+    pd.testing.assert_frame_equal(before, after, check_exact=True)
+    assert after["score"].notna().all()
+    for metric in ("M1", "M2", "M3", "M4"):
+        np.testing.assert_array_equal(original.g_rr[metric], current.g_rr[metric])
+        np.testing.assert_array_equal(original.g_sr[metric]["AIL"], current.g_sr[metric]["InDiGO"])
 
 
 def _assert_gaps_equal(left: MatchedTickerBootstrap, right: MatchedTickerBootstrap) -> None:

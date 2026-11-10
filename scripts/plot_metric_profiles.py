@@ -18,15 +18,16 @@ import pandas as pd
 
 from fineval import config
 from fineval.benchmark.config import build_metrics
+from fineval.naming import resolve_indigo_path
 from fineval.preprocessing import PreprocessingPipeline
 from fineval.preprocessing.session_clock import overnight_masked_log_returns
 from fineval.scripts.sensitivity.persistence import atomic_json, file_digest, numerical_environment
 
 ROOT = Path(__file__).resolve().parents[1]
-PANELS = {"Real": "real", "AIL": "ail", "GBM": "gbm", "MSV": "msv", "SBBTS": "sbbts"}
+PANELS = {"Real": "real", "InDiGO": "indigo", "GBM": "gbm", "MSV": "msv", "SBBTS": "sbbts"}
 STYLES = {
     "Real": ("#202020", "-"),
-    "AIL": ("#0072B2", "-"),
+    "InDiGO": ("#0072B2", "-"),
     "GBM": ("#E69F00", "--"),
     "MSV": ("#009E73", "-."),
     "SBBTS": ("#CC79A7", ":"),
@@ -222,7 +223,7 @@ def main(argv=None):
             resource.setrlimit(resource.RLIMIT_AS, (6 * 1024**3, 6 * 1024**3))
         expected = json.loads((ROOT / "results/run4/provenance/panel_digests.json").read_text())
         relative = f"data/curated/{PANELS[args.panel]}_prices.parquet"
-        path = ROOT / relative
+        path = resolve_indigo_path(ROOT / relative)
         if file_digest(path) != expected[relative]:
             raise ValueError(f"Run #4 panel identity differs: {relative}")
         print(f"Computing {args.panel}: full panel, canonical preprocessing", flush=True)

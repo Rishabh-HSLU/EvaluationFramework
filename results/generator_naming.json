@@ -1,0 +1,13 @@
+{
+  "display_name": "InDiGO",
+  "full_name": "Inverse Diffusion Generative Optimization",
+  "model_label": "InDiGO core model",
+  "historical_identifier": "AIL",
+  "framework_source_before": "a96d4f110618cb772ec4678b4fd91a3650b3b2fa",
+  "manuscript_source_before": "333ea52d84a9f46e528bf8e7cddfba2150e337ae",
+  "operation": "Rename display labels and current input paths; preserve numerical cells, raw panel bytes, archived source fingerprints and historical artifact identities.",
+  "legacy_panel_filename": "ail_prices.parquet",
+  "panel_filename": "indigo_prices.parquet",
+  "legacy_rng_stream_key": "AIL",
+  "original_reference_commit": "07c32f680dbaa6a0614d99a0a6566294c04e9c9f"
+}

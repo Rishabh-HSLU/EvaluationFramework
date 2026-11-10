@@ -76,7 +76,7 @@ class FFFDeseasonalizer:
         fff.fit(log_returns_real)
 
         deseas_real = fff.transform(log_returns_real)
-        deseas_ail  = fff.transform(log_returns_ail)
+        deseas_indigo  = fff.transform(log_returns_indigo)
     """
 
     def __init__(self, num_harmonics: int = 4, trading_minutes: int = 390) -> None:

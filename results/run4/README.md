@@ -101,8 +101,12 @@ estimates, so the same point calculation can be compared with either reference.
 
 ## Provenance and limits
 
-provenance/original_artifacts.json maps the organised filenames back to the
-unaltered original output names and hashes. The recorded startup source commit
+Generator labels now use InDiGO. Numerical values, panel bytes and keyed random
+streams are unchanged; [generator_naming.json](../generator_naming.json) records
+the mapping. `checksums.json` identifies the current labeled files.
+`provenance/original_artifacts.json` retains the original output names and hashes;
+the original files are preserved in the recorded Git reference. These original
+hashes identify the files before relabeling. The recorded startup source commit
 is e8bc552d18a6d86e4dffeda21e0dd1fe0cf10d9e. Source/environment evidence was
 captured eight minutes after launch. Operational checkpoint code was later
 added to the working tree during the uninterrupted run; the startup evidence

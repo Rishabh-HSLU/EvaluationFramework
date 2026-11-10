@@ -47,6 +47,7 @@ from fineval.config import (
     SEED,
     TAIL_FRACTION,
 )
+from fineval.naming import resolve_indigo_path
 from fineval.scripts.sensitivity.grid import (
     DERIVED_PARAMS,
     DIAL_TO_METRIC,
@@ -70,7 +71,7 @@ RESULTS_DIR = Path(__file__).resolve().parent / "results"
 ALL_METRICS = ("M1", "M2", "M3", "M4")
 CURATED_FILES = (
     "real_prices.parquet",
-    "ail_prices.parquet",
+    "indigo_prices.parquet",
     "gbm_prices.parquet",
     "msv_prices.parquet",
     "sbbts_prices.parquet",
@@ -321,7 +322,7 @@ def m4_panel_diagnostics(m4_metric, panel: pd.DataFrame) -> dict[str, float]:
 def dataset_hashes() -> dict[str, str]:
     hashes = {}
     for name in CURATED_FILES:
-        path = CURATED_DIR / name
+        path = resolve_indigo_path(CURATED_DIR / name)
         digest = hashlib.sha256()
         with path.open("rb") as handle:
             for chunk in iter(lambda: handle.read(1 << 22), b""):
@@ -382,7 +383,7 @@ def run_sweep(args: argparse.Namespace) -> None:
     deseas_real, synthetics = preprocess_pairs(real, synthetic_datasets, lambda _n: None)
     log(f"Shared data ready: real={deseas_real.shape}, generators={list(synthetics)}.")
 
-    expected_generators = {"AIL", "GBM", "MSV", "SBBTS"}
+    expected_generators = {"InDiGO", "GBM", "MSV", "SBBTS"}
     if set(synthetics) != expected_generators:
         raise ValueError(f"The four-generator grid requires {sorted(expected_generators)}")
     checkpoint_dir = run_dir / "checkpoints"
